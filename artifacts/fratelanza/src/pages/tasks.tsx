@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Download, Plus, Pencil, Trash2, MoveRight, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -250,19 +250,22 @@ export default function Tasks() {
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent>
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>{editing ? t('tasks.edit') : t('tasks.new')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2 sm:py-4">
+            <div className="rounded-md border border-border bg-muted/20 p-3 text-xs text-muted-foreground">
+              Assignment can target either a Team Member or a Freelancer. When a Freelancer is selected, CC recipients appear below. Status changes are saved in tracking history.
+            </div>
             <div className="space-y-1"><Label>Title</Label><Input data-testid="input-task-title" value={form.title} onChange={f("title")} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea value={form.description} onChange={f("description")} rows={3} /></div>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label>Status</Label>
-                <Select value={form.status} onValueChange={fs("status")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{COLUMNS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.status} onValueChange={fs("status")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="max-h-64">{COLUMNS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1">
                 <Label>Priority</Label>
-                <Select value={form.priority} onValueChange={fs("priority")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["High", "Medium", "Low"].map((priority) => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.priority} onValueChange={fs("priority")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent className="max-h-64">{["High", "Medium", "Low"].map((priority) => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1"><Label>Project</Label><Input value={form.projectName} onChange={f("projectName")} placeholder="Project name" /></div>
               <div className="space-y-1"><Label>Due Date</Label><Input type="date" value={form.dueDate} onChange={f("dueDate")} /></div>
@@ -270,12 +273,34 @@ export default function Tasks() {
                 <Label>Assign to Team Member or Freelancer</Label>
                 <Select value={form.assigneeValue} onValueChange={fs("assigneeValue")}>
                   <SelectTrigger data-testid="select-task-assignee"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-72 w-[var(--radix-select-trigger-width)]">
                     <SelectItem value={NONE}>Unassigned</SelectItem>
-                    {(assignees.data?.teamMembers ?? []).length > 0 && <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Team Members</div>}
-                    {(assignees.data?.teamMembers ?? []).map((member) => <SelectItem key={valueFor(member)} value={valueFor(member)}>{member.name}</SelectItem>)}
-                    {(assignees.data?.freelancers ?? []).length > 0 && <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Freelancers</div>}
-                    {(assignees.data?.freelancers ?? []).map((freelancer) => <SelectItem key={valueFor(freelancer)} value={valueFor(freelancer)}>{freelancer.name}</SelectItem>)}
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel className="text-xs uppercase tracking-wide text-muted-foreground">Team Members</SelectLabel>
+                      {(assignees.data?.teamMembers ?? []).length === 0 && <SelectItem value="__no_team_members" disabled>No team members</SelectItem>}
+                      {(assignees.data?.teamMembers ?? []).map((member) => (
+                        <SelectItem key={valueFor(member)} value={valueFor(member)}>
+                          <span className="flex flex-col leading-tight">
+                            <span>{member.name}</span>
+                            <span className="text-[10px] text-muted-foreground">Team Member</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel className="text-xs uppercase tracking-wide text-muted-foreground">Freelancers</SelectLabel>
+                      {(assignees.data?.freelancers ?? []).length === 0 && <SelectItem value="__no_freelancers" disabled>No freelancers</SelectItem>}
+                      {(assignees.data?.freelancers ?? []).map((freelancer) => (
+                        <SelectItem key={valueFor(freelancer)} value={valueFor(freelancer)}>
+                          <span className="flex flex-col leading-tight">
+                            <span>{freelancer.name}</span>
+                            <span className="text-[10px] text-muted-foreground">Freelancer</span>
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
               </div>
@@ -283,7 +308,8 @@ export default function Tasks() {
 
             {selectedAssignee?.type === "freelancer" && (
               <div className="space-y-2 rounded-md border border-border p-3">
-                <Label>Add in CC</Label>
+                <Label>Add in CC for this freelancer task</Label>
+                <p className="text-xs text-muted-foreground">CC recipients also receive task notifications.</p>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {ccOptions.map((recipient) => (
                     <label key={recipient.value} className="flex cursor-pointer items-center gap-2 text-sm">

@@ -378,6 +378,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </motion.h1>
           </div>
           <div className="flex shrink-0 items-center gap-2 md:gap-4">
+            <NotificationBell />
             {username && <span className="hidden sm:inline text-sm text-muted-foreground">@{username}</span>}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
