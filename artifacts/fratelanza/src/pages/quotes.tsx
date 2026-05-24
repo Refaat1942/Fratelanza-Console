@@ -11,7 +11,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, X } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, X, Printer } from "lucide-react";
+import { printQuote } from "@/lib/quote-pdf";
 
 type Quote = { id: number; clientName: string; projectName?: string | null; price: number; language?: string | null; date?: string | null; paymentTerms?: string | null; milestones?: string | null; notes?: string | null; };
 type LineItem = { desc: string; price: number };
@@ -118,6 +119,7 @@ export default function Quotes() {
                   <td className="px-4 py-3 text-muted-foreground">{q.date ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" title="Download / Print PDF" data-testid={`button-print-quote-${q.id}`} onClick={() => printQuote(q)}><Printer className="h-4 w-4 text-primary" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-edit-quote-${q.id}`} onClick={() => openEdit(q)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-delete-quote-${q.id}`} onClick={() => setDeleteId(q.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>

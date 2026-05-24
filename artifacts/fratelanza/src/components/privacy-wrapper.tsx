@@ -9,7 +9,7 @@ export function PrivacyWrapper({ value, format = 'currency' }: { value: number |
   }
 
   if (format === 'currency' && typeof value === 'number') {
-    return <span>${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
+    return <span>EGP {value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>;
   }
 
   if (format === 'number' && typeof value === 'number') {

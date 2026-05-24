@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { PrivacyProvider } from "@/lib/privacy-context";
+import { ThemeProvider } from "@/lib/theme-context";
 import { AuthProvider, useAuth } from "@/lib/auth-context";
 import { Layout } from "@/components/layout";
 import NotFound from "@/pages/not-found";
@@ -45,7 +46,7 @@ function Gate() {
   const { state } = useAuth();
   if (state.status === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground dark">
+      <div className="min-h-screen flex items-center justify-center bg-background text-muted-foreground">
         Loading...
       </div>
     );
@@ -57,18 +58,18 @@ function Gate() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <PrivacyProvider>
-          <TooltipProvider>
-            <div className="dark">
+      <ThemeProvider>
+        <AuthProvider>
+          <PrivacyProvider>
+            <TooltipProvider>
               <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
                 <Gate />
               </WouterRouter>
-            </div>
-            <Toaster />
-          </TooltipProvider>
-        </PrivacyProvider>
-      </AuthProvider>
+              <Toaster />
+            </TooltipProvider>
+          </PrivacyProvider>
+        </AuthProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

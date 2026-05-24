@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, DollarSign, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Search, X, Users } from "lucide-react";
 
 type Project = {
   id: number; type: string; projectName: string; clientName?: string | null;
@@ -25,6 +25,9 @@ type Project = {
   status: string; paidAmount: number; remainingAmount: number;
   nextPaymentDate?: string | null; notes?: string | null; date: string;
 };
+
+type TeamMember = { freelancerName: string; commission: number };
+type Freelancer = { code: string; name: string; spec?: string | null };
 
 const STATUS_COLORS: Record<string, string> = {
   Ongoing: "bg-blue-500/20 text-blue-400 border-blue-500/30",
@@ -48,6 +51,9 @@ export default function Projects() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({ ...empty });
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [pickFreelancer, setPickFreelancer] = useState<string>("");
+  const [pickCommission, setPickCommission] = useState<string>("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [paymentProject, setPaymentProject] = useState<Project | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -70,15 +76,55 @@ export default function Projects() {
     return matchType && matchStatus && matchSearch;
   });
 
-  const openCreate = () => { setForm({ ...empty }); setEditing(null); setShowForm(true); };
+  const openCreate = () => { setForm({ ...empty }); setTeam([]); setEditing(null); setShowForm(true); };
   const openEdit = (p: Project) => {
     setEditing(p);
-    setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: p.totalCost, netProfit: p.netProfit, freelancerName: p.freelancerName ?? "", freelancerCommission: p.freelancerCommission, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
+    setTeam([]);
+    // Load team first, then back-compute "other costs" = stored totalCost − all commissions.
+    const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+    fetch(`${apiBase}/projects/${p.id}/team`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : [])
+      .then((t: Array<{ freelancerName: string; commission: number }>) => {
+        const teamLoaded = t.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission) }));
+        setTeam(teamLoaded);
+        const teamCommissionSum = teamLoaded.reduce((s, m) => s + m.commission, 0);
+        const otherCosts = Math.max(0, Number(p.totalCost) - teamCommissionSum - Number(p.freelancerCommission ?? 0));
+        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: p.freelancerName ?? "", freelancerCommission: p.freelancerCommission, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
+      })
+      .catch(() => {
+        // Fallback: no team, use stored totalCost minus lead commission only
+        const otherCosts = Math.max(0, Number(p.totalCost) - Number(p.freelancerCommission ?? 0));
+        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: p.freelancerName ?? "", freelancerCommission: p.freelancerCommission, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
+      });
     setShowForm(true);
   };
 
+  const addTeamMember = () => {
+    if (!pickFreelancer) return;
+    if (team.some((m) => m.freelancerName === pickFreelancer)) {
+      toast({ title: "Already added", variant: "destructive" });
+      return;
+    }
+    setTeam((prev) => [...prev, { freelancerName: pickFreelancer, commission: Number(pickCommission) || 0 }]);
+    setPickFreelancer(""); setPickCommission("");
+  };
+
+  const removeTeamMember = (name: string) => {
+    setTeam((prev) => prev.filter((m) => m.freelancerName !== name));
+  };
+
   const handleSave = () => {
-    const data = { ...form, clientPrice: Number(form.clientPrice), totalCost: Number(form.totalCost), netProfit: Number(form.clientPrice) - Number(form.totalCost), paidAmount: Number(form.paidAmount), remainingAmount: Number(form.clientPrice) - Number(form.paidAmount), freelancerCommission: Number(form.freelancerCommission) };
+    const totalCommission = team.reduce((s, m) => s + m.commission, 0) + Number(form.freelancerCommission || 0);
+    const data = {
+      ...form,
+      clientPrice: Number(form.clientPrice),
+      totalCost: Number(form.totalCost) + totalCommission,
+      netProfit: Number(form.clientPrice) - (Number(form.totalCost) + totalCommission),
+      paidAmount: Number(form.paidAmount),
+      remainingAmount: Number(form.clientPrice) - Number(form.paidAmount),
+      freelancerCommission: Number(form.freelancerCommission),
+      team,
+    };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Project updated" }); },
@@ -111,11 +157,14 @@ export default function Projects() {
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
   const fs = (k: string) => (v: string) => setForm((prev) => ({ ...prev, [k]: v }));
 
+  const downPaymentPct = form.clientPrice > 0 ? Math.round((Number(form.paidAmount) / Number(form.clientPrice)) * 100) : 0;
+  const remainingPreview = Number(form.clientPrice) - Number(form.paidAmount);
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
-        <Button onClick={openCreate} data-testid="button-create-project" className="bg-primary text-black hover:bg-primary/90">
+        <Button onClick={openCreate} data-testid="button-create-project" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="h-4 w-4 mr-2" /> New Project
         </Button>
       </div>
@@ -125,7 +174,7 @@ export default function Projects() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input data-testid="input-search-projects" placeholder="Search projects or clients..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
-        <Select value={typeFilter} onValueChange={setTypeFilter} data-testid="select-type-filter">
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Types</SelectItem>
@@ -133,7 +182,7 @@ export default function Projects() {
             <SelectItem value="Training">Training</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={statusFilter} onValueChange={setStatusFilter} data-testid="select-status-filter">
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="All">All Status</SelectItem>
@@ -147,8 +196,8 @@ export default function Projects() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading projects...</div>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-border overflow-x-auto">
+          <table className="w-full text-sm min-w-[800px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
                 {["Type", "Project Name", "Client", "Price", "Net Profit", "Paid", "Remaining", "Status", "Actions"].map((h) => (
@@ -187,8 +236,8 @@ export default function Projects() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? "Edit Project" : "New Project"}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
-            <div className="col-span-2 space-y-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <div className="md:col-span-2 space-y-1">
               <Label>Project Name</Label>
               <Input data-testid="input-project-name" value={form.projectName} onChange={f("projectName")} />
             </div>
@@ -206,24 +255,75 @@ export default function Projects() {
             </div>
             <div className="space-y-1">
               <Label>Lead Freelancer</Label>
-              <Input value={form.freelancerName} onChange={f("freelancerName")} />
+              <Select value={form.freelancerName || undefined} onValueChange={fs("freelancerName")}>
+                <SelectTrigger><SelectValue placeholder="Select lead freelancer" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {(freelancers as Freelancer[]).map((fr) => (
+                    <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <div className="space-y-1">
+              <Label>Lead Commission (EGP)</Label>
+              <Input type="number" value={form.freelancerCommission} onChange={f("freelancerCommission")} />
+            </div>
+
+            {/* Multi-freelancer team */}
+            <div className="md:col-span-2 space-y-2 border border-border rounded-md p-3 bg-card/40">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Users className="h-4 w-4 text-primary" /> Additional Team Members
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                <Select value={pickFreelancer || undefined} onValueChange={setPickFreelancer}>
+                  <SelectTrigger className="flex-1 min-w-[200px]" data-testid="select-team-freelancer"><SelectValue placeholder="Select freelancer" /></SelectTrigger>
+                  <SelectContent className="max-h-72">
+                    {(freelancers as Freelancer[]).map((fr) => (
+                      <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Input type="number" placeholder="Commission EGP" className="w-40" value={pickCommission} onChange={(e) => setPickCommission(e.target.value)} data-testid="input-team-commission" />
+                <Button type="button" variant="outline" onClick={addTeamMember} data-testid="button-add-team"><Plus className="h-4 w-4" /></Button>
+              </div>
+              {team.length > 0 && (
+                <div className="space-y-1">
+                  {team.map((m) => (
+                    <div key={m.freelancerName} className="flex items-center justify-between px-3 py-2 rounded border border-border text-sm">
+                      <span>{m.freelancerName}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="text-primary font-medium"><PrivacyWrapper value={m.commission} /></span>
+                        <button onClick={() => removeTeamMember(m.freelancerName)} className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <div className="space-y-1">
               <Label>Client Price (EGP)</Label>
               <Input data-testid="input-client-price" type="number" value={form.clientPrice} onChange={f("clientPrice")} />
             </div>
             <div className="space-y-1">
-              <Label>Total Cost (EGP)</Label>
+              <Label>Other Costs (EGP)</Label>
               <Input type="number" value={form.totalCost} onChange={f("totalCost")} />
             </div>
             <div className="space-y-1">
-              <Label>Paid Amount (EGP)</Label>
-              <Input type="number" value={form.paidAmount} onChange={f("paidAmount")} />
+              <Label>Down Payment / Paid (EGP)</Label>
+              <Input type="number" value={form.paidAmount} onChange={f("paidAmount")} data-testid="input-down-payment" />
             </div>
             <div className="space-y-1">
-              <Label>Freelancer Commission (EGP)</Label>
-              <Input type="number" value={form.freelancerCommission} onChange={f("freelancerCommission")} />
+              <Label>Remaining (auto)</Label>
+              <Input type="number" value={remainingPreview} readOnly className="bg-muted/40" />
             </div>
+
+            <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Down payment</span><span className="font-semibold">{downPaymentPct}% of price</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={team.reduce((s, m) => s + m.commission, 0) + Number(form.freelancerCommission || 0)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className="text-green-500 font-semibold"><PrivacyWrapper value={Number(form.clientPrice) - Number(form.totalCost) - team.reduce((s, m) => s + m.commission, 0) - Number(form.freelancerCommission || 0)} /></span></div>
+            </div>
+
             <div className="space-y-1">
               <Label>Start Date</Label>
               <Input type="date" value={form.startDate} onChange={f("startDate")} />
@@ -236,7 +336,7 @@ export default function Projects() {
               <Label>Next Payment Date</Label>
               <Input type="date" value={form.nextPaymentDate} onChange={f("nextPaymentDate")} />
             </div>
-            <div className="col-span-2 space-y-1">
+            <div className="md:col-span-2 space-y-1">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={f("notes")} rows={3} />
             </div>
@@ -255,7 +355,11 @@ export default function Projects() {
         <DialogContent>
           <DialogHeader><DialogTitle>Log Payment — {paymentProject?.projectName}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="text-sm text-muted-foreground">Remaining: <span className="text-red-400 font-semibold"><PrivacyWrapper value={paymentProject?.remainingAmount ?? 0} /></span></div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded border border-border p-3"><div className="text-muted-foreground text-xs">Price</div><div className="font-semibold"><PrivacyWrapper value={paymentProject?.clientPrice ?? 0} /></div></div>
+              <div className="rounded border border-border p-3"><div className="text-muted-foreground text-xs">Already Paid</div><div className="font-semibold text-blue-400"><PrivacyWrapper value={paymentProject?.paidAmount ?? 0} /></div></div>
+              <div className="col-span-2 rounded border border-destructive/30 bg-destructive/5 p-3"><div className="text-muted-foreground text-xs">Remaining</div><div className="font-semibold text-destructive"><PrivacyWrapper value={paymentProject?.remainingAmount ?? 0} /></div></div>
+            </div>
             <div className="space-y-1">
               <Label>Amount Received (EGP)</Label>
               <Input data-testid="input-payment-amount" type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
@@ -274,7 +378,6 @@ export default function Projects() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Alert */}
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader><AlertDialogTitle>Delete Project?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>

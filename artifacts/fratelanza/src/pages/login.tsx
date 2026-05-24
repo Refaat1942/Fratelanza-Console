@@ -22,7 +22,7 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background text-foreground dark p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-4">
       <div className="w-full max-w-sm rounded-lg border border-border bg-card p-8 shadow-xl">
         <div className="flex flex-col items-center mb-6">
           <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center mb-3">
@@ -43,7 +43,7 @@ export default function Login() {
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-3 py-2">{error}</div>
           )}
-          <Button type="submit" data-testid="button-sign-in" disabled={busy} className="w-full bg-primary text-black hover:bg-primary/90">
+          <Button type="submit" data-testid="button-sign-in" disabled={busy} className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
             {busy ? "Signing in..." : "Sign in"}
           </Button>
         </form>

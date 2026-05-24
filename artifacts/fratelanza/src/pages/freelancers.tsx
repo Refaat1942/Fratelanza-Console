@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Star, Upload } from "lucide-react";
@@ -15,6 +16,35 @@ import { useRef } from "react";
 type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; };
 
 const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5 };
+
+const SPECIALIZATIONS = [
+  "Frontend Developer",
+  "Backend Developer",
+  "Full-Stack Developer",
+  "Mobile Developer (iOS)",
+  "Mobile Developer (Android)",
+  "Mobile Developer (React Native / Flutter)",
+  "UI/UX Designer",
+  "Graphic Designer",
+  "DevOps Engineer",
+  "Cloud Engineer (AWS / Azure / GCP)",
+  "Data Engineer",
+  "Data Scientist",
+  "Machine Learning Engineer",
+  "AI / LLM Engineer",
+  "QA / Test Engineer",
+  "Security Engineer",
+  "Database Administrator",
+  "WordPress Developer",
+  "Shopify / E-commerce Developer",
+  "ERP Consultant (SAP / Odoo)",
+  "CRM Consultant (Salesforce / HubSpot)",
+  "Business Analyst",
+  "Project Manager",
+  "Technical Writer",
+  "Trainer / Instructor",
+  "Other",
+];
 
 export default function Freelancers() {
   const { toast } = useToast();
@@ -160,7 +190,17 @@ export default function Freelancers() {
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-1"><Label>Full Name</Label><Input data-testid="input-freelancer-name" value={form.name} onChange={f("name")} /></div>
             <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={f("phone")} /></div>
-            <div className="space-y-1"><Label>Specialization</Label><Input value={form.spec} onChange={f("spec")} /></div>
+            <div className="space-y-1">
+              <Label>Specialization</Label>
+              <Select value={form.spec || undefined} onValueChange={(v) => setForm((prev) => ({ ...prev, spec: v }))}>
+                <SelectTrigger data-testid="select-spec"><SelectValue placeholder="Select specialization" /></SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {SPECIALIZATIONS.map((s) => (
+                    <SelectItem key={s} value={s}>{s}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1"><Label>Position</Label><Input value={form.position} onChange={f("position")} /></div>
             <div className="space-y-1"><Label>Rating (1-5)</Label><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={f("rating")} /></div>
             <div className="space-y-1"><Label>Total Earned (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>

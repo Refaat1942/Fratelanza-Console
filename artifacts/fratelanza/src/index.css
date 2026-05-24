@@ -145,7 +145,54 @@
 }
 
 .dark {
-  /* We use the same dark theme for .dark */
+  /* Same as :root (dark navy is the default) */
+}
+
+.light {
+  --button-outline: rgba(0,0,0, .10);
+  --badge-outline: rgba(0,0,0, .05);
+  --opaque-button-border-intensity: -9;
+  --elevate-1: rgba(0,0,0, .04);
+  --elevate-2: rgba(0,0,0, .09);
+
+  --background: 0 0% 100%;
+  --foreground: 217 64% 11%;
+
+  --border: 217 20% 88%;
+  --input: 217 20% 88%;
+  --ring: 195 100% 40%;
+
+  --card: 0 0% 100%;
+  --card-foreground: 217 64% 11%;
+  --card-border: 217 20% 88%;
+
+  --sidebar: 217 30% 96%;
+  --sidebar-foreground: 217 64% 11%;
+  --sidebar-border: 217 20% 88%;
+  --sidebar-primary: 195 100% 40%;
+  --sidebar-primary-foreground: 0 0% 100%;
+  --sidebar-accent: 217 30% 92%;
+  --sidebar-accent-foreground: 217 64% 11%;
+  --sidebar-ring: 195 100% 40%;
+
+  --popover: 0 0% 100%;
+  --popover-foreground: 217 64% 11%;
+  --popover-border: 217 20% 88%;
+
+  --primary: 195 100% 40%;
+  --primary-foreground: 0 0% 100%;
+
+  --secondary: 217 20% 92%;
+  --secondary-foreground: 217 64% 11%;
+
+  --muted: 217 20% 95%;
+  --muted-foreground: 217 15% 40%;
+
+  --accent: 217 20% 92%;
+  --accent-foreground: 217 64% 11%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
 }
 
 @layer base {
