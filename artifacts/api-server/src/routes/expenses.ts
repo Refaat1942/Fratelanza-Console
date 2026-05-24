@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
-import { expensesTable, projectsTable } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { expensesTable, freelancerPaymentTermsTable, projectsTable, projectTeamTable } from "@workspace/db";
+import { eq, and, sql, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -233,6 +233,34 @@ router.get("/finance/report", async (req, res): Promise<void> => {
     ? await db.select().from(projectsTable).where(and(...projConditions)).orderBy(sql`date desc`)
     : await db.select().from(projectsTable).orderBy(sql`date desc`);
 
+  const projectIds = projects.map((project) => project.id);
+  const [teamRows, freelancerTerms] = projectIds.length > 0
+    ? await Promise.all([
+        db.select().from(projectTeamTable).where(inArray(projectTeamTable.projectId, projectIds)),
+        db.select().from(freelancerPaymentTermsTable).where(inArray(freelancerPaymentTermsTable.projectId, projectIds)),
+      ])
+    : [[], []] as const;
+
+  const teamCommissionByProject = new Map<number, number>();
+  for (const row of teamRows) {
+    teamCommissionByProject.set(row.projectId, (teamCommissionByProject.get(row.projectId) ?? 0) + Number(row.commission));
+  }
+
+  const paidFreelancerTermsByProject = new Map<number, number>();
+  for (const row of freelancerTerms) {
+    if (row.status === "Paid") {
+      paidFreelancerTermsByProject.set(row.projectId, (paidFreelancerTermsByProject.get(row.projectId) ?? 0) + Number(row.amount));
+    }
+  }
+
+  const recognizedProjectCosts = projects.map((project) => {
+    const plannedCommission = Number(project.freelancerCommission) + (teamCommissionByProject.get(project.id) ?? 0);
+    const nonCommissionCost = Math.max(0, Number(project.totalCost) - plannedCommission);
+    const paidFreelancerCost = paidFreelancerTermsByProject.get(project.id) ?? 0;
+    return { projectId: project.id, totalCost: nonCommissionCost + paidFreelancerCost };
+  });
+  const costByProject = new Map(recognizedProjectCosts.map((row) => [row.projectId, row.totalCost]));
+
   const [expAgg] = expConditions.length
     ? await db.select({
         totalExpenses: sql<number>`coalesce(sum(amount::numeric), 0)`,
@@ -244,8 +272,8 @@ router.get("/finance/report", async (req, res): Promise<void> => {
   const totalRevenue = projects.reduce((s, p) => s + Number(p.clientPrice), 0);
   const totalPaid = projects.reduce((s, p) => s + Number(p.paidAmount), 0);
   const totalRemaining = projects.reduce((s, p) => s + Number(p.remainingAmount), 0);
-  const totalCost = projects.reduce((s, p) => s + Number(p.totalCost), 0);
-  const totalNetProfit = projects.reduce((s, p) => s + Number(p.netProfit), 0);
+  const totalCost = projects.reduce((s, p) => s + (costByProject.get(p.id) ?? 0), 0);
+  const totalNetProfit = projects.reduce((s, p) => s + (Number(p.paidAmount) - (costByProject.get(p.id) ?? 0)), 0);
   const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
   const netBalance = totalNetProfit - totalExpenses;
 
@@ -263,8 +291,8 @@ router.get("/finance/report", async (req, res): Promise<void> => {
       projectName: r.projectName,
       clientName: r.clientName,
       clientPrice: Number(r.clientPrice),
-      totalCost: Number(r.totalCost),
-      netProfit: Number(r.netProfit),
+      totalCost: costByProject.get(r.id) ?? 0,
+      netProfit: Number(r.paidAmount) - (costByProject.get(r.id) ?? 0),
       freelancerName: r.freelancerName,
       freelancerCommission: Number(r.freelancerCommission),
       startDate: r.startDate,

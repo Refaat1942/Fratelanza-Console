@@ -28,7 +28,7 @@ type Project = {
 };
 
 type TeamMember = { freelancerName: string; commission: number };
-type PaymentTerm = { amount: number | string; dueDate: string; note: string; status?: string };
+type PaymentTerm = { amount: number | string; dueDate: string; note: string; status: "Pending" | "Paid" };
 type FreelancerPaymentTerm = PaymentTerm & { freelancerName: string };
 type Freelancer = { code: string; name: string; spec?: string | null };
 
@@ -107,8 +107,8 @@ export default function Projects() {
     fetch(`${apiBase}/projects/${p.id}/payment-terms`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : { clientReceivables: [], freelancerPaymentTerms: [] })
       .then((terms: { clientReceivables?: PaymentTerm[]; freelancerPaymentTerms?: FreelancerPaymentTerm[] }) => {
-        setClientReceivables((terms.clientReceivables ?? []).map((term) => ({ amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status ?? "Pending" })));
-        setFreelancerPaymentTerms((terms.freelancerPaymentTerms ?? []).map((term) => ({ freelancerName: term.freelancerName, amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status ?? "Pending" })));
+        setClientReceivables((terms.clientReceivables ?? []).map((term) => ({ amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status === "Paid" ? "Paid" : "Pending" })));
+        setFreelancerPaymentTerms((terms.freelancerPaymentTerms ?? []).map((term) => ({ freelancerName: term.freelancerName, amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status === "Paid" ? "Paid" : "Pending" })));
       })
       .catch(() => { setClientReceivables([]); setFreelancerPaymentTerms([]); });
     setShowForm(true);
@@ -380,14 +380,14 @@ export default function Projects() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-semibold">Freelancer commission payment terms</div>
-                  <div className="text-xs text-muted-foreground">Divide freelancer commissions into dated payment parts.</div>
+                  <div className="text-xs text-muted-foreground">Only terms marked Paid are recognized in Finance costs/expenses.</div>
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={addFreelancerPaymentTerm}>Add term</Button>
               </div>
               {freelancerPaymentTerms.length === 0 ? (
                 <div className="rounded border border-dashed border-border p-3 text-xs text-muted-foreground">No freelancer payment terms yet.</div>
               ) : freelancerPaymentTerms.map((term, index) => (
-                <div key={`freelancer-payment-${index}`} className="grid grid-cols-1 gap-2 rounded border border-border p-2 md:grid-cols-[1.5fr_1fr_1fr_2fr_auto]">
+                <div key={`freelancer-payment-${index}`} className="grid grid-cols-1 gap-2 rounded border border-border p-2 md:grid-cols-[1.4fr_0.9fr_1fr_1fr_1.5fr_auto]">
                   <Select value={term.freelancerName || undefined} onValueChange={(value) => updateFreelancerPaymentTerm(index, { freelancerName: value })}>
                     <SelectTrigger><SelectValue placeholder="Freelancer" /></SelectTrigger>
                     <SelectContent>
@@ -396,11 +396,18 @@ export default function Projects() {
                   </Select>
                   <Input type="number" min="0" placeholder="Amount" value={term.amount} onChange={(e) => updateFreelancerPaymentTerm(index, { amount: e.target.value })} />
                   <Input type="date" value={term.dueDate} onChange={(e) => updateFreelancerPaymentTerm(index, { dueDate: e.target.value })} />
+                  <Select value={term.status} onValueChange={(status) => updateFreelancerPaymentTerm(index, { status: status as "Pending" | "Paid" })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Pending">Pending</SelectItem>
+                      <SelectItem value="Paid">Paid</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Input placeholder="Note" value={term.note} onChange={(e) => updateFreelancerPaymentTerm(index, { note: e.target.value })} />
                   <Button type="button" variant="ghost" size="icon" onClick={() => setFreelancerPaymentTerms((prev) => prev.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
                 </div>
               ))}
-              <div className="text-xs text-muted-foreground">Scheduled freelancer payments: <PrivacyWrapper value={freelancerPaymentTerms.reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /></div>
+              <div className="text-xs text-muted-foreground">Scheduled freelancer payments: <PrivacyWrapper value={freelancerPaymentTerms.reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /> · Paid/recognized cost: <PrivacyWrapper value={freelancerPaymentTerms.filter((term) => term.status === "Paid").reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /></div>
             </div>
 
             <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
