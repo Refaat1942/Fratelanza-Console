@@ -4,10 +4,10 @@ This guide deploys Fratelanza alongside your other projects without touching the
 
 ## How it's isolated
 
-- All containers are prefixed with `fratelanza_` (set by `name: fratelanza` in compose)
+- All containers are prefixed with `fratelanza-console` (set by `name: fratelanza-console` in compose)
 - The web container binds to port **3100** on localhost only (`127.0.0.1:3100`)
 - The API container binds to port **3101** on localhost only (`127.0.0.1:3101`)
-- The database has its own named volume `fratelanza_pgdata`
+- The database has its own named volume `fratelanza_console_pgdata`
 - Your other projects are completely unaffected
 
 ---
@@ -40,12 +40,15 @@ Paste and fill in:
 ```
 POSTGRES_PASSWORD=choose_a_strong_password
 SESSION_SECRET=any_long_random_string_here_32chars_min
-MASTER_PASSWORD=your_app_login_password
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_app_login_password
 REGISTRY=ghcr.io/refaat1942
 IMAGE_TAG=latest
 ```
 
 Save with `Ctrl+O`, exit with `Ctrl+X`.
+
+If you already used `MASTER_PASSWORD` in an older `.env`, it still works as a fallback, but `ADMIN_PASSWORD` is preferred.
 
 ---
 
@@ -86,7 +89,16 @@ Check everything started:
 docker compose ps
 ```
 
-You should see `fratelanza-db`, `fratelanza-api`, and `fratelanza-web` all with status **Up**.
+You should see `fratelanza-console-db`, `fratelanza-console-api`, and `fratelanza-console-web` all with status **Up**.
+
+If `docker compose pull` fails with `pull access denied` or `denied: permission_denied`, your GitHub token cannot read the GHCR package. Create a GitHub personal access token with `read:packages`, then log in again:
+
+```bash
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+docker compose pull
+```
+
+If `docker compose up -d` says `set ADMIN_PASSWORD or MASTER_PASSWORD in .env`, open `/opt/fratelanza/.env` and add `ADMIN_PASSWORD=your_app_login_password`.
 
 ---
 
@@ -129,7 +141,7 @@ certbot --nginx -d fratelanza.yourdomain.com
 
 Open your domain in a browser. You should see the Fratelanza login screen.
 
-Default login password: whatever you set as `MASTER_PASSWORD` in `.env`
+Default login username/password: the `ADMIN_USERNAME` and `ADMIN_PASSWORD` values from `.env`
 
 ---
 
@@ -159,6 +171,11 @@ docker compose down -v
 
 # Restart just the API
 docker compose restart api
+
+# See why a container failed
+docker compose ps
+docker compose logs --tail=200 api
+docker compose logs --tail=200 web
 ```
 
 ---
