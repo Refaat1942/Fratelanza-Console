@@ -1,19 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BUILD_URL="${BUILD_URL:-https://8ddc433f-ed55-43c5-a767-d07292f0585f-00-ts7yqfyrbybl.worf.replit.dev/api/public/build.tar.gz}"
-APP_DIR="/opt/fratelanza-console"
-STATIC_DIR="$APP_DIR/web-static"
-TMP_TAR="/tmp/fratelanza-build.tar.gz"
+APP_DIR="${APP_DIR:-/opt/fratelanza}"
+ENV_FILE="${ENV_FILE:-.env}"
 
-echo ">> Downloading build from $BUILD_URL"
-curl -fsSL "$BUILD_URL" -o "$TMP_TAR"
-echo ">> Size: $(du -h "$TMP_TAR" | cut -f1)"
+if [[ ! -f "$APP_DIR/docker-compose.yml" ]]; then
+  echo "Missing $APP_DIR/docker-compose.yml" >&2
+  echo "Copy docker-compose.yml to the VPS app directory before running this script." >&2
+  exit 1
+fi
 
-echo ">> Replacing $STATIC_DIR"
-mkdir -p "$STATIC_DIR"
-rm -rf "${STATIC_DIR:?}"/*
-tar -xzf "$TMP_TAR" -C "$STATIC_DIR"
-rm -f "$TMP_TAR"
+if [[ ! -f "$APP_DIR/$ENV_FILE" ]]; then
+  echo "Missing $APP_DIR/$ENV_FILE" >&2
+  echo "Create it from .env.example before running this script." >&2
+  exit 1
+fi
 
-echo ">> Done. Hard-refresh console.fratelanza.com (Ctrl+Shift+R)."
+cd "$APP_DIR"
+
+echo ">> Pulling latest Fratelanza images"
+docker compose --env-file "$ENV_FILE" pull
+
+echo ">> Restarting services"
+docker compose --env-file "$ENV_FILE" up -d --remove-orphans
+
+echo ">> Removing unused images"
+docker image prune -f
+
+echo ">> Done. Check with: docker compose ps"

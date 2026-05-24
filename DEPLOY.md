@@ -1,148 +1,150 @@
-# Manual Deployment — Hostinger VPS
+# Deployment — Hostinger VPS
 
-This guide deploys Fratelanza alongside your other projects without touching them.
+This app runs as three Docker services on the VPS:
 
-## How it's isolated
+- `db`: PostgreSQL 16 with its own named volume, `fratelanza_console_pgdata`
+- `api`: Express API image from GHCR, bound to `127.0.0.1:3101`
+- `web`: Vite static site served by nginx, bound to `127.0.0.1:3100`
 
-- All containers are prefixed with `fratelanza_` (set by `name: fratelanza` in compose)
-- The web container binds to port **3100** on localhost only (`127.0.0.1:3100`)
-- The API container binds to port **3101** on localhost only (`127.0.0.1:3101`)
-- The database has its own named volume `fratelanza_pgdata`
-- Your other projects are completely unaffected
+The public domain is served by the host-level nginx config in `nginx-vhost.conf`.
 
----
+## 1. Build and publish images
 
-## Step 1 — SSH into your VPS
+The GitHub Actions workflow `.github/workflows/deploy.yml` builds these images:
+
+- `${REGISTRY}/fratelanza-api:${IMAGE_TAG}`
+- `${REGISTRY}/fratelanza-web:${IMAGE_TAG}`
+
+For normal deployment from Replit, push your Replit changes to GitHub, then run the **Build & Deploy to Hostinger VPS** workflow from GitHub Actions.
+
+Required GitHub repository secrets:
+
+| Secret | Description |
+|---|---|
+| `VPS_HOST` | VPS IP or hostname |
+| `VPS_USER` | SSH username, usually `root` |
+| `VPS_SSH_KEY` | Private SSH key that can access the VPS |
+| `POSTGRES_PASSWORD` | Strong database password |
+| `SESSION_SECRET` | Long random Express session secret |
+| `ADMIN_USERNAME` | Initial admin username, for example `admin` |
+| `ADMIN_PASSWORD` | Initial admin password |
+
+## 2. First-time VPS setup
+
+SSH into the VPS:
 
 ```bash
 ssh root@YOUR_VPS_IP
 ```
 
----
+Install Docker, Compose, and nginx if they are not installed yet:
 
-## Step 2 — Create project folder
+```bash
+apt update
+apt install -y docker.io docker-compose-plugin nginx
+systemctl enable --now docker nginx
+```
+
+Create the app folder:
 
 ```bash
 mkdir -p /opt/fratelanza
 cd /opt/fratelanza
 ```
 
----
+Copy `docker-compose.yml` and `nginx-vhost.conf` from this repo to `/opt/fratelanza` on the VPS.
 
-## Step 3 — Create your `.env` file
+Example from your local machine:
 
 ```bash
+scp docker-compose.yml nginx-vhost.conf root@YOUR_VPS_IP:/opt/fratelanza/
+```
+
+## 3. Create the VPS `.env`
+
+On the VPS:
+
+```bash
+cd /opt/fratelanza
 nano .env
 ```
 
-Paste and fill in:
+Paste and edit:
 
-```
+```dotenv
 POSTGRES_PASSWORD=choose_a_strong_password
-SESSION_SECRET=any_long_random_string_here_32chars_min
-MASTER_PASSWORD=your_app_login_password
+SESSION_SECRET=use_openssl_rand_hex_32_or_longer
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_app_login_password
 REGISTRY=ghcr.io/refaat1942
 IMAGE_TAG=latest
 ```
 
-Save with `Ctrl+O`, exit with `Ctrl+X`.
-
----
-
-## Step 4 — Copy `docker-compose.yml` to the VPS
-
-From your local machine (or just create it on the VPS):
+You can generate secrets with:
 
 ```bash
-# Option A — from your local machine
-scp docker-compose.yml root@YOUR_VPS_IP:/opt/fratelanza/
-
-# Option B — paste it directly on the VPS
-nano /opt/fratelanza/docker-compose.yml
-# paste the contents of docker-compose.yml, then save
+openssl rand -hex 32
 ```
 
----
-
-## Step 5 — Log in to GitHub Container Registry
+If the GHCR images are private, log in on the VPS before pulling:
 
 ```bash
-echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u Refaat1942 --password-stdin
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
 
----
-
-## Step 6 — Pull images and start
+## 4. Start the app
 
 ```bash
 cd /opt/fratelanza
-docker compose pull
-docker compose up -d
-```
-
-Check everything started:
-
-```bash
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --remove-orphans
 docker compose ps
 ```
 
-You should see `fratelanza-db`, `fratelanza-api`, and `fratelanza-web` all with status **Up**.
+Expected services:
 
----
+- `fratelanza-console-db`
+- `fratelanza-console-api`
+- `fratelanza-console-web`
 
-## Step 7 — Set up your domain with Nginx
-
-Install nginx on the host if not already there:
+Check the API from the VPS:
 
 ```bash
-apt install nginx -y
+curl -f http://127.0.0.1:3101/api/healthz
 ```
 
-Copy the vhost config:
+## 5. Set up the public domain
+
+Edit the vhost and replace `fratelanza.yourdomain.com` with your real domain or subdomain:
 
 ```bash
+cp /opt/fratelanza/nginx-vhost.conf /etc/nginx/sites-available/fratelanza
 nano /etc/nginx/sites-available/fratelanza
-```
-
-Paste the contents of `nginx-vhost.conf`, but **replace** `fratelanza.yourdomain.com` with your actual domain or subdomain.
-
-Enable it:
-
-```bash
-ln -s /etc/nginx/sites-available/fratelanza /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/fratelanza /etc/nginx/sites-enabled/fratelanza
 nginx -t
 systemctl reload nginx
 ```
 
----
-
-## Step 8 — (Optional) Add HTTPS with Let's Encrypt
+Add HTTPS:
 
 ```bash
-apt install certbot python3-certbot-nginx -y
-certbot --nginx -d fratelanza.yourdomain.com
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d YOUR_DOMAIN
 ```
 
----
+Open your domain in a browser. Log in with `ADMIN_USERNAME` and `ADMIN_PASSWORD`.
 
-## Step 9 — Verify the app is running
+## Updating after new Replit changes
 
-Open your domain in a browser. You should see the Fratelanza login screen.
-
-Default login password: whatever you set as `MASTER_PASSWORD` in `.env`
-
----
-
-## Updating to a new version
+1. Push the Replit changes to GitHub.
+2. Run the GitHub Actions deploy workflow, or SSH to the VPS and run:
 
 ```bash
 cd /opt/fratelanza
-docker compose pull
-docker compose up -d
+docker compose --env-file .env pull
+docker compose --env-file .env up -d --remove-orphans
 docker image prune -f
 ```
-
----
 
 ## Useful commands
 
@@ -150,25 +152,24 @@ docker image prune -f
 # View logs
 docker compose logs -f api
 docker compose logs -f web
+docker compose logs -f db
 
-# Stop the app
+# Restart one service
+docker compose restart api
+
+# Stop the app, keeping the database volume
 docker compose down
 
-# Stop and delete the database (DANGER — data is lost)
+# Stop and delete the database volume. This deletes data.
 docker compose down -v
-
-# Restart just the API
-docker compose restart api
 ```
 
----
+## Port reference
 
-## Port reference (safe with other projects)
+| Service | Host port | Container port |
+|---|---:|---:|
+| Web | `127.0.0.1:3100` | `80` |
+| API | `127.0.0.1:3101` | `8080` |
+| Database | Not exposed | `5432` |
 
-| Service | Host port | Internal port |
-|---------|-----------|---------------|
-| Web (nginx) | 127.0.0.1:3100 | 80 |
-| API (express) | 127.0.0.1:3101 | 8080 |
-| Database | not exposed | 5432 |
-
-Ports 3100 and 3101 are only accessible from localhost — your host nginx proxies public traffic to them.
+Ports `3100` and `3101` are localhost-only. Public traffic should enter through host nginx.

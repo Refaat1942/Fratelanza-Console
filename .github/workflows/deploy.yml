@@ -65,6 +65,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Prepare app directory
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: mkdir -p /opt/fratelanza
+
       - name: Copy compose file to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -76,23 +84,21 @@ jobs:
 
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.1.0
+        env:
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: REGISTRY,IMAGE_TAG
+          envs: REGISTRY,IMAGE_TAG,POSTGRES_PASSWORD,SESSION_SECRET,ADMIN_USERNAME,ADMIN_PASSWORD
           script: |
             set -e
             cd /opt/fratelanza
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-
-            export REGISTRY=$REGISTRY
-            export IMAGE_TAG=$IMAGE_TAG
-            export POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-            export SESSION_SECRET=${{ secrets.SESSION_SECRET }}
-            export ADMIN_USERNAME=${{ secrets.ADMIN_USERNAME }}
-            export ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
 
             docker compose pull
             docker compose up -d --remove-orphans
