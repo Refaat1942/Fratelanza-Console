@@ -1,15 +1,63 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
+import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
 import { expensesTable, projectsTable } from "@workspace/db";
-import { eq, and, sql, gte, lte } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+
+function smartCategory(description: string): string {
+  const text = description.toLowerCase();
+  const rules: Array<[string, string[]]> = [
+    ["Payroll", ["salary", "salaries", "payroll", "wage", "bonus", "employee", "staff"]],
+    ["Freelancers", ["freelancer", "instructor", "trainer", "commission", "contractor"]],
+    ["Software & Subscriptions", ["subscription", "software", "license", "hosting", "domain", "server", "vps", "cloud", "github", "openai", "api", "saas"]],
+    ["Marketing", ["marketing", "ads", "advertising", "facebook", "google", "campaign", "design", "social media"]],
+    ["Office", ["office", "rent", "workspace", "coworking", "internet", "electricity", "water", "utilities", "stationery"]],
+    ["Travel & Transport", ["travel", "taxi", "uber", "careem", "fuel", "transport", "flight", "hotel"]],
+    ["Training", ["training", "course", "workshop", "certificate", "learning"]],
+    ["Equipment", ["laptop", "computer", "hardware", "monitor", "phone", "printer", "equipment"]],
+    ["Banking & Fees", ["bank", "fee", "fees", "transfer", "transaction", "visa", "card", "tax"]],
+    ["Meals", ["meal", "food", "coffee", "restaurant", "lunch", "dinner"]],
+  ];
+  return rules.find(([, words]) => words.some((word) => text.includes(word)))?.[0] ?? "Other";
+}
+
+function normalizeKey(row: Record<string, unknown>, key: string): unknown {
+  const wanted = key.toLowerCase().replace(/[^a-z0-9]/g, "");
+  for (const [rawKey, value] of Object.entries(row)) {
+    if (rawKey.toLowerCase().replace(/[^a-z0-9]/g, "") === wanted) return value;
+  }
+  return undefined;
+}
+
+function normalizeDate(value: unknown): string {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      const yyyy = String(parsed.y).padStart(4, "0");
+      const mm = String(parsed.m).padStart(2, "0");
+      const dd = String(parsed.d).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    }
+  }
+  const raw = String(value ?? "").trim();
+  if (!raw) return new Date().toISOString().slice(0, 10);
+  const parsed = new Date(raw);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return raw;
+}
 
 function toShape(r: typeof expensesTable.$inferSelect) {
   return {
     id: r.id,
     description: r.description,
     amount: Number(r.amount),
+    category: r.category,
     date: r.date,
   };
 }
@@ -55,9 +103,59 @@ router.post("/expenses", async (req, res): Promise<void> => {
   const [row] = await db.insert(expensesTable).values({
     description: body.description,
     amount: String(Number(body.amount ?? 0)),
+    category: body.category ?? smartCategory(String(body.description ?? "")),
     date: body.date ?? today,
   }).returning();
   res.status(201).json(toShape(row));
+});
+
+
+router.post("/expenses/import", upload.single("file"), async (req, res): Promise<void> => {
+  const file = (req as unknown as { file?: Express.Multer.File }).file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
+    return;
+  }
+
+  let rows: Record<string, unknown>[];
+  try {
+    const wb = XLSX.read(file.buffer, { type: "buffer", cellDates: true });
+    const sheet = wb.Sheets[wb.SheetNames[0]!]!;
+    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
+  } catch {
+    res.status(400).json({ error: "Could not parse file. Use .xlsx, .xls or .csv" });
+    return;
+  }
+
+  let created = 0;
+  let skipped = 0;
+  const categories: Record<string, number> = {};
+  const errors: { row: number; error: string }[] = [];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i]!;
+    const description = String(normalizeKey(row, "description") ?? "").trim();
+    const amountRaw = normalizeKey(row, "amount");
+    const amount = Number(String(amountRaw ?? "").replace(/,/g, ""));
+    const date = normalizeDate(normalizeKey(row, "date"));
+
+    if (!description || !Number.isFinite(amount)) {
+      skipped++;
+      errors.push({ row: i + 2, error: "Missing description or invalid amount" });
+      continue;
+    }
+
+    const category = smartCategory(description);
+    try {
+      await db.insert(expensesTable).values({ description, amount: String(amount), category, date });
+      created++;
+      categories[category] = (categories[category] ?? 0) + 1;
+    } catch (err) {
+      errors.push({ row: i + 2, error: (err as Error).message });
+    }
+  }
+
+  res.json({ totalRows: rows.length, created, skipped, categories, errors });
 });
 
 router.delete("/expenses/:id", async (req, res): Promise<void> => {

@@ -9,10 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, TrendingDown } from "lucide-react";
+import { Upload, Plus, Trash2, TrendingDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-type Expense = { id: number; description: string; amount: number; date?: string | null; };
+type Expense = { id: number; description: string; amount: number; category?: string | null; date?: string | null; };
 
 export default function Expenses() {
   const { t } = useTranslation();
@@ -23,6 +23,7 @@ export default function Expenses() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   const params = {
     startDate: startDate || undefined,
@@ -46,6 +47,38 @@ export default function Expenses() {
     });
   };
 
+
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+    setIsImporting(true);
+    try {
+      const res = await fetch("/api/expenses/import", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Import failed");
+      invalidate();
+      const categoryText = Object.entries(data.categories ?? {})
+        .map(([category, count]) => `${category}: ${count}`)
+        .join(", ");
+      toast({ title: `Imported ${data.created} expenses`, description: categoryText || undefined });
+      if (data.skipped > 0) {
+        toast({ title: `${data.skipped} rows skipped`, description: "Check description, amount, and date columns.", variant: "destructive" });
+      }
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const handleDelete = () => {
     if (deleteId === null) return;
     del.mutate({ id: deleteId } as Parameters<typeof del.mutate>[0], {
@@ -60,9 +93,17 @@ export default function Expenses() {
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('expenses.title')}</h1>
-        <Button onClick={() => setShowForm(true)} data-testid="button-add-expense" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4 me-2" /> {t('expenses.new')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" disabled={isImporting} asChild>
+            <label className="cursor-pointer" data-testid="button-import-expenses">
+              <Upload className="h-4 w-4 me-2" /> {isImporting ? "Importing..." : "Upload Excel"}
+              <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} />
+            </label>
+          </Button>
+          <Button onClick={() => setShowForm(true)} data-testid="button-add-expense" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-4 w-4 me-2" /> {t('expenses.new')}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -90,17 +131,18 @@ export default function Expenses() {
           <table className="w-full text-sm">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Description", "Amount", "Date", ""].map((h) => (
+                {["Description", "Category", "Amount", "Date", ""].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(expenses as Expense[]).length === 0 ? (
-                <tr><td colSpan={4} className="px-4 py-8 text-center text-muted-foreground">No expenses recorded</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No expenses recorded</td></tr>
               ) : (expenses as Expense[]).map((e) => (
                 <tr key={e.id} data-testid={`row-expense-${e.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3">{e.description}</td>
+                  <td className="px-4 py-3"><span className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs text-primary">{e.category ?? "Other"}</span></td>
                   <td className="px-4 py-3 text-red-400 font-medium"><PrivacyWrapper value={e.amount} /></td>
                   <td className="px-4 py-3 text-muted-foreground">{e.date ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -117,6 +159,7 @@ export default function Expenses() {
         <DialogContent>
           <DialogHeader><DialogTitle>{t('expenses.new')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="rounded-md border border-border bg-muted/20 p-3 text-xs text-muted-foreground">Excel import accepts columns: description, amount, date. Category is detected automatically from description.</div>
             <div className="space-y-1"><Label>Description</Label><Input data-testid="input-expense-desc" value={form.description} onChange={f("description")} placeholder="What was this expense for?" /></div>
             <div className="space-y-1"><Label>Amount (EGP)</Label><Input data-testid="input-expense-amount" type="number" value={form.amount} onChange={f("amount")} /></div>
             <div className="space-y-1"><Label>Date</Label><Input type="date" value={form.date} onChange={f("date")} /></div>

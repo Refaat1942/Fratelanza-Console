@@ -6,6 +6,7 @@ export const expensesTable = pgTable("general_expenses", {
   id: serial("id").primaryKey(),
   description: text("description").notNull(),
   amount: numeric("amount", { precision: 12, scale: 2 }).notNull().default("0"),
+  category: text("category").notNull().default("Other"),
   date: text("date"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

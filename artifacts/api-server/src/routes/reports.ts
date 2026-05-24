@@ -114,6 +114,7 @@ router.get("/reports/system-activity.xlsx", async (_req, res): Promise<void> => 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(expenses.map((e) => ({
     ID: e.id,
     Description: e.description,
+    Category: e.category,
     Amount: numberValue(e.amount),
     Date: e.date ?? "",
     CreatedAt: iso(e.createdAt) ?? "",

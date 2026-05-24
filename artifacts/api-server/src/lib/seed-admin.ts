@@ -20,6 +20,17 @@ export async function ensureSessionTable(): Promise<void> {
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'admin';`);
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "page_permissions" text[] NOT NULL DEFAULT '{}';`);
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "general_expenses" (
+        "id" serial PRIMARY KEY,
+        "description" text NOT NULL,
+        "amount" numeric(12, 2) NOT NULL DEFAULT '0',
+        "category" text NOT NULL DEFAULT 'Other',
+        "date" text,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.execute(sql`ALTER TABLE "general_expenses" ADD COLUMN IF NOT EXISTS "category" text NOT NULL DEFAULT 'Other';`);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "tasks" (
         "id" serial PRIMARY KEY,
         "title" text NOT NULL,
