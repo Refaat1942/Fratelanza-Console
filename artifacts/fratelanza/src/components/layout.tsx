@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Link, useLocation } from 'wouter';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Briefcase, DollarSign, Users, Building2, FileText, FileEdit,
   Receipt, KanbanSquare, PieChart, Lock, Unlock, LogOut, Menu, Sun, Moon,
-  KeyRound, Settings as SettingsIcon, Languages, UserCog,
+  KeyRound, Settings as SettingsIcon, Languages, UserCog, Bell,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { usePrivacy } from '@/lib/privacy-context';
@@ -18,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 function NavBody({ onNav }: { onNav?: () => void }) {
   const [location] = useLocation();
@@ -165,6 +167,108 @@ function PrivacyControls() {
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+
+type TaskNotification = {
+  id: number;
+  taskTitle: string;
+  message: string;
+  recipientName: string;
+  readAt: string | null;
+  createdAt: string;
+};
+
+type TaskNotificationResponse = {
+  unreadCount: number;
+  items: TaskNotification[];
+};
+
+function playNotificationSound() {
+  const AudioContextCtor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return;
+  const ctx = new AudioContextCtor();
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.type = 'sine';
+  oscillator.frequency.value = 880;
+  gain.gain.value = 0.08;
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.start();
+  oscillator.stop(ctx.currentTime + 0.18);
+  oscillator.onended = () => void ctx.close();
+}
+
+function NotificationBell() {
+  const { apiBase, state } = useAuth();
+  const seenUnread = useRef<number | null>(null);
+  const notifications = useQuery({
+    queryKey: ['task-notifications'],
+    enabled: state.status === 'auth',
+    refetchInterval: 15000,
+    queryFn: async (): Promise<TaskNotificationResponse> => {
+      const res = await fetch(`${apiBase}/task-notifications`, { credentials: 'include' });
+      if (!res.ok) throw new Error('Could not load task notifications');
+      return res.json();
+    },
+  });
+
+  const unreadCount = notifications.data?.unreadCount ?? 0;
+
+  useEffect(() => {
+    if (seenUnread.current === null) {
+      seenUnread.current = unreadCount;
+      return;
+    }
+    if (unreadCount > seenUnread.current) {
+      try {
+        playNotificationSound();
+      } catch {
+        // Browsers can block sound until the first user gesture.
+      }
+    }
+    seenUnread.current = unreadCount;
+  }, [unreadCount]);
+
+  const markRead = async () => {
+    await fetch(`${apiBase}/task-notifications/read`, { method: 'POST', credentials: 'include' });
+    await notifications.refetch();
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="icon" className="relative" data-testid="button-task-notifications">
+          <Bell className="h-5 w-5" />
+          {unreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-destructive px-1 text-[10px] font-bold text-destructive-foreground">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 max-w-[calc(100vw-1rem)] p-0">
+        <div className="flex items-center justify-between border-b border-border px-3 py-2">
+          <div className="text-sm font-semibold">Task alerts</div>
+          <Button variant="ghost" size="sm" onClick={markRead} disabled={unreadCount === 0}>Mark read</Button>
+        </div>
+        <div className="max-h-80 overflow-y-auto p-2">
+          {notifications.isLoading ? (
+            <div className="p-3 text-sm text-muted-foreground">Loading alerts...</div>
+          ) : (notifications.data?.items.length ?? 0) === 0 ? (
+            <div className="p-3 text-sm text-muted-foreground">No task alerts</div>
+          ) : notifications.data?.items.map((item) => (
+            <div key={item.id} className={`rounded-md p-2 text-sm ${item.readAt ? 'text-muted-foreground' : 'bg-primary/10 text-foreground'}`}>
+              <div className="font-medium">{item.taskTitle}</div>
+              <div className="text-xs">{item.message}</div>
+              <div className="mt-1 text-[10px] text-muted-foreground">For {item.recipientName}</div>
+            </div>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

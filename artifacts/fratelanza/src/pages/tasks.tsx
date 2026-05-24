@@ -1,21 +1,44 @@
 import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useListTasks, getListTasksQueryKey, useCreateTask, useUpdateTask, useDeleteTask, useListProjects } from "@workspace/api-client-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useListTasks, getListTasksQueryKey, useCreateTask, useUpdateTask, useDeleteTask } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, MoveRight } from "lucide-react";
+import { Download, Plus, Pencil, Trash2, MoveRight, Users } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/lib/auth-context";
 
-type Task = { id: number; title: string; description?: string | null; status: string; priority?: string | null; projectName?: string | null; assignedTo?: string | null; dueDate?: string | null; createdAt: string; };
+type RecipientType = "team_member" | "freelancer";
+type TaskRecipient = { type: RecipientType; id: string; name: string; category: "Team Members" | "Freelancers"; value?: string };
+type Task = {
+  id: number;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority?: string | null;
+  projectName?: string | null;
+  assignedTo?: string | null;
+  assigneeType?: RecipientType | null;
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  assigneeValue?: string | null;
+  ccRecipients?: TaskRecipient[];
+  dueDate?: string | null;
+  lastStatusAt?: string | null;
+  createdAt: string;
+};
+type Activity = { id: number; action: string; actor?: string | null; fromStatus?: string | null; toStatus?: string | null; details?: string | null; createdAt: string };
+type AssigneesResponse = { teamMembers: TaskRecipient[]; freelancers: TaskRecipient[] };
 
 const COLUMNS = ["Todo", "In Progress", "Done"];
+const NONE = "__none";
 
 const PRIORITY_COLORS: Record<string, string> = {
   High: "bg-red-500/20 text-red-400 border-red-500/30",
@@ -23,11 +46,23 @@ const PRIORITY_COLORS: Record<string, string> = {
   Low: "bg-green-500/20 text-green-400 border-green-500/30",
 };
 
-const emptyForm = { title: "", description: "", status: "Todo", priority: "Medium", projectName: "", assignedTo: "", dueDate: "" };
+const emptyForm = {
+  title: "",
+  description: "",
+  status: "Todo",
+  priority: "Medium",
+  projectName: "",
+  assigneeValue: NONE,
+  ccRecipients: [] as string[],
+  dueDate: "",
+};
+
+const valueFor = (r: Pick<TaskRecipient, "type" | "id">) => `${r.type}:${r.id}`;
 
 export default function Tasks() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { apiBase } = useAuth();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Task | null>(null);
@@ -35,26 +70,84 @@ export default function Tasks() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: tasks = [], isLoading } = useListTasks();
-  const { data: projects = [] } = useListProjects();
   const create = useCreateTask();
   const update = useUpdateTask();
   const del = useDeleteTask();
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
+  const assignees = useQuery({
+    queryKey: ["task-assignees"],
+    queryFn: async (): Promise<AssigneesResponse> => {
+      const res = await fetch(`${apiBase}/task-assignees`, { credentials: "include" });
+      if (!res.ok) throw new Error("Could not load assignees");
+      return res.json();
+    },
+  });
 
-  const tasksByStatus = (status: string) => (tasks as Task[]).filter((t) => t.status === status);
+  const activity = useQuery({
+    queryKey: ["task-activity", editing?.id],
+    enabled: Boolean(editing?.id),
+    queryFn: async (): Promise<Activity[]> => {
+      const res = await fetch(`${apiBase}/tasks/${editing!.id}/activity`, { credentials: "include" });
+      if (!res.ok) throw new Error("Could not load task activity");
+      return res.json();
+    },
+  });
 
-  const openCreate = (status = "Todo") => { setForm({ ...emptyForm, status }); setEditing(null); setShowForm(true); };
-  const openEdit = (t: Task) => { setEditing(t); setForm({ title: t.title, description: t.description ?? "", status: t.status, priority: t.priority ?? "Medium", projectName: t.projectName ?? "", assignedTo: t.assignedTo ?? "", dueDate: t.dueDate ?? "" }); setShowForm(true); };
+  const allAssignees = [
+    ...(assignees.data?.teamMembers ?? []).map((r) => ({ ...r, value: r.value ?? valueFor(r) })),
+    ...(assignees.data?.freelancers ?? []).map((r) => ({ ...r, value: r.value ?? valueFor(r) })),
+  ];
+  const selectedAssignee = allAssignees.find((a) => a.value === form.assigneeValue) ?? null;
+  const ccOptions = allAssignees.filter((a) => a.value !== form.assigneeValue);
+
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: getListTasksQueryKey() });
+    qc.invalidateQueries({ queryKey: ["task-notifications"] });
+  };
+
+  const tasksByStatus = (status: string) => (tasks as Task[]).filter((task) => task.status === status);
+
+  const openCreate = (status = "Todo") => {
+    setForm({ ...emptyForm, status });
+    setEditing(null);
+    setShowForm(true);
+  };
+
+  const openEdit = (task: Task) => {
+    const assigneeValue = task.assigneeValue ?? (task.assigneeType && task.assigneeId ? valueFor({ type: task.assigneeType, id: task.assigneeId }) : NONE);
+    setEditing(task);
+    setForm({
+      title: task.title,
+      description: task.description ?? "",
+      status: task.status,
+      priority: task.priority ?? "Medium",
+      projectName: task.projectName ?? "",
+      assigneeValue,
+      ccRecipients: (task.ccRecipients ?? []).map(valueFor),
+      dueDate: task.dueDate ?? "",
+    });
+    setShowForm(true);
+  };
 
   const handleSave = () => {
+    const payload = {
+      title: form.title,
+      description: form.description,
+      status: form.status,
+      priority: form.priority,
+      projectName: form.projectName,
+      assigneeValue: form.assigneeValue === NONE ? null : form.assigneeValue,
+      ccRecipients: selectedAssignee?.type === "freelancer" ? form.ccRecipients : [],
+      dueDate: form.dueDate,
+    };
+
     if (editing) {
-      update.mutate({ id: editing.id, data: form } as Parameters<typeof update.mutate>[0], {
+      update.mutate({ id: editing.id, data: payload } as Parameters<typeof update.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Task updated" }); },
         onError: () => toast({ title: "Error", variant: "destructive" }),
       });
     } else {
-      create.mutate({ data: form } as Parameters<typeof create.mutate>[0], {
+      create.mutate({ data: payload } as Parameters<typeof create.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Task created" }); },
         onError: () => toast({ title: "Error", variant: "destructive" }),
       });
@@ -75,18 +168,35 @@ export default function Tasks() {
     });
   };
 
-  const nextStatus = (s: string) => COLUMNS[(COLUMNS.indexOf(s) + 1) % COLUMNS.length];
+  const toggleCc = (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      ccRecipients: prev.ccRecipients.includes(value)
+        ? prev.ccRecipients.filter((v) => v !== value)
+        : [...prev.ccRecipients, value],
+    }));
+  };
 
+  const downloadReport = () => {
+    window.location.href = `${apiBase}/reports/system-activity.xlsx`;
+  };
+
+  const nextStatus = (s: string) => COLUMNS[(COLUMNS.indexOf(s) + 1) % COLUMNS.length];
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
-  const fs = (k: string) => (v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+  const fs = (k: string) => (v: string) => setForm((prev) => ({ ...prev, [k]: v, ...(k === "assigneeValue" && !v.startsWith("freelancer:") ? { ccRecipients: [] } : {}) }));
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('tasks.title')}</h1>
-        <Button onClick={() => openCreate()} data-testid="button-add-task" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4 me-2" /> {t('tasks.new')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={downloadReport} data-testid="button-export-task-report">
+            <Download className="h-4 w-4 me-2" /> Export Excel
+          </Button>
+          <Button onClick={() => openCreate()} data-testid="button-add-task" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-4 w-4 me-2" /> {t('tasks.new')}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -117,23 +227,20 @@ export default function Tasks() {
                       </div>
                     </div>
                     {task.description && <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>}
+                    <div className="flex gap-1 flex-wrap">
+                      {task.priority && <Badge variant="outline" className={`text-[10px] px-1 py-0 ${PRIORITY_COLORS[task.priority] ?? ""}`}>{task.priority}</Badge>}
+                      {task.projectName && <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground">{task.projectName}</Badge>}
+                      {(task.assigneeName || task.assignedTo) && <Badge variant="outline" className="text-[10px] px-1 py-0"><Users className="me-1 h-3 w-3" />{task.assigneeName ?? task.assignedTo}</Badge>}
+                      {(task.ccRecipients?.length ?? 0) > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0">CC {task.ccRecipients!.length}</Badge>}
+                    </div>
                     <div className="flex items-center justify-between flex-wrap gap-1">
-                      <div className="flex gap-1 flex-wrap">
-                        {task.priority && <Badge variant="outline" className={`text-[10px] px-1 py-0 ${PRIORITY_COLORS[task.priority] ?? ""}`}>{task.priority}</Badge>}
-                        {task.projectName && <Badge variant="outline" className="text-[10px] px-1 py-0 text-muted-foreground">{task.projectName}</Badge>}
-                      </div>
                       {col !== "Done" && (
                         <button onClick={() => moveTask(task, nextStatus(col))} className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-0.5" data-testid={`button-move-${task.id}`}>
-                          <MoveRight className="h-3 w-3" />
+                          Move to {nextStatus(col)} <MoveRight className="h-3 w-3" />
                         </button>
                       )}
+                      {task.dueDate && <span className="text-[10px] text-muted-foreground">Due: {task.dueDate}</span>}
                     </div>
-                    {(task.assignedTo || task.dueDate) && (
-                      <div className="flex gap-3 text-[10px] text-muted-foreground">
-                        {task.assignedTo && <span>{task.assignedTo}</span>}
-                        {task.dueDate && <span>Due: {task.dueDate}</span>}
-                      </div>
-                    )}
                   </div>
                 ))}
               </div>
@@ -155,12 +262,56 @@ export default function Tasks() {
               </div>
               <div className="space-y-1">
                 <Label>Priority</Label>
-                <Select value={form.priority} onValueChange={fs("priority")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["High", "Medium", "Low"].map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.priority} onValueChange={fs("priority")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{["High", "Medium", "Low"].map((priority) => <SelectItem key={priority} value={priority}>{priority}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1"><Label>Project</Label><Input value={form.projectName} onChange={f("projectName")} placeholder="Project name" /></div>
-              <div className="space-y-1"><Label>Assigned To</Label><Input value={form.assignedTo} onChange={f("assignedTo")} /></div>
               <div className="space-y-1"><Label>Due Date</Label><Input type="date" value={form.dueDate} onChange={f("dueDate")} /></div>
+              <div className="space-y-1 sm:col-span-2">
+                <Label>Assign to Team Member or Freelancer</Label>
+                <Select value={form.assigneeValue} onValueChange={fs("assigneeValue")}>
+                  <SelectTrigger data-testid="select-task-assignee"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Unassigned</SelectItem>
+                    {(assignees.data?.teamMembers ?? []).length > 0 && <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Team Members</div>}
+                    {(assignees.data?.teamMembers ?? []).map((member) => <SelectItem key={valueFor(member)} value={valueFor(member)}>{member.name}</SelectItem>)}
+                    {(assignees.data?.freelancers ?? []).length > 0 && <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">Freelancers</div>}
+                    {(assignees.data?.freelancers ?? []).map((freelancer) => <SelectItem key={valueFor(freelancer)} value={valueFor(freelancer)}>{freelancer.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+
+            {selectedAssignee?.type === "freelancer" && (
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <Label>Add in CC</Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {ccOptions.map((recipient) => (
+                    <label key={recipient.value} className="flex cursor-pointer items-center gap-2 text-sm">
+                      <Checkbox checked={form.ccRecipients.includes(recipient.value)} onCheckedChange={() => toggleCc(recipient.value)} />
+                      <span>{recipient.name}</span>
+                      <span className="text-xs text-muted-foreground">{recipient.category}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {editing && (
+              <div className="space-y-2 rounded-md border border-border p-3">
+                <Label>Status tracking and updates</Label>
+                {activity.isLoading ? <div className="text-xs text-muted-foreground">Loading history...</div> : (activity.data?.length ?? 0) === 0 ? <div className="text-xs text-muted-foreground">No updates yet</div> : (
+                  <div className="max-h-40 space-y-2 overflow-y-auto">
+                    {activity.data?.map((item) => (
+                      <div key={item.id} className="text-xs">
+                        <div className="font-medium">{item.action.replace(/_/g, " ")}</div>
+                        <div className="text-muted-foreground">{item.details}</div>
+                        <div className="text-[10px] text-muted-foreground">{new Date(item.createdAt).toLocaleString()}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>

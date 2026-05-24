@@ -20,6 +20,57 @@ export async function ensureSessionTable(): Promise<void> {
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'admin';`);
     await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "page_permissions" text[] NOT NULL DEFAULT '{}';`);
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "tasks" (
+        "id" serial PRIMARY KEY,
+        "title" text NOT NULL,
+        "description" text,
+        "status" text NOT NULL DEFAULT 'Todo',
+        "priority" text DEFAULT 'Medium',
+        "project_id" integer,
+        "project_name" text,
+        "assigned_to" text,
+        "assignee_type" text,
+        "assignee_id" text,
+        "assignee_name" text,
+        "cc_recipients" text[] NOT NULL DEFAULT '{}',
+        "due_date" text,
+        "last_status_at" timestamptz,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "assignee_type" text;`);
+    await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "assignee_id" text;`);
+    await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "assignee_name" text;`);
+    await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "cc_recipients" text[] NOT NULL DEFAULT '{}';`);
+    await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "last_status_at" timestamptz;`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "task_activities" (
+        "id" serial PRIMARY KEY,
+        "task_id" integer NOT NULL,
+        "action" text NOT NULL,
+        "actor" text,
+        "from_status" text,
+        "to_status" text,
+        "details" text,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_task_activities_task_id" ON "task_activities" ("task_id");`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "task_notifications" (
+        "id" serial PRIMARY KEY,
+        "recipient_type" text NOT NULL,
+        "recipient_id" text NOT NULL,
+        "recipient_name" text NOT NULL,
+        "task_id" integer NOT NULL,
+        "task_title" text NOT NULL,
+        "message" text NOT NULL,
+        "read_at" timestamptz,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_task_notifications_recipient" ON "task_notifications" ("recipient_type", "recipient_id", "read_at");`);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",
         "sess" json NOT NULL,
