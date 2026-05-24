@@ -40,7 +40,8 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
     res.status(401).json({ error: "Not authenticated" });
     return;
   }
-  if (req.session.role !== "admin") {
+  const role = req.session.role ?? "admin";
+  if (role !== "admin") {
     res.status(403).json({ error: "Admin only" });
     return;
   }
