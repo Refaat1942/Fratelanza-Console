@@ -176,6 +176,36 @@ router.post("/expenses/import", upload.single("file"), async (req, res): Promise
   res.json({ totalRows: rows.length, created, skipped, categories, errors });
 });
 
+
+router.patch("/expenses/:id", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const body = req.body ?? {};
+  const updates: Record<string, string> = {};
+
+  if (body.description !== undefined) updates.description = String(body.description);
+  if (body.amount !== undefined) updates.amount = String(Number(body.amount ?? 0));
+  if (body.date !== undefined) updates.date = String(body.date);
+  if (body.category !== undefined) {
+    updates.category = isExpenseCategory(body.category)
+      ? body.category
+      : smartCategory(String(body.description ?? body.category ?? ""));
+  } else if (body.description !== undefined) {
+    updates.category = smartCategory(String(body.description));
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "Nothing to update" });
+    return;
+  }
+
+  const [row] = await db.update(expensesTable).set(updates).where(eq(expensesTable.id, id)).returning();
+  if (!row) {
+    res.status(404).json({ error: "Expense not found" });
+    return;
+  }
+  res.json(toShape(row));
+});
+
 router.delete("/expenses/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const [deleted] = await db.delete(expensesTable).where(eq(expensesTable.id, id)).returning();

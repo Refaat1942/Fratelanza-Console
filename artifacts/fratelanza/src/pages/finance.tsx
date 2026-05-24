@@ -24,9 +24,9 @@ export default function Finance() {
   const clearFilter = () => { setStartDate(""); setEndDate(""); setApplied({ startDate: "", endDate: "" }); };
 
   const kpis = report ? [
-    { label: "Total Revenue", value: report.totalRevenue, color: "text-foreground" },
-    { label: "Total Paid", value: report.totalPaid, color: "text-blue-400" },
-    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400" },
+    { label: "Contract Value", value: report.totalRevenue, color: "text-foreground" },
+    { label: "Gross Revenue (Paid)", value: report.totalPaid, color: "text-blue-400" },
+    { label: "Backlog / Receivables", value: report.totalRemaining, color: "text-orange-400" },
     { label: "Total Cost", value: report.totalCost, color: "text-red-400" },
     { label: "Net Profit", value: report.totalNetProfit, color: "text-primary" },
     { label: "Expenses", value: report.totalExpenses, color: "text-red-400" },
@@ -103,7 +103,7 @@ export default function Finance() {
               <table className="w-full text-sm">
                 <thead className="bg-card">
                   <tr className="border-b border-border">
-                    {["Type", "Project", "Client", "Revenue", "Cost", "Net Profit", "Paid", "Remaining", "Status"].map((h) => (
+                    {["Type", "Project", "Client", "Contract", "Cost", "Net Profit", "Paid Revenue", "Backlog", "Status"].map((h) => (
                       <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                     ))}
                   </tr>

@@ -4,23 +4,40 @@ import { useListExpenses, getListExpensesQueryKey, useCreateExpense, useDeleteEx
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, Plus, Trash2, TrendingDown } from "lucide-react";
+import { Upload, Plus, Pencil, Trash2, TrendingDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 type Expense = { id: number; description: string; amount: number; category?: string | null; date?: string | null; };
+
+const EXPENSE_CATEGORIES = [
+  "Payroll",
+  "Freelancers",
+  "Software & Subscriptions",
+  "Marketing",
+  "Office",
+  "Travel & Transport",
+  "Training",
+  "Equipment",
+  "Banking & Fees",
+  "Meals",
+  "Other",
+];
+
 
 export default function Expenses() {
   const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ description: "", amount: 0, date: new Date().toISOString().slice(0, 10) });
+  const [form, setForm] = useState({ description: "", amount: 0, category: "Other", date: new Date().toISOString().slice(0, 10) });
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [editing, setEditing] = useState<Expense | null>(null);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isImporting, setIsImporting] = useState(false);
@@ -40,9 +57,48 @@ export default function Expenses() {
     qc.invalidateQueries({ queryKey: getGetExpenseSummaryQueryKey() });
   };
 
-  const handleSave = () => {
-    create.mutate({ data: { ...form, amount: Number(form.amount) } } as Parameters<typeof create.mutate>[0], {
-      onSuccess: () => { invalidate(); setShowForm(false); setForm({ description: "", amount: 0, date: new Date().toISOString().slice(0, 10) }); toast({ title: "Expense added" }); },
+
+  const openCreate = () => {
+    setEditing(null);
+    setForm({ description: "", amount: 0, category: "Other", date: new Date().toISOString().slice(0, 10) });
+    setShowForm(true);
+  };
+
+  const openEdit = (expense: Expense) => {
+    setEditing(expense);
+    setForm({
+      description: expense.description,
+      amount: expense.amount,
+      category: expense.category ?? "Other",
+      date: expense.date ?? new Date().toISOString().slice(0, 10),
+    });
+    setShowForm(true);
+  };
+
+  const handleSave = async () => {
+    const payload = { ...form, amount: Number(form.amount) };
+    if (editing) {
+      try {
+        const res = await fetch(`/api/expenses/${editing.id}`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json().catch(() => null);
+        if (!res.ok) throw new Error(data?.error ?? "Error updating expense");
+        invalidate();
+        setShowForm(false);
+        setEditing(null);
+        toast({ title: "Expense updated" });
+      } catch (err) {
+        toast({ title: (err as Error).message, variant: "destructive" });
+      }
+      return;
+    }
+
+    create.mutate({ data: payload } as Parameters<typeof create.mutate>[0], {
+      onSuccess: () => { invalidate(); setShowForm(false); setForm({ description: "", amount: 0, category: "Other", date: new Date().toISOString().slice(0, 10) }); toast({ title: "Expense added" }); },
       onError: () => toast({ title: "Error", variant: "destructive" }),
     });
   };
@@ -100,7 +156,7 @@ export default function Expenses() {
               <input className="hidden" type="file" accept=".xlsx,.xls,.csv" onChange={handleImport} />
             </label>
           </Button>
-          <Button onClick={() => setShowForm(true)} data-testid="button-add-expense" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Button onClick={openCreate} data-testid="button-add-expense" className="bg-primary text-primary-foreground hover:bg-primary/90">
             <Plus className="h-4 w-4 me-2" /> {t('expenses.new')}
           </Button>
         </div>
@@ -146,7 +202,10 @@ export default function Expenses() {
                   <td className="px-4 py-3 text-red-400 font-medium"><PrivacyWrapper value={e.amount} /></td>
                   <td className="px-4 py-3 text-muted-foreground">{e.date ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <Button size="icon" variant="ghost" data-testid={`button-delete-expense-${e.id}`} onClick={() => setDeleteId(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" data-testid={`button-edit-expense-${e.id}`} onClick={() => openEdit(e)}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" data-testid={`button-delete-expense-${e.id}`} onClick={() => setDeleteId(e.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -155,18 +214,27 @@ export default function Expenses() {
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if (!open) setEditing(null); }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{t('expenses.new')}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? "Edit Expense" : t('expenses.new')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="rounded-md border border-border bg-muted/20 p-3 text-xs text-muted-foreground">Excel import accepts columns: description, amount, date. Category is detected automatically from description.</div>
             <div className="space-y-1"><Label>Description</Label><Input data-testid="input-expense-desc" value={form.description} onChange={f("description")} placeholder="What was this expense for?" /></div>
             <div className="space-y-1"><Label>Amount (EGP)</Label><Input data-testid="input-expense-amount" type="number" value={form.amount} onChange={f("amount")} /></div>
+            <div className="space-y-1">
+              <Label>Category</Label>
+              <Select value={form.category} onValueChange={(category) => setForm((prev) => ({ ...prev, category }))}>
+                <SelectTrigger data-testid="select-expense-category"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_CATEGORIES.map((category) => <SelectItem key={category} value={category}>{category}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-1"><Label>Date</Label><Input type="date" value={form.date} onChange={f("date")} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
-            <Button data-testid="button-save-expense" onClick={handleSave} disabled={create.isPending}>{create.isPending ? t('common.saving') : t('expenses.new')}</Button>
+            <Button data-testid="button-save-expense" onClick={handleSave} disabled={create.isPending}>{create.isPending ? t('common.saving') : editing ? "Save changes" : t('expenses.new')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
