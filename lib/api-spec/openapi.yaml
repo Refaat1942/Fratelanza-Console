@@ -878,6 +878,87 @@ paths:
         "404":
           description: Not found
 
+  # ── Users (admin-only) ────────────────────────────────────────────────
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List all users (admin only)
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "403":
+          description: Admin only
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create a new user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserInput"
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "409":
+          description: Username already exists
+
+  /users/{id}:
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update a user (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UserUpdate"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete a user (admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          description: Cannot delete (last admin or self)
+        "404":
+          description: Not found
+
   # ── Finance / P&L Report ──────────────────────────────────────────────
   /finance/report:
     get:
@@ -926,6 +1007,60 @@ components:
           type: boolean
         token:
           type: ["string", "null"]
+        username:
+          type: string
+        role:
+          type: string
+        pagePermissions:
+          type: array
+          items:
+            type: string
+
+    User:
+      type: object
+      required: [id, username, role, pagePermissions, createdAt]
+      properties:
+        id:
+          type: integer
+        username:
+          type: string
+        role:
+          type: string
+        pagePermissions:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+
+    UserInput:
+      type: object
+      required: [username, password, role]
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        role:
+          type: string
+        pagePermissions:
+          type: array
+          items:
+            type: string
+
+    UserUpdate:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: ["string", "null"]
+        role:
+          type: string
+        pagePermissions:
+          type: array
+          items:
+            type: string
 
     # ── Dashboard ──────────────────────────────────────────────────────
     DashboardSummary:

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Briefcase, DollarSign, Users, Building2, FileText, FileEdit,
   Receipt, KanbanSquare, PieChart, Lock, Unlock, LogOut, Menu, Sun, Moon,
-  KeyRound, Settings as SettingsIcon, Languages,
+  KeyRound, Settings as SettingsIcon, Languages, UserCog,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { usePrivacy } from '@/lib/privacy-context';
@@ -22,7 +22,8 @@ import { useToast } from '@/hooks/use-toast';
 function NavBody({ onNav }: { onNav?: () => void }) {
   const [location] = useLocation();
   const { t } = useTranslation();
-  const navigation = [
+  const { isAdmin, canAccess } = useAuth();
+  const allNav = [
     { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard, key: 'dashboard' },
     { name: t('nav.projects'), href: '/projects', icon: Briefcase, key: 'projects' },
     { name: t('nav.receivables'), href: '/receivables', icon: DollarSign, key: 'receivables' },
@@ -34,7 +35,9 @@ function NavBody({ onNav }: { onNav?: () => void }) {
     { name: t('nav.tasks'), href: '/tasks', icon: KanbanSquare, key: 'tasks' },
     { name: t('nav.finance'), href: '/finance', icon: PieChart, key: 'finance' },
     { name: t('nav.settings'), href: '/settings', icon: SettingsIcon, key: 'settings' },
+    { name: t('nav.users', { defaultValue: 'Users' }), href: '/users', icon: UserCog, key: 'users', adminOnly: true },
   ];
+  const navigation = allNav.filter((it) => (it.adminOnly ? isAdmin : canAccess(it.key)));
   return (
     <nav className="space-y-1 px-3">
       {navigation.map((item, idx) => {

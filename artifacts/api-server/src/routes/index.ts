@@ -9,6 +9,7 @@ import templatesRouter from "./templates";
 import quotesRouter from "./quotes";
 import expensesRouter from "./expenses";
 import tasksRouter from "./tasks";
+import usersRouter from "./users";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(templatesRouter);
 router.use(quotesRouter);
 router.use(expensesRouter);
 router.use(tasksRouter);
+router.use(usersRouter);
 
 export default router;

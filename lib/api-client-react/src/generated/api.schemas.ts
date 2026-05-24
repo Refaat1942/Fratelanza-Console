@@ -17,6 +17,32 @@ export interface AuthResult {
   success: boolean;
   /** @nullable */
   token?: string | null;
+  username?: string;
+  role?: string;
+  pagePermissions?: string[];
+}
+
+export interface User {
+  id: number;
+  username: string;
+  role: string;
+  pagePermissions: string[];
+  createdAt: string;
+}
+
+export interface UserInput {
+  username: string;
+  password: string;
+  role: string;
+  pagePermissions?: string[];
+}
+
+export interface UserUpdate {
+  username?: string;
+  /** @nullable */
+  password?: string | null;
+  role?: string;
+  pagePermissions?: string[];
 }
 
 export interface DashboardSummary {

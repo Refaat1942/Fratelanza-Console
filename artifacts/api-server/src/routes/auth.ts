@@ -10,6 +10,8 @@ declare module "express-session" {
   interface SessionData {
     userId?: number;
     username?: string;
+    role?: string;
+    pagePermissions?: string[];
   }
 }
 
@@ -31,7 +33,14 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
   req.session.userId = user.id;
   req.session.username = user.username;
-  res.json({ success: true, username: user.username });
+  req.session.role = user.role;
+  req.session.pagePermissions = user.pagePermissions ?? [];
+  res.json({
+    success: true,
+    username: user.username,
+    role: user.role,
+    pagePermissions: user.pagePermissions ?? [],
+  });
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
@@ -46,27 +55,12 @@ router.get("/auth/me", async (req, res): Promise<void> => {
     res.status(401).json({ authenticated: false });
     return;
   }
-  res.json({ authenticated: true, username: req.session.username });
-});
-
-router.post("/auth/change-password", async (req, res): Promise<void> => {
-  if (!req.session.userId) {
-    res.status(401).json({ error: "Not authenticated" });
-    return;
-  }
-  const { currentPassword, newPassword } = req.body ?? {};
-  if (!currentPassword || !newPassword || String(newPassword).length < 6) {
-    res.status(400).json({ error: "newPassword must be at least 6 chars" });
-    return;
-  }
-  const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.session.userId));
-  if (!user || !(await bcrypt.compare(String(currentPassword), user.passwordHash))) {
-    res.status(401).json({ error: "Current password incorrect" });
-    return;
-  }
-  const hash = await bcrypt.hash(String(newPassword), 10);
-  await db.update(usersTable).set({ passwordHash: hash }).where(eq(usersTable.id, user.id));
-  res.json({ success: true });
+  res.json({
+    authenticated: true,
+    username: req.session.username,
+    role: req.session.role ?? "admin",
+    pagePermissions: req.session.pagePermissions ?? [],
+  });
 });
 
 // kept for backwards-compatibility with any prior frontend code paths

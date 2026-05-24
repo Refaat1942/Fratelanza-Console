@@ -5,13 +5,16 @@ const API_BASE = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 type AuthState =
   | { status: "loading" }
   | { status: "anon" }
-  | { status: "auth"; username: string };
+  | { status: "auth"; username: string; role: string; pagePermissions: string[] };
 
 type Ctx = {
   state: AuthState;
   login: (username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   apiBase: string;
+  isAdmin: boolean;
+  canAccess: (pageKey: string) => boolean;
+  canEdit: boolean;
 };
 
 const AuthContext = createContext<Ctx | null>(null);
@@ -24,7 +27,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(async (r) => {
         if (r.ok) {
           const data = await r.json();
-          setState({ status: "auth", username: data.username ?? "user" });
+          setState({
+            status: "auth",
+            username: data.username ?? "user",
+            role: data.role ?? "admin",
+            pagePermissions: Array.isArray(data.pagePermissions) ? data.pagePermissions : [],
+          });
         } else {
           setState({ status: "anon" });
         }
@@ -41,7 +49,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (res.ok) {
       const data = await res.json();
-      setState({ status: "auth", username: data.username ?? username });
+      setState({
+        status: "auth",
+        username: data.username ?? username,
+        role: data.role ?? "admin",
+        pagePermissions: Array.isArray(data.pagePermissions) ? data.pagePermissions : [],
+      });
       return { ok: true };
     }
     let err = "Invalid credentials";
@@ -57,7 +70,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: "anon" });
   };
 
-  return <AuthContext.Provider value={{ state, login, logout, apiBase: API_BASE }}>{children}</AuthContext.Provider>;
+  const isAdmin = state.status === "auth" && state.role === "admin";
+  const canEdit = isAdmin; // viewers are read-only
+  const canAccess = (pageKey: string) => {
+    if (state.status !== "auth") return false;
+    if (state.role === "admin") return true;
+    return state.pagePermissions.includes(pageKey);
+  };
+
+  return (
+    <AuthContext.Provider value={{ state, login, logout, apiBase: API_BASE, isAdmin, canAccess, canEdit }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

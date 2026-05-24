@@ -7,3 +7,4 @@ export * from "./expenses";
 export * from "./tasks";
 export * from "./team";
 export * from "./users";
+export * from "./session";

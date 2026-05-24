@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AuthResult {
-  success: boolean;
-  /** @nullable */
-  token?: string | null;
+export interface UserUpdate {
   username?: string;
+  /** @nullable */
+  password?: string | null;
   role?: string;
   pagePermissions?: string[];
 }

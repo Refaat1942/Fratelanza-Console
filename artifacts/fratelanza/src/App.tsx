@@ -23,6 +23,7 @@ import Expenses from "./pages/expenses";
 import Tasks from "./pages/tasks";
 import Finance from "./pages/finance";
 import Settings from "./pages/settings";
+import Users from "./pages/users";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ function AnimatedRoutes() {
           <Route path="/tasks" component={Tasks} />
           <Route path="/finance" component={Finance} />
           <Route path="/settings" component={Settings} />
+          <Route path="/users" component={Users} />
           <Route component={NotFound} />
         </Switch>
       </PageTransition>

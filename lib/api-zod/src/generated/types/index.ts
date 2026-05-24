@@ -48,3 +48,6 @@ export * from './teamMemberInput';
 export * from './template';
 export * from './templateInput';
 export * from './templateUpdate';
+export * from './user';
+export * from './userInput';
+export * from './userUpdate';
