@@ -54,6 +54,7 @@ export async function ensureSessionTable(): Promise<void> {
     await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "assignee_name" text;`);
     await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "cc_recipients" text[] NOT NULL DEFAULT '{}';`);
     await db.execute(sql`ALTER TABLE "tasks" ADD COLUMN IF NOT EXISTS "last_status_at" timestamptz;`);
+    await db.execute(sql`UPDATE "tasks" SET "status" = 'To Do' WHERE "status" = 'Todo';`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "task_activities" (
         "id" serial PRIMARY KEY,

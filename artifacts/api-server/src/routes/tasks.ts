@@ -21,7 +21,12 @@ type TaskRecipient = {
 
 type Assignee = TaskRecipient & { value: string };
 
-const VALID_STATUSES = new Set(["Todo", "In Progress", "Done"]);
+const VALID_STATUSES = new Set(["To Do", "In Progress", "Done"]);
+
+function normalizeStatus(status: unknown): string {
+  if (status === "Todo" || status === "To Do") return "To Do";
+  return typeof status === "string" && VALID_STATUSES.has(status) ? status : "To Do";
+}
 
 function recipientValue(type: RecipientType, id: string): string {
   return `${type}:${id}`;
@@ -276,7 +281,10 @@ router.post("/task-notifications/read", async (req, res): Promise<void> => {
 router.get("/tasks", async (req, res): Promise<void> => {
   const { status, projectId } = req.query as Record<string, string>;
   const conditions = [];
-  if (status) conditions.push(eq(tasksTable.status, status));
+  if (status) {
+    const normalizedStatus = normalizeStatus(status);
+    conditions.push(normalizedStatus === "To Do" ? or(eq(tasksTable.status, "To Do"), eq(tasksTable.status, "Todo"))! : eq(tasksTable.status, normalizedStatus));
+  }
   if (projectId) conditions.push(eq(tasksTable.projectId, parseInt(projectId, 10)));
 
   const rows = conditions.length
@@ -290,7 +298,7 @@ router.post("/tasks", async (req, res): Promise<void> => {
   const body = req.body ?? {};
   const assignee = await resolveRecipientFromBody(body);
   const ccRecipients = await resolveCcRecipients(body, assignee);
-  const status = typeof body.status === "string" && VALID_STATUSES.has(body.status) ? body.status : "Todo";
+  const status = normalizeStatus(body.status);
 
   const [row] = await db.insert(tasksTable).values({
     title: body.title,
@@ -353,13 +361,15 @@ router.patch("/tasks/:id", async (req, res): Promise<void> => {
       : null;
   const assignmentChanged = taskChangedAssignment(existing, assignee);
   const ccRecipients = body.ccRecipients !== undefined ? await resolveCcRecipients(body, assignee) : decodeRecipients(existing.ccRecipients);
-  const statusChanged = typeof body.status === "string" && body.status !== existing.status;
+  const normalizedBodyStatus = body.status !== undefined ? normalizeStatus(body.status) : undefined;
+  const statusChanged = normalizedBodyStatus !== undefined && normalizedBodyStatus !== existing.status;
 
   const updates: Record<string, unknown> = {};
-  const textFields = ["title", "description", "status", "priority", "projectName", "dueDate"];
+  const textFields = ["title", "description", "priority", "projectName", "dueDate"];
   for (const f of textFields) {
     if (body[f] !== undefined) updates[f] = body[f];
   }
+  if (normalizedBodyStatus !== undefined) updates.status = normalizedBodyStatus;
   if (body.projectId !== undefined) updates.projectId = body.projectId === null ? null : Number(body.projectId);
   if (body.assigneeValue !== undefined || body.assigneeType !== undefined || body.assigneeId !== undefined || body.assignedTo !== undefined) {
     updates.assignedTo = assignee?.name ?? null;

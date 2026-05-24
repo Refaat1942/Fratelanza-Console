@@ -116,7 +116,11 @@ export default function Projects() {
   };
 
   const handleSave = () => {
-    const totalCommission = team.reduce((s, m) => s + m.commission, 0) + Number(form.freelancerCommission || 0);
+    const leadCommission = Math.max(0, Number(form.freelancerCommission || 0));
+    const commissionedTeam = team
+      .map((m) => ({ ...m, commission: Math.max(0, Number(m.commission || 0)) }))
+      .filter((m) => m.commission > 0);
+    const totalCommission = commissionedTeam.reduce((s, m) => s + m.commission, 0) + leadCommission;
     const data = {
       ...form,
       clientPrice: Number(form.clientPrice),
@@ -124,8 +128,8 @@ export default function Projects() {
       netProfit: Number(form.clientPrice) - (Number(form.totalCost) + totalCommission),
       paidAmount: Number(form.paidAmount),
       remainingAmount: Number(form.clientPrice) - Number(form.paidAmount),
-      freelancerCommission: Number(form.freelancerCommission),
-      team,
+      freelancerCommission: leadCommission,
+      team: commissionedTeam,
     };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
@@ -267,14 +271,14 @@ export default function Projects() {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label>Lead Commission (EGP)</Label>
-              <Input type="number" value={form.freelancerCommission} onChange={f("freelancerCommission")} />
+              <Label>Lead Commission (EGP) — optional</Label>
+              <Input type="number" min="0" placeholder="Leave blank for no commission" value={form.freelancerCommission} onChange={f("freelancerCommission")} />
             </div>
 
             {/* Multi-freelancer team */}
             <div className="md:col-span-2 space-y-2 border border-border rounded-md p-3 bg-card/40">
               <div className="flex items-center gap-2 text-sm font-semibold">
-                <Users className="h-4 w-4 text-primary" /> Additional Team Members
+                <Users className="h-4 w-4 text-primary" /> Additional Commissioned Freelancers
               </div>
               <div className="flex gap-2 flex-wrap">
                 <Select value={pickFreelancer || undefined} onValueChange={setPickFreelancer}>
@@ -285,7 +289,7 @@ export default function Projects() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="number" placeholder="Commission EGP" className="w-40" value={pickCommission} onChange={(e) => setPickCommission(e.target.value)} data-testid="input-team-commission" />
+                <Input type="number" min="0" placeholder="Commission EGP (optional)" className="w-48" value={pickCommission} onChange={(e) => setPickCommission(e.target.value)} data-testid="input-team-commission" />
                 <Button type="button" variant="outline" onClick={addTeamMember} data-testid="button-add-team"><Plus className="h-4 w-4" /></Button>
               </div>
               {team.length > 0 && (

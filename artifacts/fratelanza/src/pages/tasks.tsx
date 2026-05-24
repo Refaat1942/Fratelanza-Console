@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Download, Plus, Pencil, Trash2, MoveRight, Users } from "lucide-react";
+import { Download, Plus, Pencil, Trash2, MoveRight, Users, Clock, CheckCircle2, AlertCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth-context";
 
@@ -37,7 +37,7 @@ type Task = {
 type Activity = { id: number; action: string; actor?: string | null; fromStatus?: string | null; toStatus?: string | null; details?: string | null; createdAt: string };
 type AssigneesResponse = { teamMembers: TaskRecipient[]; freelancers: TaskRecipient[] };
 
-const COLUMNS = ["Todo", "In Progress", "Done"];
+const COLUMNS = ["To Do", "In Progress", "Done"];
 const NONE = "__none";
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -49,7 +49,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 const emptyForm = {
   title: "",
   description: "",
-  status: "Todo",
+  status: "To Do",
   priority: "Medium",
   projectName: "",
   assigneeValue: NONE,
@@ -105,9 +105,15 @@ export default function Tasks() {
     qc.invalidateQueries({ queryKey: ["task-notifications"] });
   };
 
-  const tasksByStatus = (status: string) => (tasks as Task[]).filter((task) => task.status === status);
+  const normalizedStatus = (status: string) => (status === "Todo" ? "To Do" : status);
+  const allTasks = (tasks as Task[]).map((task) => ({ ...task, status: normalizedStatus(task.status) }));
+  const tasksByStatus = (status: string) => allTasks.filter((task) => task.status === status);
+  const totalTasks = allTasks.length;
+  const openTasks = allTasks.filter((task) => task.status !== "Done").length;
+  const highPriorityTasks = allTasks.filter((task) => task.priority === "High" && task.status !== "Done").length;
+  const completedTasks = allTasks.filter((task) => task.status === "Done").length;
 
-  const openCreate = (status = "Todo") => {
+  const openCreate = (status = "To Do") => {
     setForm({ ...emptyForm, status });
     setEditing(null);
     setShowForm(true);
@@ -119,7 +125,7 @@ export default function Tasks() {
     setForm({
       title: task.title,
       description: task.description ?? "",
-      status: task.status,
+      status: normalizedStatus(task.status),
       priority: task.priority ?? "Medium",
       projectName: task.projectName ?? "",
       assigneeValue,
@@ -182,6 +188,11 @@ export default function Tasks() {
   };
 
   const nextStatus = (s: string) => COLUMNS[(COLUMNS.indexOf(s) + 1) % COLUMNS.length];
+  const columnStyles: Record<string, { dot: string; ring: string; bg: string }> = {
+    "To Do": { dot: "bg-slate-400", ring: "border-slate-500/30", bg: "bg-slate-500/5" },
+    "In Progress": { dot: "bg-primary", ring: "border-primary/40", bg: "bg-primary/5" },
+    Done: { dot: "bg-green-400", ring: "border-green-500/30", bg: "bg-green-500/5" },
+  };
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
   const fs = (k: string) => (v: string) => setForm((prev) => ({ ...prev, [k]: v, ...(k === "assigneeValue" && !v.startsWith("freelancer:") ? { ccRecipients: [] } : {}) }));
 
@@ -202,25 +213,45 @@ export default function Tasks() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><Clock className="h-4 w-4" /> Total tasks</div>
+              <div className="mt-2 text-2xl font-bold">{totalTasks}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><MoveRight className="h-4 w-4" /> Open</div>
+              <div className="mt-2 text-2xl font-bold text-primary">{openTasks}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><AlertCircle className="h-4 w-4" /> High priority</div>
+              <div className="mt-2 text-2xl font-bold text-red-400">{highPriorityTasks}</div>
+            </div>
+            <div className="rounded-xl border border-border bg-card/70 p-4">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground"><CheckCircle2 className="h-4 w-4" /> Done</div>
+              <div className="mt-2 text-2xl font-bold text-green-400">{completedTasks}</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {COLUMNS.map((col) => (
-            <div key={col} className="space-y-3">
+            <div key={col} className={`space-y-3 rounded-2xl border ${columnStyles[col].ring} ${columnStyles[col].bg} p-3`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <div className={`h-2 w-2 rounded-full ${col === "Todo" ? "bg-muted-foreground" : col === "In Progress" ? "bg-primary" : "bg-green-400"}`} />
+                  <div className={`h-2.5 w-2.5 rounded-full ${columnStyles[col].dot}`} />
                   <span className="font-semibold text-sm">{col}</span>
                   <span className="text-xs text-muted-foreground bg-card border border-border px-1.5 py-0.5 rounded">{tasksByStatus(col).length}</span>
                 </div>
-                <button onClick={() => openCreate(col)} className="text-muted-foreground hover:text-foreground transition-colors" data-testid={`button-add-task-${col.replace(" ", "-").toLowerCase()}`}>
+                <button onClick={() => openCreate(col)} className="text-muted-foreground hover:text-foreground transition-colors" data-testid={`button-add-task-${col.replace(/\s+/g, "-").toLowerCase()}`}>
                   <Plus className="h-4 w-4" />
                 </button>
               </div>
 
-              <div className="space-y-2 min-h-[200px]">
+              <div className="space-y-3 min-h-[240px]">
                 {tasksByStatus(col).map((task) => (
-                  <div key={task.id} data-testid={`task-card-${task.id}`} className="rounded-lg border border-border bg-card p-3 space-y-2 hover:border-primary/30 transition-colors">
+                  <div key={task.id} data-testid={`task-card-${task.id}`} className={`rounded-xl border bg-card/95 p-4 space-y-3 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-md ${task.priority === "High" ? "border-red-500/30" : "border-border"}`}>
                     <div className="flex items-start justify-between gap-2">
-                      <span className="text-sm font-medium leading-snug">{task.title}</span>
+                      <span className="text-sm font-semibold leading-snug text-foreground">{task.title}</span>
                       <div className="flex gap-1 shrink-0">
                         <button onClick={() => openEdit(task)} className="text-muted-foreground hover:text-foreground"><Pencil className="h-3 w-3" /></button>
                         <button onClick={() => setDeleteId(task.id)} className="text-muted-foreground hover:text-destructive"><Trash2 className="h-3 w-3" /></button>
@@ -247,6 +278,7 @@ export default function Tasks() {
             </div>
           ))}
         </div>
+        </>
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>

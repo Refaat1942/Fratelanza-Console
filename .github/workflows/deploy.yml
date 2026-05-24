@@ -89,11 +89,12 @@ jobs:
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: REGISTRY,IMAGE_TAG,POSTGRES_PASSWORD,SESSION_SECRET,ADMIN_USERNAME,ADMIN_PASSWORD
+          envs: REGISTRY,IMAGE_TAG,POSTGRES_PASSWORD,SESSION_SECRET,ADMIN_USERNAME,ADMIN_PASSWORD,OPENAI_API_KEY
           script: |
             set -e
             cd /opt/fratelanza

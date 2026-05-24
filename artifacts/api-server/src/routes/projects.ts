@@ -5,6 +5,11 @@ import { eq, sql, and, ilike, isNull, not } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+function positiveMoney(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
 function toProjectShape(r: typeof projectsTable.$inferSelect) {
   return {
     id: r.id,
@@ -72,19 +77,22 @@ router.post("/projects", async (req, res): Promise<void> => {
     netProfit: String(price - cost),
     paidAmount: String(paid),
     remainingAmount: String(price - paid),
-    freelancerCommission: String(Number(body.freelancerCommission ?? 0)),
+    freelancerCommission: String(positiveMoney(body.freelancerCommission)),
   };
 
   const [project] = await db.insert(projectsTable).values(values).returning();
 
-  if (Array.isArray(team) && team.length > 0) {
-    await db.insert(projectTeamTable).values(
-      team.map((m: { freelancerName: string; commission: number }) => ({
-        projectId: project.id,
-        freelancerName: m.freelancerName,
-        commission: String(m.commission),
-      }))
-    );
+  if (Array.isArray(team)) {
+    const commissionedTeam = team.filter((m: { freelancerName: string; commission: number }) => positiveMoney(m.commission) > 0);
+    if (commissionedTeam.length > 0) {
+      await db.insert(projectTeamTable).values(
+        commissionedTeam.map((m: { freelancerName: string; commission: number }) => ({
+          projectId: project.id,
+          freelancerName: m.freelancerName,
+          commission: String(positiveMoney(m.commission)),
+        }))
+      );
+    }
   }
 
   res.status(201).json(toProjectShape(project));
@@ -126,7 +134,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.remainingAmount = String(Number(body.remainingAmount));
   }
   if (body.freelancerCommission !== undefined) {
-    updates.freelancerCommission = String(Number(body.freelancerCommission));
+    updates.freelancerCommission = String(positiveMoney(body.freelancerCommission));
   }
 
   const textFields = ["projectName", "clientName", "freelancerName", "startDate", "deadline", "status", "nextPaymentDate", "notes"];
@@ -147,12 +155,13 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
 
   if (Array.isArray(team)) {
     await db.delete(projectTeamTable).where(eq(projectTeamTable.projectId, id));
-    if (team.length > 0) {
+    const commissionedTeam = team.filter((m: { freelancerName: string; commission: number }) => positiveMoney(m.commission) > 0);
+    if (commissionedTeam.length > 0) {
       await db.insert(projectTeamTable).values(
-        team.map((m: { freelancerName: string; commission: number }) => ({
+        commissionedTeam.map((m: { freelancerName: string; commission: number }) => ({
           projectId: id,
           freelancerName: m.freelancerName,
-          commission: String(m.commission),
+          commission: String(positiveMoney(m.commission)),
         }))
       );
     }
@@ -203,10 +212,15 @@ router.get("/projects/:id/team", async (req, res): Promise<void> => {
 router.post("/projects/:id/team", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { freelancerName, commission } = req.body ?? {};
+  const parsedCommission = positiveMoney(commission);
+  if (parsedCommission <= 0) {
+    res.status(400).json({ error: "Commission must be greater than 0" });
+    return;
+  }
   const [member] = await db.insert(projectTeamTable).values({
     projectId: id,
     freelancerName,
-    commission: String(Number(commission ?? 0)),
+    commission: String(parsedCommission),
   }).returning();
   res.status(201).json(toTeamShape(member));
 });
