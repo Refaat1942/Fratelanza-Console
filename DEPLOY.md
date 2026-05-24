@@ -1,14 +1,24 @@
-# Manual Deployment — Hostinger VPS
+# Hostinger VPS Deployment
 
 This guide deploys Fratelanza alongside your other projects without touching them.
 
 ## How it's isolated
 
-- All containers are prefixed with `fratelanza_` (set by `name: fratelanza` in compose)
+- All containers are prefixed with `fratelanza-console` (set by `name: fratelanza-console` in compose)
 - The web container binds to port **3100** on localhost only (`127.0.0.1:3100`)
 - The API container binds to port **3101** on localhost only (`127.0.0.1:3101`)
-- The database has its own named volume `fratelanza_pgdata`
+- The database has its own named volume `fratelanza_console_pgdata`
 - Your other projects are completely unaffected
+
+---
+
+## Recommended flow from Replit to Hostinger
+
+1. Push your Replit changes to GitHub.
+2. Run the GitHub Actions workflow **Build & Deploy to Hostinger VPS**.
+3. The workflow builds Docker images, pushes them to GitHub Container Registry (GHCR), SSHs into the VPS, then runs `docker compose pull && docker compose up -d`.
+
+Use the manual steps below if you want to deploy from the VPS yourself.
 
 ---
 
@@ -23,6 +33,10 @@ ssh root@YOUR_VPS_IP
 ## Step 2 — Create project folder
 
 ```bash
+apt update
+apt install -y docker.io docker-compose-plugin nginx
+systemctl enable --now docker
+
 mkdir -p /opt/fratelanza
 cd /opt/fratelanza
 ```
@@ -40,7 +54,8 @@ Paste and fill in:
 ```
 POSTGRES_PASSWORD=choose_a_strong_password
 SESSION_SECRET=any_long_random_string_here_32chars_min
-MASTER_PASSWORD=your_app_login_password
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your_app_login_password
 REGISTRY=ghcr.io/refaat1942
 IMAGE_TAG=latest
 ```
@@ -62,13 +77,20 @@ nano /opt/fratelanza/docker-compose.yml
 # paste the contents of docker-compose.yml, then save
 ```
 
+The compose file pulls these images:
+
+- `${REGISTRY}/fratelanza-api:${IMAGE_TAG}`
+- `${REGISTRY}/fratelanza-web:${IMAGE_TAG}`
+
 ---
 
 ## Step 5 — Log in to GitHub Container Registry
 
 ```bash
-echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u Refaat1942 --password-stdin
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
 ```
+
+If the package is private, the token needs `read:packages` permission.
 
 ---
 
@@ -91,12 +113,6 @@ You should see `fratelanza-db`, `fratelanza-api`, and `fratelanza-web` all with 
 ---
 
 ## Step 7 — Set up your domain with Nginx
-
-Install nginx on the host if not already there:
-
-```bash
-apt install nginx -y
-```
 
 Copy the vhost config:
 
@@ -129,7 +145,7 @@ certbot --nginx -d fratelanza.yourdomain.com
 
 Open your domain in a browser. You should see the Fratelanza login screen.
 
-Default login password: whatever you set as `MASTER_PASSWORD` in `.env`
+Login with `ADMIN_USERNAME` and `ADMIN_PASSWORD` from `.env`.
 
 ---
 
@@ -148,8 +164,15 @@ docker image prune -f
 
 ```bash
 # View logs
+docker compose logs -f
 docker compose logs -f api
 docker compose logs -f web
+
+# Confirm rendered config/env values
+docker compose config
+
+# Confirm local-only ports
+ss -lntp | grep -E '3100|3101'
 
 # Stop the app
 docker compose down
