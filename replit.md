@@ -13,7 +13,7 @@ A full-stack web ERP system for managing software & training projects, freelance
 - Required env: `DATABASE_URL` — Postgres connection string
 - Required env: `SESSION_SECRET` — Express session secret
 - Optional env: `ADMIN_USERNAME` — initial admin username (default: `admin`)
-- Optional env: `ADMIN_PASSWORD` — initial admin password (default: `MASTER_PASSWORD` value, else `fratelanza2024`)
+- Optional env: `ADMIN_PASSWORD` — initial admin password (falls back to `MASTER_PASSWORD` in development, otherwise defaults to `fratelanza2024`)
 
 ## Stack
 
@@ -83,7 +83,8 @@ Files in repo root:
 # On VPS
 mkdir -p /opt/fratelanza
 # Copy docker-compose.yml
-# Set env vars and run:
+# Create .env with POSTGRES_PASSWORD, SESSION_SECRET, ADMIN_USERNAME, ADMIN_PASSWORD, REGISTRY, IMAGE_TAG
+# Then run:
 docker compose up -d
 ```
 
