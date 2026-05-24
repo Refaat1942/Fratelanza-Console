@@ -58,6 +58,7 @@ A full-stack web ERP system for managing software & training projects, freelance
 ## Deployment (Hostinger VPS)
 
 Files in repo root:
+
 - `Dockerfile.api` — multi-stage build for the Express API
 - `Dockerfile.web` — multi-stage Vite build + nginx static serving
 - `docker-compose.yml` — orchestrates postgres, api, web containers
@@ -67,15 +68,15 @@ Files in repo root:
 
 ### Required GitHub Secrets for deploy workflow
 
-| Secret | Description |
-|---|---|
-| `VPS_HOST` | VPS IP or hostname |
-| `VPS_USER` | SSH username (e.g. `root`) |
-| `VPS_SSH_KEY` | Private SSH key for VPS access |
-| `POSTGRES_PASSWORD` | Postgres DB password |
-| `SESSION_SECRET` | Express session secret |
-| `ADMIN_USERNAME` | Initial admin username (optional, default `admin`) |
-| `ADMIN_PASSWORD` | Initial admin password (required on first deploy) |
+| Secret              | Description                                        |
+| ------------------- | -------------------------------------------------- |
+| `VPS_HOST`          | VPS IP or hostname                                 |
+| `VPS_USER`          | SSH username (e.g. `root`)                         |
+| `VPS_SSH_KEY`       | Private SSH key for VPS access                     |
+| `POSTGRES_PASSWORD` | Postgres DB password                               |
+| `SESSION_SECRET`    | Express session secret                             |
+| `ADMIN_USERNAME`    | Initial admin username (optional, default `admin`) |
+| `ADMIN_PASSWORD`    | Initial admin password (required on first deploy)  |
 
 ### VPS first-run setup
 
@@ -90,18 +91,18 @@ docker compose up -d
 
 ## DB Tables
 
-| Table | Purpose |
-|---|---|
-| `pricing_records` | All project records (software + training) |
-| `freelancers` | Freelancer directory |
-| `clients` | Client CRM |
-| `templates` | Service pricing templates |
-| `sales_quotes` | Quotes |
-| `general_expenses` | Expense log |
-| `tasks` | Kanban tasks |
-| `project_team` | Project ↔ freelancer assignments |
-| `users` | Login accounts (bcrypt password hash) |
-| `session` | Express session store (connect-pg-simple) |
+| Table              | Purpose                                   |
+| ------------------ | ----------------------------------------- |
+| `pricing_records`  | All project records (software + training) |
+| `freelancers`      | Freelancer directory                      |
+| `clients`          | Client CRM                                |
+| `templates`        | Service pricing templates                 |
+| `sales_quotes`     | Quotes                                    |
+| `general_expenses` | Expense log                               |
+| `tasks`            | Kanban tasks                              |
+| `project_team`     | Project ↔ freelancer assignments          |
+| `users`            | Login accounts (bcrypt password hash)     |
+| `session`          | Express session store (connect-pg-simple) |
 
 ## User preferences
 

@@ -257,10 +257,10 @@ Make sure the Nginx vhost proxies `/api/` to `http://127.0.0.1:3101` and `/` to 
 
 ## Port reference
 
-| Service | Host port | Internal port |
-|---------|-----------|---------------|
-| Web (nginx container) | 127.0.0.1:3100 | 80 |
-| API (Express) | 127.0.0.1:3101 | 8080 |
-| Database | not exposed | 5432 |
+| Service               | Host port      | Internal port |
+| --------------------- | -------------- | ------------- |
+| Web (nginx container) | 127.0.0.1:3100 | 80            |
+| API (Express)         | 127.0.0.1:3101 | 8080          |
+| Database              | not exposed    | 5432          |
 
 Ports 3100 and 3101 are only accessible from the VPS itself. The host Nginx proxy handles public HTTP/HTTPS traffic.
