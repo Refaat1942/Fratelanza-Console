@@ -15,6 +15,7 @@ export const ar: Translations = {
     dashboard: "الرئيسية", projects: "المشاريع", receivables: "المستحقات",
     freelancers: "المستقلون", clients: "العملاء", templates: "القوالب",
     quotes: "عروض الأسعار", expenses: "المصروفات", tasks: "المهام", finance: "المالية",
+    users: "المستخدمون",
     settings: "الإعدادات", logout: "تسجيل الخروج", systemActive: "النظام نشط",
   },
   login: {

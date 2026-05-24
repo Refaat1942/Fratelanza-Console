@@ -58,7 +58,7 @@ export default function Expenses() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('expenses.title')}</h1>
         <Button onClick={() => setShowForm(true)} data-testid="button-add-expense" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="h-4 w-4 me-2" /> {t('expenses.new')}
@@ -75,7 +75,7 @@ export default function Expenses() {
           <CardContent><div className="text-2xl font-bold">{summary?.count ?? 0}</div></CardContent>
         </Card>
         <div className="flex flex-col gap-2 justify-center">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="space-y-1 flex-1"><Label className="text-xs">From</Label><Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></div>
             <div className="space-y-1 flex-1"><Label className="text-xs">To</Label><Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} /></div>
           </div>

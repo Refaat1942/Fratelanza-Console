@@ -82,7 +82,7 @@ export default function Tasks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('tasks.title')}</h1>
         <Button onClick={() => openCreate()} data-testid="button-add-task" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="h-4 w-4 me-2" /> {t('tasks.new')}
@@ -92,7 +92,7 @@ export default function Tasks() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading...</div>
       ) : (
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           {COLUMNS.map((col) => (
             <div key={col} className="space-y-3">
               <div className="flex items-center justify-between">
@@ -145,10 +145,10 @@ export default function Tasks() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
           <DialogHeader><DialogTitle>{editing ? t('tasks.edit') : t('tasks.new')}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4 py-2 sm:py-4">
             <div className="space-y-1"><Label>Title</Label><Input data-testid="input-task-title" value={form.title} onChange={f("title")} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea value={form.description} onChange={f("description")} rows={3} /></div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1">
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={fs("status")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{COLUMNS.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent></Select>

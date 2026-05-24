@@ -203,3 +203,41 @@
     @apply font-sans antialiased bg-background text-foreground;
   }
 }
+
+@media (max-width: 767px) {
+  main .rounded-lg:has(> table),
+  main .rounded:has(> table),
+  [role="dialog"] .rounded-lg:has(> table),
+  [role="dialog"] .rounded:has(> table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  main .rounded-lg:has(> table) > table,
+  main .rounded:has(> table) > table,
+  [role="dialog"] .rounded-lg:has(> table) > table,
+  [role="dialog"] .rounded:has(> table) > table {
+    min-width: 42rem;
+  }
+
+  main .flex.items-center.justify-between {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  main .flex.items-center.justify-between > button,
+  main .flex.items-center.justify-between > a {
+    flex-shrink: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  [role="dialog"] .grid.grid-cols-2,
+  [role="dialog"] .grid.grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  [role="dialog"] .grid.grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

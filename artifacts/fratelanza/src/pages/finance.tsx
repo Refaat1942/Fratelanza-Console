@@ -50,14 +50,14 @@ export default function Finance() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('finance.title')}</h1>
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="grid w-full grid-cols-1 gap-2 sm:w-auto sm:grid-cols-[auto_auto_auto_auto] sm:items-center">
           <div className="flex items-center gap-1">
             <Label className="text-xs whitespace-nowrap">From</Label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-36" data-testid="input-start-date" />
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-full sm:w-36" data-testid="input-start-date" />
           </div>
           <div className="flex items-center gap-1">
             <Label className="text-xs whitespace-nowrap">To</Label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-36" data-testid="input-end-date" />
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-full sm:w-36" data-testid="input-end-date" />
           </div>
           <Button onClick={applyFilter} data-testid="button-apply-filter">Apply</Button>
           <Button variant="outline" onClick={clearFilter}>Clear</Button>
@@ -68,7 +68,7 @@ export default function Finance() {
         <div className="text-center py-12 text-muted-foreground">Loading report...</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {kpis.map((kpi) => (
               <Card key={kpi.label} className="bg-card/50">
                 <CardHeader className="pb-1 pt-3 px-3"><CardTitle className="text-xs text-muted-foreground">{kpi.label}</CardTitle></CardHeader>

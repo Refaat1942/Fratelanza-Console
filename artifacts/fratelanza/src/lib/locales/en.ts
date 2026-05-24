@@ -12,6 +12,7 @@ export const en = {
     dashboard: "Dashboard", projects: "Projects", receivables: "Receivables",
     freelancers: "Freelancers", clients: "Clients", templates: "Templates",
     quotes: "Quotes", expenses: "Expenses", tasks: "Tasks", finance: "Finance",
+    users: "Users",
     settings: "Settings", logout: "Logout", systemActive: "System Active",
   },
   login: {

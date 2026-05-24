@@ -172,7 +172,7 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted-foreground">Manage accounts, roles and per-page access</p>
         </div>
@@ -282,7 +282,7 @@ export default function UsersPage() {
             {form.role === "viewer" && (
               <div className="space-y-2">
                 <Label>Allowed pages</Label>
-                <div className="grid grid-cols-2 gap-2 rounded-md border border-border p-3">
+                <div className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 sm:grid-cols-2">
                   {ALL_PAGES.map((p) => (
                     <label key={p.key} className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox

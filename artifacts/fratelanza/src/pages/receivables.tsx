@@ -39,7 +39,7 @@ export default function Receivables() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('receivables.title')}</h1>
         <div className="text-sm text-muted-foreground">{t('receivables.totalOutstanding')}</div>
       </div>

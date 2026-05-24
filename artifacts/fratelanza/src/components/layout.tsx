@@ -238,10 +238,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
     : location.startsWith('/tasks') ? 'tasks'
     : location.startsWith('/finance') ? 'finance'
     : location.startsWith('/settings') ? 'settings'
+    : location.startsWith('/users') ? 'users'
     : 'dashboard';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="flex h-dvh overflow-hidden bg-background text-foreground" dir={isRtl ? 'rtl' : 'ltr'}>
       <aside className={`hidden md:flex w-64 ${isRtl ? 'border-l' : 'border-r'} border-border bg-card flex-col`}>
         <SidebarContent />
       </aside>
@@ -252,9 +253,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </SheetContent>
       </Sheet>
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="h-16 border-b border-border bg-background flex items-center justify-between px-4 md:px-8">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <header className="min-h-16 border-b border-border bg-background flex items-center justify-between gap-3 px-3 py-2 md:px-8 md:py-0">
+          <div className="flex min-w-0 items-center gap-2 md:gap-3">
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" className="md:hidden" data-testid="button-open-menu">
@@ -267,12 +268,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
               initial={{ opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25 }}
-              className="text-lg md:text-xl font-semibold"
+              className="truncate text-base font-semibold md:text-xl"
             >
               {t(`nav.${titleKey}`)}
             </motion.h1>
           </div>
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex shrink-0 items-center gap-2 md:gap-4">
             {username && <span className="hidden sm:inline text-sm text-muted-foreground">@{username}</span>}
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></span>
@@ -281,7 +282,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background">{children}</main>
+        <main className="flex-1 min-w-0 overflow-y-auto bg-background p-3 sm:p-4 md:p-8">{children}</main>
       </div>
     </div>
   );
