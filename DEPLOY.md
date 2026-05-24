@@ -1,174 +1,220 @@
-# Manual Deployment — Hostinger VPS
+# Manual Deployment - Hostinger VPS
 
-This guide deploys Fratelanza alongside your other projects without touching them.
+This project is deployed as three Docker containers:
 
-## How it's isolated
+- `fratelanza-console-db` - PostgreSQL
+- `fratelanza-console-api` - Express API on `127.0.0.1:3101`
+- `fratelanza-console-web` - Vite static web app on `127.0.0.1:3100`
 
-- All containers are prefixed with `fratelanza_` (set by `name: fratelanza` in compose)
-- The web container binds to port **3100** on localhost only (`127.0.0.1:3100`)
-- The API container binds to port **3101** on localhost only (`127.0.0.1:3101`)
-- The database has its own named volume `fratelanza_pgdata`
-- Your other projects are completely unaffected
+Host nginx proxies public traffic from your domain to those localhost ports.
 
----
+## Recommended flow
 
-## Step 1 — SSH into your VPS
+1. Make your changes in Replit.
+2. Push the changes to GitHub.
+3. Run the GitHub Actions workflow named **Build & Deploy to Hostinger VPS**.
+4. Open your domain and log in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+
+The workflow builds fresh Docker images, pushes them to GitHub Container Registry, copies `docker-compose.yml` to the VPS, then runs `docker compose pull && docker compose up -d`.
+
+## One-time VPS setup
+
+SSH into Hostinger:
 
 ```bash
 ssh root@YOUR_VPS_IP
 ```
 
----
+Install Docker, Compose, and nginx if they are not installed:
 
-## Step 2 — Create project folder
+```bash
+apt update
+apt install -y ca-certificates curl gnupg nginx
+install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+apt update
+apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+Create the app directory:
 
 ```bash
 mkdir -p /opt/fratelanza
 cd /opt/fratelanza
 ```
 
----
-
-## Step 3 — Create your `.env` file
+Create `/opt/fratelanza/.env`:
 
 ```bash
-nano .env
+nano /opt/fratelanza/.env
 ```
 
-Paste and fill in:
+Paste and edit:
 
-```
-POSTGRES_PASSWORD=choose_a_strong_password
-SESSION_SECRET=any_long_random_string_here_32chars_min
-MASTER_PASSWORD=your_app_login_password
+```env
+POSTGRES_PASSWORD=choose_a_strong_database_password
+SESSION_SECRET=choose_a_long_random_session_secret_32_chars_min
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=choose_your_login_password
 REGISTRY=ghcr.io/refaat1942
 IMAGE_TAG=latest
 ```
 
-Save with `Ctrl+O`, exit with `Ctrl+X`.
+## GitHub repository secrets
 
----
+Add these in GitHub: **Settings -> Secrets and variables -> Actions -> New repository secret**.
 
-## Step 4 — Copy `docker-compose.yml` to the VPS
+| Secret | Value |
+|---|---|
+| `VPS_HOST` | Your Hostinger VPS IP or hostname |
+| `VPS_USER` | Usually `root` |
+| `VPS_SSH_KEY` | Private SSH key that can log in to the VPS |
+| `POSTGRES_PASSWORD` | Same value as the VPS `.env` |
+| `SESSION_SECRET` | Same value as the VPS `.env` |
+| `ADMIN_USERNAME` | Login username, for example `admin` |
+| `ADMIN_PASSWORD` | Login password |
 
-From your local machine (or just create it on the VPS):
+## First deploy
 
-```bash
-# Option A — from your local machine
-scp docker-compose.yml root@YOUR_VPS_IP:/opt/fratelanza/
+Run the **Build & Deploy to Hostinger VPS** workflow from GitHub Actions.
 
-# Option B — paste it directly on the VPS
-nano /opt/fratelanza/docker-compose.yml
-# paste the contents of docker-compose.yml, then save
-```
-
----
-
-## Step 5 — Log in to GitHub Container Registry
-
-```bash
-echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u Refaat1942 --password-stdin
-```
-
----
-
-## Step 6 — Pull images and start
+After it finishes, check the VPS:
 
 ```bash
 cd /opt/fratelanza
-docker compose pull
-docker compose up -d
-```
-
-Check everything started:
-
-```bash
 docker compose ps
+docker compose logs --tail=100 api
+docker compose logs --tail=100 web
 ```
 
-You should see `fratelanza-db`, `fratelanza-api`, and `fratelanza-web` all with status **Up**.
+You should see all services with status `Up`.
 
----
+## Domain nginx config
 
-## Step 7 — Set up your domain with Nginx
+Point your domain or subdomain DNS `A` record to the Hostinger VPS IP.
 
-Install nginx on the host if not already there:
-
-```bash
-apt install nginx -y
-```
-
-Copy the vhost config:
+Create nginx config:
 
 ```bash
 nano /etc/nginx/sites-available/fratelanza
 ```
 
-Paste the contents of `nginx-vhost.conf`, but **replace** `fratelanza.yourdomain.com` with your actual domain or subdomain.
+Paste this, replacing `console.fratelanza.com` with your real domain:
 
-Enable it:
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name console.fratelanza.com;
+
+    client_max_body_size 20M;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3101;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:3100;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Enable and reload nginx:
 
 ```bash
-ln -s /etc/nginx/sites-available/fratelanza /etc/nginx/sites-enabled/
+ln -sf /etc/nginx/sites-available/fratelanza /etc/nginx/sites-enabled/fratelanza
 nginx -t
 systemctl reload nginx
 ```
 
----
+## HTTPS
 
-## Step 8 — (Optional) Add HTTPS with Let's Encrypt
+The API uses secure cookies in production, so login works best over HTTPS.
 
 ```bash
-apt install certbot python3-certbot-nginx -y
-certbot --nginx -d fratelanza.yourdomain.com
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d console.fratelanza.com
 ```
 
----
+Replace `console.fratelanza.com` with your real domain.
 
-## Step 9 — Verify the app is running
+## Updating after Replit changes
 
-Open your domain in a browser. You should see the Fratelanza login screen.
+From Replit:
 
-Default login password: whatever you set as `MASTER_PASSWORD` in `.env`
+```bash
+git add .
+git commit -m "Describe your change"
+git push
+```
 
----
+Then run the GitHub Actions deploy workflow again.
 
-## Updating to a new version
+## Manual VPS commands
 
 ```bash
 cd /opt/fratelanza
+
+# Pull the latest images and restart
 docker compose pull
-docker compose up -d
-docker image prune -f
-```
+docker compose up -d --remove-orphans
 
----
-
-## Useful commands
-
-```bash
-# View logs
+# Logs
 docker compose logs -f api
 docker compose logs -f web
 
+# Restart one service
+docker compose restart api
+
 # Stop the app
 docker compose down
-
-# Stop and delete the database (DANGER — data is lost)
-docker compose down -v
-
-# Restart just the API
-docker compose restart api
 ```
 
----
+## Troubleshooting
 
-## Port reference (safe with other projects)
+### `docker compose pull` fails with unauthorized
 
-| Service | Host port | Internal port |
-|---------|-----------|---------------|
-| Web (nginx) | 127.0.0.1:3100 | 80 |
-| API (express) | 127.0.0.1:3101 | 8080 |
-| Database | not exposed | 5432 |
+Log in to GitHub Container Registry on the VPS with a GitHub token that has package read access:
 
-Ports 3100 and 3101 are only accessible from localhost — your host nginx proxies public traffic to them.
+```bash
+echo YOUR_GITHUB_TOKEN | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+```
+
+### Containers start but the website is blank
+
+Check that the `web` service is using the `fratelanza-web` image:
+
+```bash
+docker compose ps
+docker inspect fratelanza-console-web --format '{{.Config.Image}}'
+```
+
+### Login does not stay logged in
+
+Make sure HTTPS is enabled and your nginx config sends:
+
+```nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+### API errors on startup
+
+Check the API logs:
+
+```bash
+docker compose logs --tail=200 api
+```
+
+Common causes are missing `SESSION_SECRET`, missing `ADMIN_PASSWORD`, or an incorrect `POSTGRES_PASSWORD`.
