@@ -6,7 +6,7 @@ export const tasksTable = pgTable("tasks", {
   id: serial("id").primaryKey(),
   title: text("title").notNull(),
   description: text("description"),
-  status: text("status").notNull().default("Todo"),
+  status: text("status").notNull().default("To Do"),
   priority: text("priority").default("Medium"),
   projectId: integer("project_id"),
   projectName: text("project_name"),

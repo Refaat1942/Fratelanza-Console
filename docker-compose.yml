@@ -28,7 +28,6 @@ services:
       SESSION_SECRET: ${SESSION_SECRET}
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       NODE_ENV: production
       PORT: 8080
     networks:

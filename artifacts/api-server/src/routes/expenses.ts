@@ -44,44 +44,6 @@ function smartCategory(description: string): ExpenseCategory {
   return (rules.find(([, words]) => words.some((word) => text.includes(word)))?.[0] as ExpenseCategory | undefined) ?? "Other";
 }
 
-async function aiCategory(description: string): Promise<ExpenseCategory> {
-  const fallback = smartCategory(description);
-  const apiKey = process.env["OPENAI_API_KEY"];
-  if (!apiKey) return fallback;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 7000);
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      signal: controller.signal,
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: process.env["OPENAI_MODEL"] ?? "gpt-4o-mini",
-        temperature: 0,
-        messages: [
-          {
-            role: "system",
-            content: `Classify an expense into exactly one category from this list: ${EXPENSE_CATEGORIES.join(", ")}. Return only the category text.`,
-          },
-          { role: "user", content: description.slice(0, 500) },
-        ],
-      }),
-    });
-    if (!res.ok) return fallback;
-    const data = await res.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const category = data.choices?.[0]?.message?.content?.trim();
-    return isExpenseCategory(category) ? category : fallback;
-  } catch {
-    return fallback;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function normalizeKey(row: Record<string, unknown>, key: string): unknown {
   const wanted = key.toLowerCase().replace(/[^a-z0-9]/g, "");
   for (const [rawKey, value] of Object.entries(row)) {
@@ -159,7 +121,7 @@ router.post("/expenses", async (req, res): Promise<void> => {
   const [row] = await db.insert(expensesTable).values({
     description: body.description,
     amount: String(Number(body.amount ?? 0)),
-    category: isExpenseCategory(body.category) ? body.category : await aiCategory(String(body.description ?? "")),
+    category: isExpenseCategory(body.category) ? body.category : smartCategory(String(body.description ?? "")),
     date: body.date ?? today,
   }).returning();
   res.status(201).json(toShape(row));
@@ -201,7 +163,7 @@ router.post("/expenses/import", upload.single("file"), async (req, res): Promise
       continue;
     }
 
-    const category = await aiCategory(description);
+    const category = smartCategory(description);
     try {
       await db.insert(expensesTable).values({ description, amount: String(amount), category, date });
       created++;

@@ -3,7 +3,9 @@ import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
 import {
   expensesTable,
+  freelancerPaymentTermsTable,
   freelancersTable,
+  projectReceivablesTable,
   projectsTable,
   taskActivitiesTable,
   taskNotificationsTable,
@@ -23,7 +25,7 @@ function numberValue(value: unknown): number {
 }
 
 router.get("/reports/system-activity.xlsx", async (_req, res): Promise<void> => {
-  const [tasks, activities, notifications, users, freelancers, projects, expenses] = await Promise.all([
+  const [tasks, activities, notifications, users, freelancers, projects, expenses, clientReceivables, freelancerPaymentTerms] = await Promise.all([
     db.select().from(tasksTable).orderBy(desc(tasksTable.createdAt)),
     db.select().from(taskActivitiesTable).orderBy(desc(taskActivitiesTable.createdAt)),
     db.select().from(taskNotificationsTable).orderBy(desc(taskNotificationsTable.createdAt)),
@@ -31,6 +33,8 @@ router.get("/reports/system-activity.xlsx", async (_req, res): Promise<void> => 
     db.select().from(freelancersTable).orderBy(freelancersTable.name),
     db.select().from(projectsTable).orderBy(desc(projectsTable.date)),
     db.select().from(expensesTable).orderBy(desc(expensesTable.createdAt)),
+    db.select().from(projectReceivablesTable).orderBy(desc(projectReceivablesTable.createdAt)),
+    db.select().from(freelancerPaymentTermsTable).orderBy(desc(freelancerPaymentTermsTable.createdAt)),
   ]);
 
   const wb = XLSX.utils.book_new();
@@ -119,6 +123,30 @@ router.get("/reports/system-activity.xlsx", async (_req, res): Promise<void> => 
     Date: e.date ?? "",
     CreatedAt: iso(e.createdAt) ?? "",
   }))), "Expenses");
+
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(clientReceivables.map((r) => ({
+    ID: r.id,
+    ProjectID: r.projectId,
+    Amount: numberValue(r.amount),
+    DueDate: r.dueDate ?? "",
+    Note: r.note ?? "",
+    Status: r.status,
+    PaidAt: r.paidAt ?? "",
+    CreatedAt: iso(r.createdAt) ?? "",
+  }))), "Client Receivables");
+
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(freelancerPaymentTerms.map((r) => ({
+    ID: r.id,
+    ProjectID: r.projectId,
+    Freelancer: r.freelancerName,
+    Amount: numberValue(r.amount),
+    DueDate: r.dueDate ?? "",
+    Note: r.note ?? "",
+    Status: r.status,
+    PaidAt: r.paidAt ?? "",
+    CreatedAt: iso(r.createdAt) ?? "",
+  }))), "Freelancer Terms");
 
   const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   const stamp = new Date().toISOString().slice(0, 10);

@@ -31,6 +31,33 @@ export async function ensureSessionTable(): Promise<void> {
     `);
     await db.execute(sql`ALTER TABLE "general_expenses" ADD COLUMN IF NOT EXISTS "category" text NOT NULL DEFAULT 'Other';`);
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "project_receivables" (
+        "id" serial PRIMARY KEY,
+        "project_id" integer NOT NULL,
+        "amount" numeric(12, 2) NOT NULL DEFAULT '0',
+        "due_date" text,
+        "note" text,
+        "status" text NOT NULL DEFAULT 'Pending',
+        "paid_at" text,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_project_receivables_project_id" ON "project_receivables" ("project_id");`);
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "freelancer_payment_terms" (
+        "id" serial PRIMARY KEY,
+        "project_id" integer NOT NULL,
+        "freelancer_name" text NOT NULL,
+        "amount" numeric(12, 2) NOT NULL DEFAULT '0',
+        "due_date" text,
+        "note" text,
+        "status" text NOT NULL DEFAULT 'Pending',
+        "paid_at" text,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    await db.execute(sql`CREATE INDEX IF NOT EXISTS "IDX_freelancer_payment_terms_project_id" ON "freelancer_payment_terms" ("project_id");`);
+    await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "tasks" (
         "id" serial PRIMARY KEY,
         "title" text NOT NULL,

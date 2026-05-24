@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectTeamTable } from "@workspace/db";
+import { freelancerPaymentTermsTable, projectReceivablesTable, projectsTable, projectTeamTable } from "@workspace/db";
 import { eq, sql, and, ilike, isNull, not } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -8,6 +8,84 @@ const router: IRouter = Router();
 function positiveMoney(value: unknown): number {
   const parsed = Number(value ?? 0);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+type ReceivableInput = { amount?: unknown; dueDate?: unknown; note?: unknown; status?: unknown; paidAt?: unknown };
+type FreelancerPaymentInput = ReceivableInput & { freelancerName?: unknown };
+
+function cleanText(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return text ? text : null;
+}
+
+function normalizeTermStatus(value: unknown): string {
+  const status = String(value ?? "Pending").trim();
+  return status === "Paid" ? "Paid" : "Pending";
+}
+
+function toReceivableShape(r: typeof projectReceivablesTable.$inferSelect) {
+  return {
+    id: r.id,
+    projectId: r.projectId,
+    amount: Number(r.amount),
+    dueDate: r.dueDate,
+    note: r.note,
+    status: r.status,
+    paidAt: r.paidAt,
+  };
+}
+
+function toFreelancerPaymentShape(r: typeof freelancerPaymentTermsTable.$inferSelect) {
+  return {
+    id: r.id,
+    projectId: r.projectId,
+    freelancerName: r.freelancerName,
+    amount: Number(r.amount),
+    dueDate: r.dueDate,
+    note: r.note,
+    status: r.status,
+    paidAt: r.paidAt,
+  };
+}
+
+function receivableValues(projectId: number, rows: ReceivableInput[]) {
+  return rows
+    .map((row) => ({
+      projectId,
+      amount: String(positiveMoney(row.amount)),
+      dueDate: cleanText(row.dueDate),
+      note: cleanText(row.note),
+      status: normalizeTermStatus(row.status),
+      paidAt: cleanText(row.paidAt),
+    }))
+    .filter((row) => Number(row.amount) > 0);
+}
+
+function freelancerPaymentValues(projectId: number, rows: FreelancerPaymentInput[]) {
+  return rows
+    .map((row) => ({
+      projectId,
+      freelancerName: cleanText(row.freelancerName) ?? "",
+      amount: String(positiveMoney(row.amount)),
+      dueDate: cleanText(row.dueDate),
+      note: cleanText(row.note),
+      status: normalizeTermStatus(row.status),
+      paidAt: cleanText(row.paidAt),
+    }))
+    .filter((row) => row.freelancerName && Number(row.amount) > 0);
+}
+
+async function replaceProjectTerms(projectId: number, clientReceivables: unknown, freelancerPaymentTerms: unknown): Promise<void> {
+  if (Array.isArray(clientReceivables)) {
+    await db.delete(projectReceivablesTable).where(eq(projectReceivablesTable.projectId, projectId));
+    const values = receivableValues(projectId, clientReceivables as ReceivableInput[]);
+    if (values.length > 0) await db.insert(projectReceivablesTable).values(values);
+  }
+  if (Array.isArray(freelancerPaymentTerms)) {
+    await db.delete(freelancerPaymentTermsTable).where(eq(freelancerPaymentTermsTable.projectId, projectId));
+    const values = freelancerPaymentValues(projectId, freelancerPaymentTerms as FreelancerPaymentInput[]);
+    if (values.length > 0) await db.insert(freelancerPaymentTermsTable).values(values);
+  }
 }
 
 function toProjectShape(r: typeof projectsTable.$inferSelect) {
@@ -65,7 +143,7 @@ router.get("/projects/receivables", async (req, res): Promise<void> => {
 });
 
 router.post("/projects", async (req, res): Promise<void> => {
-  const { team, ...body } = req.body ?? {};
+  const { team, clientReceivables, freelancerPaymentTerms, ...body } = req.body ?? {};
   const price = Number(body.clientPrice ?? 0);
   const cost = Number(body.totalCost ?? 0);
   const paid = Number(body.paidAmount ?? 0);
@@ -95,6 +173,8 @@ router.post("/projects", async (req, res): Promise<void> => {
     }
   }
 
+  await replaceProjectTerms(project.id, clientReceivables, freelancerPaymentTerms);
+
   res.status(201).json(toProjectShape(project));
 });
 
@@ -105,13 +185,22 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Project not found" });
     return;
   }
-  const team = await db.select().from(projectTeamTable).where(eq(projectTeamTable.projectId, id));
-  res.json({ ...toProjectShape(project), team: team.map(toTeamShape) });
+  const [team, clientReceivables, freelancerPaymentTerms] = await Promise.all([
+    db.select().from(projectTeamTable).where(eq(projectTeamTable.projectId, id)),
+    db.select().from(projectReceivablesTable).where(eq(projectReceivablesTable.projectId, id)).orderBy(projectReceivablesTable.dueDate),
+    db.select().from(freelancerPaymentTermsTable).where(eq(freelancerPaymentTermsTable.projectId, id)).orderBy(freelancerPaymentTermsTable.dueDate),
+  ]);
+  res.json({
+    ...toProjectShape(project),
+    team: team.map(toTeamShape),
+    clientReceivables: clientReceivables.map(toReceivableShape),
+    freelancerPaymentTerms: freelancerPaymentTerms.map(toFreelancerPaymentShape),
+  });
 });
 
 router.patch("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const { team, ...body } = req.body ?? {};
+  const { team, clientReceivables, freelancerPaymentTerms, ...body } = req.body ?? {};
 
   const updates: Record<string, string | undefined> = {};
   if (body.clientPrice !== undefined) {
@@ -167,11 +256,15 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     }
   }
 
+  await replaceProjectTerms(id, clientReceivables, freelancerPaymentTerms);
+
   res.json(toProjectShape(project));
 });
 
 router.delete("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  await db.delete(freelancerPaymentTermsTable).where(eq(freelancerPaymentTermsTable.projectId, id));
+  await db.delete(projectReceivablesTable).where(eq(projectReceivablesTable.projectId, id));
   await db.delete(projectTeamTable).where(eq(projectTeamTable.projectId, id));
   const [deleted] = await db.delete(projectsTable).where(eq(projectsTable.id, id)).returning();
   if (!deleted) {
@@ -201,6 +294,19 @@ router.post("/projects/:id/payment", async (req, res): Promise<void> => {
 
   const [updated] = await db.update(projectsTable).set(updates).where(eq(projectsTable.id, id)).returning();
   res.json(toProjectShape(updated));
+});
+
+
+router.get("/projects/:id/payment-terms", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [clientReceivables, freelancerPaymentTerms] = await Promise.all([
+    db.select().from(projectReceivablesTable).where(eq(projectReceivablesTable.projectId, id)).orderBy(projectReceivablesTable.dueDate),
+    db.select().from(freelancerPaymentTermsTable).where(eq(freelancerPaymentTermsTable.projectId, id)).orderBy(freelancerPaymentTermsTable.dueDate),
+  ]);
+  res.json({
+    clientReceivables: clientReceivables.map(toReceivableShape),
+    freelancerPaymentTerms: freelancerPaymentTerms.map(toFreelancerPaymentShape),
+  });
 });
 
 router.get("/projects/:id/team", async (req, res): Promise<void> => {

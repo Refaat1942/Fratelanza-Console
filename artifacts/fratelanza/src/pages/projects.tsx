@@ -28,6 +28,8 @@ type Project = {
 };
 
 type TeamMember = { freelancerName: string; commission: number };
+type PaymentTerm = { amount: number | string; dueDate: string; note: string; status?: string };
+type FreelancerPaymentTerm = PaymentTerm & { freelancerName: string };
 type Freelancer = { code: string; name: string; spec?: string | null };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -54,6 +56,8 @@ export default function Projects() {
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({ ...empty });
   const [team, setTeam] = useState<TeamMember[]>([]);
+  const [clientReceivables, setClientReceivables] = useState<PaymentTerm[]>([]);
+  const [freelancerPaymentTerms, setFreelancerPaymentTerms] = useState<FreelancerPaymentTerm[]>([]);
   const [pickFreelancer, setPickFreelancer] = useState<string>("");
   const [pickCommission, setPickCommission] = useState<string>("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -78,10 +82,12 @@ export default function Projects() {
     return matchType && matchStatus && matchSearch;
   });
 
-  const openCreate = () => { setForm({ ...empty }); setTeam([]); setEditing(null); setShowForm(true); };
+  const openCreate = () => { setForm({ ...empty }); setTeam([]); setClientReceivables([]); setFreelancerPaymentTerms([]); setEditing(null); setShowForm(true); };
   const openEdit = (p: Project) => {
     setEditing(p);
     setTeam([]);
+    setClientReceivables([]);
+    setFreelancerPaymentTerms([]);
     // Load team first, then back-compute "other costs" = stored totalCost − all commissions.
     const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
     fetch(`${apiBase}/projects/${p.id}/team`, { credentials: "include" })
@@ -98,6 +104,13 @@ export default function Projects() {
         const otherCosts = Math.max(0, Number(p.totalCost) - Number(p.freelancerCommission ?? 0));
         setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: p.freelancerName ?? "", freelancerCommission: p.freelancerCommission, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
       });
+    fetch(`${apiBase}/projects/${p.id}/payment-terms`, { credentials: "include" })
+      .then((r) => r.ok ? r.json() : { clientReceivables: [], freelancerPaymentTerms: [] })
+      .then((terms: { clientReceivables?: PaymentTerm[]; freelancerPaymentTerms?: FreelancerPaymentTerm[] }) => {
+        setClientReceivables((terms.clientReceivables ?? []).map((term) => ({ amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status ?? "Pending" })));
+        setFreelancerPaymentTerms((terms.freelancerPaymentTerms ?? []).map((term) => ({ freelancerName: term.freelancerName, amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status ?? "Pending" })));
+      })
+      .catch(() => { setClientReceivables([]); setFreelancerPaymentTerms([]); });
     setShowForm(true);
   };
 
@@ -115,6 +128,21 @@ export default function Projects() {
     setTeam((prev) => prev.filter((m) => m.freelancerName !== name));
   };
 
+
+  const updateClientReceivable = (index: number, patch: Partial<PaymentTerm>) => {
+    setClientReceivables((prev) => prev.map((term, i) => i === index ? { ...term, ...patch } : term));
+  };
+  const updateFreelancerPaymentTerm = (index: number, patch: Partial<FreelancerPaymentTerm>) => {
+    setFreelancerPaymentTerms((prev) => prev.map((term, i) => i === index ? { ...term, ...patch } : term));
+  };
+  const addClientReceivable = () => {
+    setClientReceivables((prev) => [...prev, { amount: Math.max(0, remainingPreview), dueDate: form.nextPaymentDate || "", note: "Remaining payment", status: "Pending" }]);
+  };
+  const addFreelancerPaymentTerm = () => {
+    const freelancerName = form.freelancerName || team[0]?.freelancerName || "";
+    setFreelancerPaymentTerms((prev) => [...prev, { freelancerName, amount: 0, dueDate: "", note: "Commission payment", status: "Pending" }]);
+  };
+
   const handleSave = () => {
     const leadCommission = Math.max(0, Number(form.freelancerCommission || 0));
     const commissionedTeam = team
@@ -130,6 +158,8 @@ export default function Projects() {
       remainingAmount: Number(form.clientPrice) - Number(form.paidAmount),
       freelancerCommission: leadCommission,
       team: commissionedTeam,
+      clientReceivables: clientReceivables.map((term) => ({ ...term, amount: Number(term.amount) || 0 })).filter((term) => term.amount > 0),
+      freelancerPaymentTerms: freelancerPaymentTerms.map((term) => ({ ...term, amount: Number(term.amount) || 0 })).filter((term) => term.freelancerName && term.amount > 0),
     };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
@@ -165,6 +195,7 @@ export default function Projects() {
 
   const downPaymentPct = form.clientPrice > 0 ? Math.round((Number(form.paidAmount) / Number(form.clientPrice)) * 100) : 0;
   const remainingPreview = Number(form.clientPrice) - Number(form.paidAmount);
+  const freelancerPaymentNames = Array.from(new Set([form.freelancerName, ...team.map((m) => m.freelancerName)].filter(Boolean)));
 
   return (
     <div className="space-y-6">
@@ -322,6 +353,54 @@ export default function Projects() {
             <div className="space-y-1">
               <Label>Remaining (auto)</Label>
               <Input type="number" value={remainingPreview} readOnly className="bg-muted/40" />
+            </div>
+
+            <div className="md:col-span-2 space-y-3 rounded-md border border-border bg-card/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold">Client receivables schedule</div>
+                  <div className="text-xs text-muted-foreground">Split the remaining payment into dated receivable parts.</div>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={addClientReceivable}>Add receivable</Button>
+              </div>
+              {clientReceivables.length === 0 ? (
+                <div className="rounded border border-dashed border-border p-3 text-xs text-muted-foreground">No receivable terms yet.</div>
+              ) : clientReceivables.map((term, index) => (
+                <div key={`client-receivable-${index}`} className="grid grid-cols-1 gap-2 rounded border border-border p-2 md:grid-cols-[1fr_1fr_2fr_auto]">
+                  <Input type="number" min="0" placeholder="Amount" value={term.amount} onChange={(e) => updateClientReceivable(index, { amount: e.target.value })} />
+                  <Input type="date" value={term.dueDate} onChange={(e) => updateClientReceivable(index, { dueDate: e.target.value })} />
+                  <Input placeholder="Note" value={term.note} onChange={(e) => updateClientReceivable(index, { note: e.target.value })} />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => setClientReceivables((prev) => prev.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
+                </div>
+              ))}
+              <div className="text-xs text-muted-foreground">Scheduled total: <PrivacyWrapper value={clientReceivables.reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /> / Remaining: <PrivacyWrapper value={Math.max(0, remainingPreview)} /></div>
+            </div>
+
+            <div className="md:col-span-2 space-y-3 rounded-md border border-border bg-card/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold">Freelancer commission payment terms</div>
+                  <div className="text-xs text-muted-foreground">Divide freelancer commissions into dated payment parts.</div>
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={addFreelancerPaymentTerm}>Add term</Button>
+              </div>
+              {freelancerPaymentTerms.length === 0 ? (
+                <div className="rounded border border-dashed border-border p-3 text-xs text-muted-foreground">No freelancer payment terms yet.</div>
+              ) : freelancerPaymentTerms.map((term, index) => (
+                <div key={`freelancer-payment-${index}`} className="grid grid-cols-1 gap-2 rounded border border-border p-2 md:grid-cols-[1.5fr_1fr_1fr_2fr_auto]">
+                  <Select value={term.freelancerName || undefined} onValueChange={(value) => updateFreelancerPaymentTerm(index, { freelancerName: value })}>
+                    <SelectTrigger><SelectValue placeholder="Freelancer" /></SelectTrigger>
+                    <SelectContent>
+                      {freelancerPaymentNames.length === 0 ? <SelectItem value="__none" disabled>Select freelancer first</SelectItem> : freelancerPaymentNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Input type="number" min="0" placeholder="Amount" value={term.amount} onChange={(e) => updateFreelancerPaymentTerm(index, { amount: e.target.value })} />
+                  <Input type="date" value={term.dueDate} onChange={(e) => updateFreelancerPaymentTerm(index, { dueDate: e.target.value })} />
+                  <Input placeholder="Note" value={term.note} onChange={(e) => updateFreelancerPaymentTerm(index, { note: e.target.value })} />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => setFreelancerPaymentTerms((prev) => prev.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
+                </div>
+              ))}
+              <div className="text-xs text-muted-foreground">Scheduled freelancer payments: <PrivacyWrapper value={freelancerPaymentTerms.reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /></div>
             </div>
 
             <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
