@@ -1,0 +1,58 @@
+name: fratelanza-console
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: fratelanza-console-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fratelanza_console
+      POSTGRES_USER: fratelanza_console
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fratelanza_console"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ${REGISTRY:-ghcr.io/refaat1942}/fratelanza-api:${IMAGE_TAG:-latest}
+    container_name: fratelanza-console-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://fratelanza_console:${POSTGRES_PASSWORD}@db:5432/fratelanza_console
+      SESSION_SECRET: ${SESSION_SECRET}
+      MASTER_PASSWORD: ${MASTER_PASSWORD:-fratelanza2024}
+      PORT: 8080
+      NODE_ENV: production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:3101:8080"
+
+  web:
+    image: ${REGISTRY:-ghcr.io/refaat1942}/fratelanza-web:${IMAGE_TAG:-latest}
+    container_name: fratelanza-console-web
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:3100:80"
+    depends_on:
+      - api
+
+networks:
+  internal:
+    name: fratelanza-console-net
+    driver: bridge
+
+volumes:
+  pgdata:
+    name: fratelanza_console_pgdata

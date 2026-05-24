@@ -1,0 +1,1503 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Fratelanza Management Console API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+  - name: dashboard
+  - name: projects
+  - name: freelancers
+  - name: clients
+  - name: templates
+  - name: quotes
+  - name: expenses
+  - name: tasks
+  - name: auth
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # ── Auth ──────────────────────────────────────────────────────────────
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login with master password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid password
+
+  /auth/verify:
+    post:
+      operationId: verifyPassword
+      tags: [auth]
+      summary: Verify master password for sensitive operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginInput"
+      responses:
+        "200":
+          description: Password verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResult"
+        "401":
+          description: Invalid password
+
+  # ── Dashboard ─────────────────────────────────────────────────────────
+  /dashboard/summary:
+    get:
+      operationId: getDashboardSummary
+      tags: [dashboard]
+      summary: Get overall financial summary stats
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardSummary"
+
+  /dashboard/profit-by-type:
+    get:
+      operationId: getProfitByType
+      tags: [dashboard]
+      summary: Get net profit grouped by project type
+      responses:
+        "200":
+          description: Profit by type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProfitByType"
+
+  /dashboard/payment-alerts:
+    get:
+      operationId: getPaymentAlerts
+      tags: [dashboard]
+      summary: Get overdue or upcoming payment alerts
+      responses:
+        "200":
+          description: Payment alerts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentAlert"
+
+  /dashboard/recent-projects:
+    get:
+      operationId: getRecentProjects
+      tags: [dashboard]
+      summary: Get 5 most recently created projects
+      responses:
+        "200":
+          description: Recent projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+
+  # ── Projects ──────────────────────────────────────────────────────────
+  /projects:
+    get:
+      operationId: listProjects
+      tags: [projects]
+      summary: List all projects with optional filters
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+    post:
+      operationId: createProject
+      tags: [projects]
+      summary: Create a new project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectInput"
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+
+  /projects/receivables:
+    get:
+      operationId: listReceivables
+      tags: [projects]
+      summary: List projects with outstanding payments
+      responses:
+        "200":
+          description: Receivable projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+
+  /projects/{id}:
+    get:
+      operationId: getProject
+      tags: [projects]
+      summary: Get a single project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateProject
+      tags: [projects]
+      summary: Update a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProjectUpdate"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteProject
+      tags: [projects]
+      summary: Delete a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /projects/{id}/payment:
+    post:
+      operationId: logPayment
+      tags: [projects]
+      summary: Log a payment received for a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentInput"
+      responses:
+        "200":
+          description: Updated project after payment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "404":
+          description: Not found
+
+  /projects/{id}/team:
+    get:
+      operationId: getProjectTeam
+      tags: [projects]
+      summary: Get team members for a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Team members
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamMember"
+    post:
+      operationId: addTeamMember
+      tags: [projects]
+      summary: Add a team member to a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeamMemberInput"
+      responses:
+        "201":
+          description: Added team member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+
+  /projects/{id}/team/{memberId}:
+    delete:
+      operationId: removeTeamMember
+      tags: [projects]
+      summary: Remove a team member from a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: path
+          name: memberId
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Removed
+
+  # ── Freelancers ───────────────────────────────────────────────────────
+  /freelancers:
+    get:
+      operationId: listFreelancers
+      tags: [freelancers]
+      summary: List freelancers with optional filters
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: spec
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Freelancers list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Freelancer"
+    post:
+      operationId: createFreelancer
+      tags: [freelancers]
+      summary: Add a new freelancer/instructor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreelancerInput"
+      responses:
+        "201":
+          description: Created freelancer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Freelancer"
+
+  /freelancers/specializations:
+    get:
+      operationId: listSpecializations
+      tags: [freelancers]
+      summary: Get distinct specializations
+      responses:
+        "200":
+          description: Specializations
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+
+  /freelancers/{code}:
+    patch:
+      operationId: updateFreelancer
+      tags: [freelancers]
+      summary: Update a freelancer
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreelancerUpdate"
+      responses:
+        "200":
+          description: Updated freelancer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Freelancer"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteFreelancer
+      tags: [freelancers]
+      summary: Delete a freelancer
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Clients ───────────────────────────────────────────────────────────
+  /clients:
+    get:
+      operationId: listClients
+      tags: [clients]
+      summary: List clients with optional search
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: project
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Clients list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Client"
+    post:
+      operationId: createClient
+      tags: [clients]
+      summary: Add a new client
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientInput"
+      responses:
+        "201":
+          description: Created client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+
+  /clients/{id}:
+    get:
+      operationId: getClient
+      tags: [clients]
+      summary: Get client 360 profile
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Client profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClientProfile"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateClient
+      tags: [clients]
+      summary: Update a client
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClientUpdate"
+      responses:
+        "200":
+          description: Updated client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Client"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteClient
+      tags: [clients]
+      summary: Delete a client
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Templates (Services) ──────────────────────────────────────────────
+  /templates:
+    get:
+      operationId: listTemplates
+      tags: [templates]
+      summary: List all service templates
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Templates list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Template"
+    post:
+      operationId: createTemplate
+      tags: [templates]
+      summary: Add a new service template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateInput"
+      responses:
+        "201":
+          description: Created template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+
+  /templates/{id}:
+    patch:
+      operationId: updateTemplate
+      tags: [templates]
+      summary: Update a service template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateUpdate"
+      responses:
+        "200":
+          description: Updated template
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Template"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteTemplate
+      tags: [templates]
+      summary: Delete a service template
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Sales Quotes ──────────────────────────────────────────────────────
+  /quotes:
+    get:
+      operationId: listQuotes
+      tags: [quotes]
+      summary: List sales quotes
+      parameters:
+        - in: query
+          name: client
+          schema:
+            type: string
+        - in: query
+          name: search
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quotes list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Quote"
+    post:
+      operationId: createQuote
+      tags: [quotes]
+      summary: Create a new sales quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteInput"
+      responses:
+        "201":
+          description: Created quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}:
+    patch:
+      operationId: updateQuote
+      tags: [quotes]
+      summary: Update a sales quote
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteUpdate"
+      responses:
+        "200":
+          description: Updated quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteQuote
+      tags: [quotes]
+      summary: Delete a quote
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── General Expenses ──────────────────────────────────────────────────
+  /expenses:
+    get:
+      operationId: listExpenses
+      tags: [expenses]
+      summary: List general expenses
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Expenses list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Expense"
+    post:
+      operationId: createExpense
+      tags: [expenses]
+      summary: Add a general expense
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseInput"
+      responses:
+        "201":
+          description: Created expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
+
+  /expenses/summary:
+    get:
+      operationId: getExpenseSummary
+      tags: [expenses]
+      summary: Get expense totals and summary
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Expense summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseSummary"
+
+  /expenses/{id}:
+    delete:
+      operationId: deleteExpense
+      tags: [expenses]
+      summary: Delete a general expense
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Tasks ─────────────────────────────────────────────────────────────
+  /tasks:
+    get:
+      operationId: listTasks
+      tags: [tasks]
+      summary: List tasks with optional filters
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+        - in: query
+          name: projectId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Tasks list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+    post:
+      operationId: createTask
+      tags: [tasks]
+      summary: Create a new task
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+
+  /tasks/{id}:
+    patch:
+      operationId: updateTask
+      tags: [tasks]
+      summary: Update a task (status, details, etc.)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdate"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteTask
+      tags: [tasks]
+      summary: Delete a task
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  # ── Finance / P&L Report ──────────────────────────────────────────────
+  /finance/report:
+    get:
+      operationId: getFinanceReport
+      tags: [expenses]
+      summary: Get full P&L financial report
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Finance report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FinanceReport"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    # ── Auth ───────────────────────────────────────────────────────────
+    LoginInput:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+
+    AuthResult:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+        token:
+          type: ["string", "null"]
+
+    # ── Dashboard ──────────────────────────────────────────────────────
+    DashboardSummary:
+      type: object
+      required: [totalRevenue, totalPaid, totalRemaining, totalNetProfit, totalExpenses, activeProjects, completedProjects, totalClients, totalFreelancers]
+      properties:
+        totalRevenue:
+          type: number
+        totalPaid:
+          type: number
+        totalRemaining:
+          type: number
+        totalNetProfit:
+          type: number
+        totalExpenses:
+          type: number
+        activeProjects:
+          type: integer
+        completedProjects:
+          type: integer
+        totalClients:
+          type: integer
+        totalFreelancers:
+          type: integer
+
+    ProfitByType:
+      type: object
+      required: [type, netProfit, count]
+      properties:
+        type:
+          type: string
+        netProfit:
+          type: number
+        count:
+          type: integer
+
+    PaymentAlert:
+      type: object
+      required: [id, projectName, clientName, remaining, nextPaymentDate]
+      properties:
+        id:
+          type: integer
+        projectName:
+          type: string
+        clientName:
+          type: string
+        remaining:
+          type: number
+        nextPaymentDate:
+          type: string
+
+    # ── Project ────────────────────────────────────────────────────────
+    Project:
+      type: object
+      required: [id, type, projectName, clientPrice, totalCost, netProfit, status, date]
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+        projectName:
+          type: string
+        clientName:
+          type: ["string", "null"]
+        clientPrice:
+          type: number
+        totalCost:
+          type: number
+        netProfit:
+          type: number
+        freelancerName:
+          type: ["string", "null"]
+        freelancerCommission:
+          type: number
+        startDate:
+          type: ["string", "null"]
+        deadline:
+          type: ["string", "null"]
+        status:
+          type: string
+        paidAmount:
+          type: number
+        remainingAmount:
+          type: number
+        nextPaymentDate:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        date:
+          type: string
+
+    ProjectDetail:
+      allOf:
+        - $ref: "#/components/schemas/Project"
+        - type: object
+          properties:
+            team:
+              type: array
+              items:
+                $ref: "#/components/schemas/TeamMember"
+
+    ProjectInput:
+      type: object
+      required: [type, projectName, clientPrice]
+      properties:
+        type:
+          type: string
+        projectName:
+          type: string
+        clientName:
+          type: string
+        clientPrice:
+          type: number
+        totalCost:
+          type: number
+        netProfit:
+          type: number
+        freelancerName:
+          type: string
+        freelancerCommission:
+          type: number
+        startDate:
+          type: string
+        deadline:
+          type: string
+        status:
+          type: string
+        paidAmount:
+          type: number
+        remainingAmount:
+          type: number
+        nextPaymentDate:
+          type: string
+        notes:
+          type: string
+        team:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMemberInput"
+
+    ProjectUpdate:
+      type: object
+      properties:
+        projectName:
+          type: string
+        clientName:
+          type: string
+        clientPrice:
+          type: number
+        totalCost:
+          type: number
+        netProfit:
+          type: number
+        freelancerCommission:
+          type: number
+        startDate:
+          type: string
+        deadline:
+          type: string
+        status:
+          type: string
+        paidAmount:
+          type: number
+        remainingAmount:
+          type: number
+        nextPaymentDate:
+          type: string
+        notes:
+          type: string
+        team:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeamMemberInput"
+
+    PaymentInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: number
+        nextPaymentDate:
+          type: string
+
+    TeamMember:
+      type: object
+      required: [id, projectId, freelancerName, commission]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        freelancerName:
+          type: string
+        commission:
+          type: number
+
+    TeamMemberInput:
+      type: object
+      required: [freelancerName, commission]
+      properties:
+        freelancerName:
+          type: string
+        commission:
+          type: number
+
+    # ── Freelancer ─────────────────────────────────────────────────────
+    Freelancer:
+      type: object
+      required: [code, name, earned, balance, rating]
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        spec:
+          type: ["string", "null"]
+        position:
+          type: ["string", "null"]
+        earned:
+          type: number
+        balance:
+          type: number
+        rating:
+          type: number
+
+    FreelancerInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        spec:
+          type: string
+        position:
+          type: string
+        earned:
+          type: number
+        balance:
+          type: number
+
+    FreelancerUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        spec:
+          type: string
+        position:
+          type: string
+        earned:
+          type: number
+        balance:
+          type: number
+        rating:
+          type: number
+
+    # ── Client ─────────────────────────────────────────────────────────
+    Client:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        activity:
+          type: ["string", "null"]
+        project:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    ClientInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        activity:
+          type: string
+        project:
+          type: string
+        notes:
+          type: string
+
+    ClientUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        address:
+          type: string
+        activity:
+          type: string
+        project:
+          type: string
+        notes:
+          type: string
+
+    ClientProfile:
+      allOf:
+        - $ref: "#/components/schemas/Client"
+        - type: object
+          properties:
+            projects:
+              type: array
+              items:
+                $ref: "#/components/schemas/Project"
+            totalProjects:
+              type: integer
+            totalValue:
+              type: number
+            totalPaid:
+              type: number
+            totalRemaining:
+              type: number
+
+    # ── Template ───────────────────────────────────────────────────────
+    Template:
+      type: object
+      required: [id, category, name, cost]
+      properties:
+        id:
+          type: integer
+        category:
+          type: string
+        name:
+          type: string
+        cost:
+          type: number
+        expenses:
+          type: number
+        multiplier:
+          type: number
+        broker:
+          type: number
+        students:
+          type: integer
+
+    TemplateInput:
+      type: object
+      required: [category, name, cost]
+      properties:
+        category:
+          type: string
+        name:
+          type: string
+        cost:
+          type: number
+        expenses:
+          type: number
+        multiplier:
+          type: number
+        broker:
+          type: number
+        students:
+          type: integer
+
+    TemplateUpdate:
+      type: object
+      properties:
+        category:
+          type: string
+        name:
+          type: string
+        cost:
+          type: number
+        expenses:
+          type: number
+        multiplier:
+          type: number
+        broker:
+          type: number
+        students:
+          type: integer
+
+    # ── Quote ──────────────────────────────────────────────────────────
+    Quote:
+      type: object
+      required: [id, clientName, price, date]
+      properties:
+        id:
+          type: integer
+        clientName:
+          type: string
+        projectName:
+          type: ["string", "null"]
+        price:
+          type: number
+        language:
+          type: ["string", "null"]
+        date:
+          type: string
+        paymentTerms:
+          type: ["string", "null"]
+        milestones:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    QuoteInput:
+      type: object
+      required: [clientName, price]
+      properties:
+        clientName:
+          type: string
+        projectName:
+          type: string
+        price:
+          type: number
+        language:
+          type: string
+        date:
+          type: string
+        paymentTerms:
+          type: string
+        milestones:
+          type: string
+        notes:
+          type: string
+
+    QuoteUpdate:
+      type: object
+      properties:
+        clientName:
+          type: string
+        projectName:
+          type: string
+        price:
+          type: number
+        language:
+          type: string
+        paymentTerms:
+          type: string
+        milestones:
+          type: string
+        notes:
+          type: string
+
+    # ── Expense ────────────────────────────────────────────────────────
+    Expense:
+      type: object
+      required: [id, description, amount, date]
+      properties:
+        id:
+          type: integer
+        description:
+          type: string
+        amount:
+          type: number
+        date:
+          type: string
+
+    ExpenseInput:
+      type: object
+      required: [description, amount]
+      properties:
+        description:
+          type: string
+        amount:
+          type: number
+        date:
+          type: string
+
+    ExpenseSummary:
+      type: object
+      required: [totalExpenses, count]
+      properties:
+        totalExpenses:
+          type: number
+        count:
+          type: integer
+
+    # ── Task ───────────────────────────────────────────────────────────
+    Task:
+      type: object
+      required: [id, title, status, createdAt]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        description:
+          type: ["string", "null"]
+        status:
+          type: string
+        priority:
+          type: ["string", "null"]
+        projectId:
+          type: ["integer", "null"]
+        projectName:
+          type: ["string", "null"]
+        assignedTo:
+          type: ["string", "null"]
+        dueDate:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+
+    TaskInput:
+      type: object
+      required: [title]
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        priority:
+          type: string
+        projectId:
+          type: integer
+        assignedTo:
+          type: string
+        dueDate:
+          type: string
+
+    TaskUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        priority:
+          type: string
+        projectId:
+          type: integer
+        assignedTo:
+          type: string
+        dueDate:
+          type: string
+
+    # ── Finance Report ─────────────────────────────────────────────────
+    FinanceReport:
+      type: object
+      required: [totalRevenue, totalPaid, totalRemaining, totalCost, totalNetProfit, totalExpenses, netBalance, projects]
+      properties:
+        totalRevenue:
+          type: number
+        totalPaid:
+          type: number
+        totalRemaining:
+          type: number
+        totalCost:
+          type: number
+        totalNetProfit:
+          type: number
+        totalExpenses:
+          type: number
+        netBalance:
+          type: number
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/Project"
