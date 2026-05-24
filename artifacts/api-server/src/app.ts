@@ -65,19 +65,23 @@ app.use(
 // Public download endpoint (no auth) for one-off deploy file transfer
 import { createReadStream, statSync } from "node:fs";
 import { resolve } from "node:path";
-app.get("/api/public/build.tar.gz", (_req, res) => {
-  const filePath = resolve(process.cwd(), "build-download.tar.gz");
-  try {
-    const stat = statSync(filePath);
-    res.setHeader("Content-Type", "application/octet-stream");
-    res.setHeader("Content-Length", String(stat.size));
-    res.setHeader("Content-Encoding", "identity");
-    res.setHeader("Cache-Control", "no-store");
-    createReadStream(filePath).pipe(res);
-  } catch {
-    res.status(404).send("not found");
-  }
-});
+function servePublicFile(filename: string) {
+  return (_req: express.Request, res: express.Response) => {
+    const filePath = resolve(process.cwd(), filename);
+    try {
+      const stat = statSync(filePath);
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Content-Length", String(stat.size));
+      res.setHeader("Content-Encoding", "identity");
+      res.setHeader("Cache-Control", "no-store");
+      createReadStream(filePath).pipe(res);
+    } catch {
+      res.status(404).send("not found");
+    }
+  };
+}
+app.get("/api/public/build.tar.gz", servePublicFile("build-download.tar.gz"));
+app.get("/api/public/api.tar.gz", servePublicFile("api-download.tar.gz"));
 
 app.use("/api", requireAuth, router);
 
