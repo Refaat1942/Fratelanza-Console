@@ -1,4 +1,4 @@
-FROM node:24-alpine AS base
+FROM node:24-slim AS base
 RUN npm install -g pnpm@10
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/api-client-react/package.json ./lib/api-client-react/
 COPY lib/db/package.json ./lib/db/
 COPY artifacts/fratelanza/package.json ./artifacts/fratelanza/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 FROM deps AS builder
 COPY lib/ ./lib/
@@ -17,6 +17,8 @@ COPY artifacts/fratelanza/ ./artifacts/fratelanza/
 COPY tsconfig.json tsconfig.base.json ./
 ARG VITE_BASE_URL=/
 ENV VITE_BASE_URL=${VITE_BASE_URL}
+ENV PORT=3000
+ENV BASE_PATH=/
 RUN pnpm --filter @workspace/fratelanza run build
 
 FROM nginx:alpine AS runner
