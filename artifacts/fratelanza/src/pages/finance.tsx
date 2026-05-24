@@ -7,10 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { useTranslation } from "react-i18next";
 
 type Project = { id: number; type: string; projectName: string; clientName?: string | null; clientPrice: number; totalCost: number; netProfit: number; paidAmount: number; remainingAmount: number; status: string; date: string; };
 
 export default function Finance() {
+  const { t } = useTranslation();
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [applied, setApplied] = useState({ startDate: "", endDate: "" });
@@ -47,7 +49,7 @@ export default function Finance() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold tracking-tight">Financials & P&L</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('finance.title')}</h1>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1">
             <Label className="text-xs whitespace-nowrap">From</Label>

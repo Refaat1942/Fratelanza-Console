@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, X, Printer } from "lucide-react";
 import { printQuote } from "@/lib/quote-pdf";
+import { useTranslation } from "react-i18next";
 
 type Quote = { id: number; clientName: string; projectName?: string | null; price: number; language?: string | null; date?: string | null; paymentTerms?: string | null; milestones?: string | null; notes?: string | null; };
 type LineItem = { desc: string; price: number };
@@ -20,6 +21,7 @@ type LineItem = { desc: string; price: number };
 const emptyForm = { clientName: "", language: "English", date: new Date().toISOString().slice(0, 10), paymentTerms: "", milestones: "", notes: "" };
 
 export default function Quotes() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -84,9 +86,9 @@ export default function Quotes() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Sales Quotes</h1>
-        <Button onClick={openCreate} data-testid="button-create-quote" className="bg-primary text-black hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" /> New Quote
+        <h1 className="text-2xl font-bold tracking-tight">{t('quotes.title')}</h1>
+        <Button onClick={openCreate} data-testid="button-create-quote" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="h-4 w-4 me-2" /> {t('quotes.new')}
         </Button>
       </div>
 
@@ -109,7 +111,7 @@ export default function Quotes() {
             </thead>
             <tbody>
               {(quotes as Quote[]).length === 0 ? (
-                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No quotes found</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{t('quotes.noQuotes')}</td></tr>
               ) : (quotes as Quote[]).map((q) => (
                 <tr key={q.id} data-testid={`row-quote-${q.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-medium">{q.clientName}</td>
@@ -133,7 +135,7 @@ export default function Quotes() {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? "Edit Quote" : "New Sales Quote"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('quotes.edit') : t('quotes.new')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -184,16 +186,16 @@ export default function Quotes() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button data-testid="button-save-quote" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving..." : "Save Quote"}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
+            <Button data-testid="button-save-quote" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Quote?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>{t('quotes.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t('common.delete')}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, DollarSign, Search, X, Users } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Project = {
   id: number; type: string; projectName: string; clientName?: string | null;
@@ -43,6 +44,7 @@ const empty = {
 };
 
 export default function Projects() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -163,51 +165,51 @@ export default function Projects() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h1 className="text-2xl font-bold tracking-tight">Projects</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('projects.title')}</h1>
         <Button onClick={openCreate} data-testid="button-create-project" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" /> New Project
+          <Plus className="h-4 w-4 me-2" /> {t('projects.new')}
         </Button>
       </div>
 
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input data-testid="input-search-projects" placeholder="Search projects or clients..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input data-testid="input-search-projects" placeholder={t('projects.searchPlaceholder')} className="ps-9" value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
         <Select value={typeFilter} onValueChange={setTypeFilter}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="All">All Types</SelectItem>
-            <SelectItem value="Software">Software</SelectItem>
-            <SelectItem value="Training">Training</SelectItem>
+            <SelectItem value="All">{t('projects.allTypes')}</SelectItem>
+            <SelectItem value="Software">{t('projects.typeSoftware')}</SelectItem>
+            <SelectItem value="Training">{t('projects.typeTraining')}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="All">All Status</SelectItem>
-            <SelectItem value="Ongoing">Ongoing</SelectItem>
-            <SelectItem value="Completed">Completed</SelectItem>
-            <SelectItem value="Cancelled">Cancelled</SelectItem>
+            <SelectItem value="All">{t('projects.allStatus')}</SelectItem>
+            <SelectItem value="Ongoing">{t('projects.statusOngoing')}</SelectItem>
+            <SelectItem value="Completed">{t('projects.statusCompleted')}</SelectItem>
+            <SelectItem value="Cancelled">{t('projects.statusCancelled')}</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading projects...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('projects.loading')}</div>
       ) : (
         <div className="rounded-lg border border-border overflow-x-auto">
           <table className="w-full text-sm min-w-[800px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Type", "Project Name", "Client", "Price", "Net Profit", "Paid", "Remaining", "Status", "Actions"].map((h) => (
+                {[t('common.type'), t('projects.projectName'), t('projects.clientName'), t('projects.price'), t('dashboard.netProfit'), t('projects.paid'), t('projects.remaining'), t('common.status'), t('projects.actions')].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No projects found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('projects.noProjects')}</td></tr>
               ) : filtered.map((p) => (
                 <tr key={p.id} data-testid={`row-project-${p.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3"><Badge variant="outline" className={p.type === "Software" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}>{p.type}</Badge></td>
@@ -235,7 +237,7 @@ export default function Projects() {
       {/* Create / Edit Modal */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editing ? "Edit Project" : "New Project"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('projects.edit') : t('projects.new')}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
             <div className="md:col-span-2 space-y-1">
               <Label>Project Name</Label>
@@ -342,9 +344,9 @@ export default function Projects() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             <Button data-testid="button-save-project" onClick={handleSave} disabled={createProject.isPending || updateProject.isPending}>
-              {(createProject.isPending || updateProject.isPending) ? "Saving..." : "Save"}
+              {(createProject.isPending || updateProject.isPending) ? t('common.saving') : t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -353,7 +355,7 @@ export default function Projects() {
       {/* Log Payment Dialog */}
       <Dialog open={!!paymentProject} onOpenChange={(v) => !v && setPaymentProject(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Log Payment — {paymentProject?.projectName}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('projects.logPayment')} — {paymentProject?.projectName}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div className="rounded border border-border p-3"><div className="text-muted-foreground text-xs">Price</div><div className="font-semibold"><PrivacyWrapper value={paymentProject?.clientPrice ?? 0} /></div></div>
@@ -380,10 +382,10 @@ export default function Projects() {
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Project?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>{t('projects.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90" data-testid="button-confirm-delete">Delete</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90" data-testid="button-confirm-delete">{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

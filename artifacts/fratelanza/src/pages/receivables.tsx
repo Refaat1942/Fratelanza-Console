@@ -8,10 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Project = { id: number; projectName: string; clientName?: string | null; clientPrice: number; paidAmount: number; remainingAmount: number; nextPaymentDate?: string | null; status: string; };
 
 export default function Receivables() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: receivables = [], isLoading } = useListReceivables();
@@ -38,8 +40,8 @@ export default function Receivables() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Receivables</h1>
-        <div className="text-sm text-muted-foreground">Projects with outstanding payments</div>
+        <h1 className="text-2xl font-bold tracking-tight">{t('receivables.title')}</h1>
+        <div className="text-sm text-muted-foreground">{t('receivables.totalOutstanding')}</div>
       </div>
 
       {isLoading ? (
@@ -56,7 +58,7 @@ export default function Receivables() {
             </thead>
             <tbody>
               {(receivables as Project[]).length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No outstanding receivables</td></tr>
+                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">{t('receivables.noReceivables')}</td></tr>
               ) : (receivables as Project[]).map((p) => {
                 const overdue = p.nextPaymentDate && p.nextPaymentDate < now;
                 return (
@@ -75,7 +77,7 @@ export default function Receivables() {
                     </td>
                     <td className="px-4 py-3">
                       <Button size="sm" variant="outline" data-testid={`button-log-payment-${p.id}`} className="border-green-500/30 text-green-400 hover:bg-green-500/10" onClick={() => { setPayProj(p); setAmount(""); setNextDate(""); }}>
-                        <DollarSign className="h-3 w-3 mr-1" /> Log Payment
+                        <DollarSign className="h-3 w-3 me-1" /> {t('receivables.logPayment')}
                       </Button>
                     </td>
                   </tr>
@@ -88,7 +90,7 @@ export default function Receivables() {
 
       <Dialog open={!!payProj} onOpenChange={(v) => !v && setPayProj(null)}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Log Payment — {payProj?.projectName}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('receivables.logPayment')} — {payProj?.projectName}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="text-sm text-muted-foreground">Remaining: <span className="text-red-400 font-semibold ml-1"><PrivacyWrapper value={payProj?.remainingAmount ?? 0} /></span></div>
             <div className="space-y-1">
@@ -101,9 +103,9 @@ export default function Receivables() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPayProj(null)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setPayProj(null)}>{t('common.cancel')}</Button>
             <Button data-testid="button-confirm-payment" disabled={!amount || logPayment.isPending} onClick={handlePay}>
-              {logPayment.isPending ? "Saving..." : "Confirm Payment"}
+              {logPayment.isPending ? t('common.saving') : t('projects.confirmPayment')}
             </Button>
           </DialogFooter>
         </DialogContent>

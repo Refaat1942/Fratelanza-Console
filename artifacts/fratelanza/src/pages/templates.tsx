@@ -12,12 +12,14 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Template = { id: number; category: string; name: string; cost: number; expenses: number; multiplier: number; broker: number; students: number; };
 
 const emptyForm = { category: "Software", name: "", cost: 0, expenses: 0, multiplier: 1, broker: 0, students: 0 };
 
 export default function Templates() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [tab, setTab] = useState("Software");
@@ -69,9 +71,9 @@ export default function Templates() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Service Templates</h1>
-        <Button onClick={openCreate} data-testid="button-add-template" className="bg-primary text-black hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" /> Add Template
+        <h1 className="text-2xl font-bold tracking-tight">{t('templates.title')}</h1>
+        <Button onClick={openCreate} data-testid="button-add-template" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="h-4 w-4 me-2" /> {t('templates.new')}
         </Button>
       </div>
 
@@ -141,16 +143,16 @@ export default function Templates() {
             <div className="space-y-1"><Label>Students</Label><Input type="number" value={form.students} onChange={f("students")} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button data-testid="button-save-template" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
+            <Button data-testid="button-save-template" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Template?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>{t('templates.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t('common.delete')}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

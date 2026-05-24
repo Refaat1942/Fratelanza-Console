@@ -10,10 +10,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, TrendingDown } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Expense = { id: number; description: string; amount: number; date?: string | null; };
 
 export default function Expenses() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -57,9 +59,9 @@ export default function Expenses() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">General Expenses</h1>
-        <Button onClick={() => setShowForm(true)} data-testid="button-add-expense" className="bg-primary text-black hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" /> Add Expense
+        <h1 className="text-2xl font-bold tracking-tight">{t('expenses.title')}</h1>
+        <Button onClick={() => setShowForm(true)} data-testid="button-add-expense" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="h-4 w-4 me-2" /> {t('expenses.new')}
         </Button>
       </div>
 
@@ -113,23 +115,23 @@ export default function Expenses() {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Add Expense</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{t('expenses.new')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-1"><Label>Description</Label><Input data-testid="input-expense-desc" value={form.description} onChange={f("description")} placeholder="What was this expense for?" /></div>
             <div className="space-y-1"><Label>Amount (EGP)</Label><Input data-testid="input-expense-amount" type="number" value={form.amount} onChange={f("amount")} /></div>
             <div className="space-y-1"><Label>Date</Label><Input type="date" value={form.date} onChange={f("date")} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button data-testid="button-save-expense" onClick={handleSave} disabled={create.isPending}>{create.isPending ? "Saving..." : "Add Expense"}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
+            <Button data-testid="button-save-expense" onClick={handleSave} disabled={create.isPending}>{create.isPending ? t('common.saving') : t('expenses.new')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Expense?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>{t('expenses.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t('common.delete')}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

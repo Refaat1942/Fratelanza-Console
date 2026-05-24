@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, MoveRight } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Task = { id: number; title: string; description?: string | null; status: string; priority?: string | null; projectName?: string | null; assignedTo?: string | null; dueDate?: string | null; createdAt: string; };
 
@@ -25,6 +26,7 @@ const PRIORITY_COLORS: Record<string, string> = {
 const emptyForm = { title: "", description: "", status: "Todo", priority: "Medium", projectName: "", assignedTo: "", dueDate: "" };
 
 export default function Tasks() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -81,9 +83,9 @@ export default function Tasks() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Task Board</h1>
-        <Button onClick={() => openCreate()} data-testid="button-add-task" className="bg-primary text-black hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" /> New Task
+        <h1 className="text-2xl font-bold tracking-tight">{t('tasks.title')}</h1>
+        <Button onClick={() => openCreate()} data-testid="button-add-task" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="h-4 w-4 me-2" /> {t('tasks.new')}
         </Button>
       </div>
 
@@ -142,7 +144,7 @@ export default function Tasks() {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? "Edit Task" : "New Task"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('tasks.edit') : t('tasks.new')}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-1"><Label>Title</Label><Input data-testid="input-task-title" value={form.title} onChange={f("title")} /></div>
             <div className="space-y-1"><Label>Description</Label><Textarea value={form.description} onChange={f("description")} rows={3} /></div>
@@ -161,16 +163,16 @@ export default function Tasks() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button data-testid="button-save-task" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
+            <Button data-testid="button-save-task" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Task?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction></AlertDialogFooter>
+          <AlertDialogHeader><AlertDialogTitle>{t('tasks.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogFooter><AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t('common.delete')}</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </div>

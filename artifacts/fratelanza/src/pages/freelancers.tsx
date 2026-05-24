@@ -12,6 +12,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Star, Upload } from "lucide-react";
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; };
 
@@ -47,6 +48,7 @@ const SPECIALIZATIONS = [
 ];
 
 export default function Freelancers() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -129,25 +131,25 @@ export default function Freelancers() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Freelancers</h1>
+        <h1 className="text-2xl font-bold tracking-tight">{t('freelancers.title')}</h1>
         <div className="flex gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onImport} data-testid="input-import-file" />
           <Button variant="outline" onClick={onPickImport} data-testid="button-import-freelancers" disabled={importing}>
             <Upload className="h-4 w-4 mr-2" /> {importing ? "Importing..." : "Import Excel"}
           </Button>
           <Button onClick={openCreate} data-testid="button-add-freelancer" className="bg-primary text-black hover:bg-primary/90">
-            <Plus className="h-4 w-4 mr-2" /> Add Freelancer
+            <Plus className="h-4 w-4 me-2" /> {t('freelancers.new')}
           </Button>
         </div>
       </div>
 
       <div className="relative max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input data-testid="input-search-freelancers" placeholder="Search name or specialization..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input data-testid="input-search-freelancers" placeholder={t('freelancers.searchPlaceholder')} className="ps-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
@@ -160,7 +162,7 @@ export default function Freelancers() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">No freelancers found</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('freelancers.noFreelancers')}</td></tr>
               ) : filtered.map((fr) => (
                 <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fr.code}</td>
@@ -186,7 +188,7 @@ export default function Freelancers() {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? "Edit Freelancer" : "Add Freelancer"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('freelancers.edit') : t('freelancers.new')}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-1"><Label>Full Name</Label><Input data-testid="input-freelancer-name" value={form.name} onChange={f("name")} /></div>
             <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={f("phone")} /></div>
@@ -207,18 +209,18 @@ export default function Freelancers() {
             <div className="space-y-1"><Label>Balance (EGP)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button data-testid="button-save-freelancer" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
+            <Button data-testid="button-save-freelancer" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteCode !== null} onOpenChange={(v) => !v && setDeleteCode(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Freelancer?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>{t('freelancers.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

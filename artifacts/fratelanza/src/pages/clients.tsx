@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Eye } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 type Client = { id: number; name: string; phone?: string | null; address?: string | null; activity?: string | null; project?: string | null; notes?: string | null; };
 
@@ -71,6 +72,7 @@ function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
 }
 
 export default function Clients() {
+  const { t } = useTranslation();
   const { toast } = useToast();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -121,15 +123,15 @@ export default function Clients() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold tracking-tight">Clients</h1>
-        <Button onClick={openCreate} data-testid="button-add-client" className="bg-primary text-black hover:bg-primary/90">
-          <Plus className="h-4 w-4 mr-2" /> Add Client
+        <h1 className="text-2xl font-bold tracking-tight">{t('clients.title')}</h1>
+        <Button onClick={openCreate} data-testid="button-add-client" className="bg-primary text-primary-foreground hover:bg-primary/90">
+          <Plus className="h-4 w-4 me-2" /> {t('clients.new')}
         </Button>
       </div>
 
       <div className="relative max-w-xs">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input data-testid="input-search-clients" placeholder="Search clients..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input data-testid="input-search-clients" placeholder={t('clients.searchPlaceholder')} className="ps-9" value={search} onChange={(e) => setSearch(e.target.value)} />
       </div>
 
       {isLoading ? (
@@ -146,7 +148,7 @@ export default function Clients() {
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">No clients found</td></tr>
+                <tr><td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">{t('clients.noClients')}</td></tr>
               ) : filtered.map((c) => (
                 <tr key={c.id} data-testid={`row-client-${c.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
@@ -171,7 +173,7 @@ export default function Clients() {
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editing ? "Edit Client" : "Add Client"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? t('clients.edit') : t('clients.new')}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-1"><Label>Client Name</Label><Input data-testid="input-client-name" value={form.name} onChange={f("name")} /></div>
             <div className="space-y-1"><Label>Phone</Label><Input value={form.phone} onChange={f("phone")} /></div>
@@ -181,18 +183,18 @@ export default function Clients() {
             <div className="col-span-2 space-y-1"><Label>Notes</Label><Textarea value={form.notes} onChange={f("notes")} rows={3} /></div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button data-testid="button-save-client" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving..." : "Save"}</Button>
+            <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
+            <Button data-testid="button-save-client" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>
-          <AlertDialogHeader><AlertDialogTitle>Delete Client?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle>{t('clients.deleteTitle')}</AlertDialogTitle><AlertDialogDescription>{t('common.deleteConfirmDesc')}</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive hover:bg-destructive/90">{t('common.delete')}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
