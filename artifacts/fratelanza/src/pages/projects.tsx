@@ -38,6 +38,21 @@ const STATUS_COLORS: Record<string, string> = {
   Cancelled: "bg-red-500/20 text-red-400 border-red-500/30",
 };
 
+
+function parseMoney(value: unknown): number {
+  const normalized = String(value ?? "").replace(/,/g, "").replace(/[^0-9.]/g, "");
+  const firstDot = normalized.indexOf(".");
+  const cleaned = firstDot === -1 ? normalized : normalized.slice(0, firstDot + 1) + normalized.slice(firstDot + 1).replace(/\./g, "");
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function moneyInput(value: string): string {
+  const normalized = value.replace(/,/g, "").replace(/[^0-9.]/g, "");
+  const firstDot = normalized.indexOf(".");
+  return firstDot === -1 ? normalized : normalized.slice(0, firstDot + 1) + normalized.slice(firstDot + 1).replace(/\./g, "");
+}
+
 const empty = {
   type: "Software", projectName: "", clientName: "", clientPrice: 0,
   totalCost: 0, netProfit: 0, freelancerName: "", freelancerCommission: 0,
@@ -108,7 +123,7 @@ export default function Projects() {
       .then((r) => r.ok ? r.json() : { clientReceivables: [], freelancerPaymentTerms: [] })
       .then((terms: { clientReceivables?: PaymentTerm[]; freelancerPaymentTerms?: FreelancerPaymentTerm[] }) => {
         setClientReceivables((terms.clientReceivables ?? []).map((term) => ({ amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status === "Paid" ? "Paid" : "Pending" })));
-        setFreelancerPaymentTerms((terms.freelancerPaymentTerms ?? []).map((term) => ({ freelancerName: term.freelancerName, amount: Number(term.amount), dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status === "Paid" ? "Paid" : "Pending" })));
+        setFreelancerPaymentTerms((terms.freelancerPaymentTerms ?? []).map((term) => ({ freelancerName: term.freelancerName, amount: Number(term.amount) || "", dueDate: term.dueDate ?? "", note: term.note ?? "", status: term.status === "Paid" ? "Paid" : "Pending" })));
       })
       .catch(() => { setClientReceivables([]); setFreelancerPaymentTerms([]); });
     setShowForm(true);
@@ -120,7 +135,14 @@ export default function Projects() {
       toast({ title: "Already added", variant: "destructive" });
       return;
     }
-    setTeam((prev) => [...prev, { freelancerName: pickFreelancer, commission: Number(pickCommission) || 0 }]);
+    const commission = parseMoney(pickCommission);
+    setTeam((prev) => [...prev, { freelancerName: pickFreelancer, commission }]);
+    if (commission > 0) {
+      setFreelancerPaymentTerms((prev) => [
+        ...prev,
+        { freelancerName: pickFreelancer, amount: String(commission), dueDate: "", note: "Commission payment", status: "Pending" },
+      ]);
+    }
     setPickFreelancer(""); setPickCommission("");
   };
 
@@ -140,15 +162,27 @@ export default function Projects() {
   };
   const addFreelancerPaymentTerm = () => {
     const freelancerName = form.freelancerName || team[0]?.freelancerName || "";
-    setFreelancerPaymentTerms((prev) => [...prev, { freelancerName, amount: 0, dueDate: "", note: "Commission payment", status: "Pending" }]);
+    setFreelancerPaymentTerms((prev) => [...prev, { freelancerName, amount: "", dueDate: "", note: "Commission payment", status: "Pending" }]);
   };
 
   const handleSave = () => {
-    const leadCommission = Math.max(0, Number(form.freelancerCommission || 0));
+    const leadCommission = Math.max(0, parseMoney(form.freelancerCommission));
     const commissionedTeam = team
-      .map((m) => ({ ...m, commission: Math.max(0, Number(m.commission || 0)) }))
+      .map((m) => ({ ...m, commission: Math.max(0, parseMoney(m.commission)) }))
       .filter((m) => m.commission > 0);
-    const totalCommission = commissionedTeam.reduce((s, m) => s + m.commission, 0) + leadCommission;
+    const totalCommission = commissionedTeam.reduce((sum, member) => sum + member.commission, 0) + leadCommission;
+    const normalizedFreelancerTerms = freelancerPaymentTerms
+      .map((term) => ({ ...term, amount: parseMoney(term.amount) }))
+      .filter((term) => term.freelancerName && term.amount > 0);
+    const scheduledCommission = normalizedFreelancerTerms.reduce((sum, term) => sum + term.amount, 0);
+    if (scheduledCommission > totalCommission) {
+      toast({
+        title: "Payment terms exceed freelancer commissions",
+        description: "Reduce payment term amounts or increase the freelancer commission total.",
+        variant: "destructive",
+      });
+      return;
+    }
     const data = {
       ...form,
       clientPrice: Number(form.clientPrice),
@@ -158,8 +192,8 @@ export default function Projects() {
       remainingAmount: Number(form.clientPrice) - Number(form.paidAmount),
       freelancerCommission: leadCommission,
       team: commissionedTeam,
-      clientReceivables: clientReceivables.map((term) => ({ ...term, amount: Number(term.amount) || 0 })).filter((term) => term.amount > 0),
-      freelancerPaymentTerms: freelancerPaymentTerms.map((term) => ({ ...term, amount: Number(term.amount) || 0 })).filter((term) => term.freelancerName && term.amount > 0),
+      clientReceivables: clientReceivables.map((term) => ({ ...term, amount: parseMoney(term.amount) })).filter((term) => term.amount > 0),
+      freelancerPaymentTerms: normalizedFreelancerTerms,
     };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
@@ -195,6 +229,10 @@ export default function Projects() {
 
   const downPaymentPct = form.clientPrice > 0 ? Math.round((Number(form.paidAmount) / Number(form.clientPrice)) * 100) : 0;
   const remainingPreview = Number(form.clientPrice) - Number(form.paidAmount);
+  const totalFreelancerCommission = Math.max(0, parseMoney(form.freelancerCommission)) + team.reduce((sum, member) => sum + Math.max(0, parseMoney(member.commission)), 0);
+  const scheduledFreelancerPayments = freelancerPaymentTerms.reduce((sum, term) => sum + parseMoney(term.amount), 0);
+  const paidRecognizedFreelancerCost = freelancerPaymentTerms.filter((term) => term.status === "Paid").reduce((sum, term) => sum + parseMoney(term.amount), 0);
+  const freelancerPaymentOverscheduled = scheduledFreelancerPayments > totalFreelancerCommission;
   const freelancerPaymentNames = Array.from(new Set([form.freelancerName, ...team.map((m) => m.freelancerName)].filter(Boolean)));
 
   return (
@@ -303,7 +341,7 @@ export default function Projects() {
             </div>
             <div className="space-y-1">
               <Label>Lead Commission (EGP) — optional</Label>
-              <Input type="number" min="0" placeholder="Leave blank for no commission" value={form.freelancerCommission} onChange={f("freelancerCommission")} />
+              <Input type="number" min="0" placeholder="Leave blank for no commission" value={form.freelancerCommission} onChange={(e) => setForm((prev) => ({ ...prev, freelancerCommission: moneyInput(e.target.value) as unknown as number }))} />
             </div>
 
             {/* Multi-freelancer team */}
@@ -320,7 +358,7 @@ export default function Projects() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Input type="number" min="0" placeholder="Commission EGP (optional)" className="w-48" value={pickCommission} onChange={(e) => setPickCommission(e.target.value)} data-testid="input-team-commission" />
+                <Input type="number" min="0" placeholder="Commission EGP (optional)" className="w-48" value={pickCommission} onChange={(e) => setPickCommission(moneyInput(e.target.value))} data-testid="input-team-commission" />
                 <Button type="button" variant="outline" onClick={addTeamMember} data-testid="button-add-team"><Plus className="h-4 w-4" /></Button>
               </div>
               {team.length > 0 && (
@@ -380,40 +418,61 @@ export default function Projects() {
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="text-sm font-semibold">Freelancer commission payment terms</div>
-                  <div className="text-xs text-muted-foreground">Only terms marked Paid are recognized in Finance costs/expenses.</div>
+                  <div className="text-xs text-muted-foreground">Add split payments here. Keep terms Pending until the freelancer actually receives the money.</div>
                 </div>
                 <Button type="button" size="sm" variant="outline" onClick={addFreelancerPaymentTerm}>Add term</Button>
               </div>
               {freelancerPaymentTerms.length === 0 ? (
                 <div className="rounded border border-dashed border-border p-3 text-xs text-muted-foreground">No freelancer payment terms yet.</div>
               ) : freelancerPaymentTerms.map((term, index) => (
-                <div key={`freelancer-payment-${index}`} className="grid grid-cols-1 gap-2 rounded border border-border p-2 md:grid-cols-[1.4fr_0.9fr_1fr_1fr_1.5fr_auto]">
-                  <Select value={term.freelancerName || undefined} onValueChange={(value) => updateFreelancerPaymentTerm(index, { freelancerName: value })}>
-                    <SelectTrigger><SelectValue placeholder="Freelancer" /></SelectTrigger>
-                    <SelectContent>
-                      {freelancerPaymentNames.length === 0 ? <SelectItem value="__none" disabled>Select freelancer first</SelectItem> : freelancerPaymentNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  <Input type="number" min="0" placeholder="Amount" value={term.amount} onChange={(e) => updateFreelancerPaymentTerm(index, { amount: e.target.value })} />
-                  <Input type="date" value={term.dueDate} onChange={(e) => updateFreelancerPaymentTerm(index, { dueDate: e.target.value })} />
-                  <Select value={term.status} onValueChange={(status) => updateFreelancerPaymentTerm(index, { status: status as "Pending" | "Paid" })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Pending">Pending</SelectItem>
-                      <SelectItem value="Paid">Paid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Input placeholder="Note" value={term.note} onChange={(e) => updateFreelancerPaymentTerm(index, { note: e.target.value })} />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => setFreelancerPaymentTerms((prev) => prev.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
+                <div key={`freelancer-payment-${index}`} className="space-y-3 rounded-lg border border-border bg-background/40 p-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-xs font-semibold text-muted-foreground">Payment split #{index + 1}</div>
+                    <Button type="button" variant="ghost" size="icon" onClick={() => setFreelancerPaymentTerms((prev) => prev.filter((_, i) => i !== index))}><X className="h-4 w-4" /></Button>
+                  </div>
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label>Freelancer</Label>
+                      <Select value={term.freelancerName || undefined} onValueChange={(value) => updateFreelancerPaymentTerm(index, { freelancerName: value })}>
+                        <SelectTrigger><SelectValue placeholder="Freelancer" /></SelectTrigger>
+                        <SelectContent>
+                          {freelancerPaymentNames.length === 0 ? <SelectItem value="__none" disabled>Select freelancer first</SelectItem> : freelancerPaymentNames.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Amount (EGP)</Label>
+                      <Input inputMode="decimal" placeholder="e.g. 2000" value={term.amount} onChange={(e) => updateFreelancerPaymentTerm(index, { amount: moneyInput(e.target.value) })} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Due date</Label>
+                      <Input type="date" value={term.dueDate} onChange={(e) => updateFreelancerPaymentTerm(index, { dueDate: e.target.value })} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Status</Label>
+                      <Select value={term.status} onValueChange={(status) => updateFreelancerPaymentTerm(index, { status: status as "Pending" | "Paid" })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Pending">Pending</SelectItem>
+                          <SelectItem value="Paid">Paid</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1 md:col-span-2">
+                      <Label>Note</Label>
+                      <Input placeholder="e.g. first installment" value={term.note} onChange={(e) => updateFreelancerPaymentTerm(index, { note: e.target.value })} />
+                    </div>
+                  </div>
                 </div>
               ))}
-              <div className="text-xs text-muted-foreground">Scheduled freelancer payments: <PrivacyWrapper value={freelancerPaymentTerms.reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /> · Paid/recognized cost: <PrivacyWrapper value={freelancerPaymentTerms.filter((term) => term.status === "Paid").reduce((sum, term) => sum + (Number(term.amount) || 0), 0)} /></div>
+              <div className="text-xs text-muted-foreground">Scheduled freelancer payments: <PrivacyWrapper value={scheduledFreelancerPayments} /> / Commission total: <PrivacyWrapper value={totalFreelancerCommission} /> · Paid/recognized cost: <PrivacyWrapper value={paidRecognizedFreelancerCost} /></div>
+              {freelancerPaymentOverscheduled && <div className="rounded border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">Scheduled payment terms are higher than total freelancer commissions. Reduce the split amounts before saving.</div>}
             </div>
 
             <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Down payment</span><span className="font-semibold">{downPaymentPct}% of price</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={team.reduce((s, m) => s + m.commission, 0) + Number(form.freelancerCommission || 0)} /></span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className="text-green-500 font-semibold"><PrivacyWrapper value={Number(form.clientPrice) - Number(form.totalCost) - team.reduce((s, m) => s + m.commission, 0) - Number(form.freelancerCommission || 0)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={totalFreelancerCommission} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className="text-green-500 font-semibold"><PrivacyWrapper value={Number(form.clientPrice) - Number(form.totalCost) - totalFreelancerCommission} /></span></div>
             </div>
 
             <div className="space-y-1">
