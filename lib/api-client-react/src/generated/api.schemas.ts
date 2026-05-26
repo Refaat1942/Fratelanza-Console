@@ -86,8 +86,6 @@ export interface Freelancer {
   earned: number;
   balance: number;
   rating: number;
-  /** @nullable */
-  notes?: string | null;
 }
 
 export interface Task {
@@ -172,10 +170,6 @@ export interface TeamMember {
   projectId: number;
   freelancerName: string;
   commission: number;
-  /** @nullable */
-  rating?: number | null;
-  /** @nullable */
-  notes?: string | null;
 }
 
 export type ProjectDetail = Project & {
@@ -185,10 +179,6 @@ export type ProjectDetail = Project & {
 export interface TeamMemberInput {
   freelancerName: string;
   commission: number;
-  /** @nullable */
-  rating?: number | null;
-  /** @nullable */
-  notes?: string | null;
 }
 
 export interface ProjectInput {
@@ -239,7 +229,6 @@ export interface FreelancerInput {
   position?: string;
   earned?: number;
   balance?: number;
-  notes?: string;
 }
 
 export interface FreelancerUpdate {
@@ -250,7 +239,6 @@ export interface FreelancerUpdate {
   earned?: number;
   balance?: number;
   rating?: number;
-  notes?: string;
 }
 
 export interface FreelancerEvaluation {

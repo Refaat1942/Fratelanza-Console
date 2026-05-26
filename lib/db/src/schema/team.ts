@@ -7,8 +7,6 @@ export const projectTeamTable = pgTable("project_team", {
   projectId: integer("project_id").notNull(),
   freelancerName: text("freelancer_name").notNull(),
   commission: numeric("commission", { precision: 12, scale: 2 }).notNull().default("0"),
-  rating: numeric("rating", { precision: 3, scale: 1 }),
-  notes: text("notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

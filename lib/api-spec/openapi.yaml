@@ -1365,10 +1365,6 @@ components:
           type: string
         commission:
           type: number
-        rating:
-          type: ["number", "null"]
-        notes:
-          type: ["string", "null"]
 
     TeamMemberInput:
       type: object
@@ -1378,10 +1374,6 @@ components:
           type: string
         commission:
           type: number
-        rating:
-          type: ["number", "null"]
-        notes:
-          type: ["string", "null"]
 
     # ── Freelancer ─────────────────────────────────────────────────────
     Freelancer:
@@ -1404,8 +1396,6 @@ components:
           type: number
         rating:
           type: number
-        notes:
-          type: ["string", "null"]
 
     FreelancerInput:
       type: object
@@ -1423,8 +1413,6 @@ components:
           type: number
         balance:
           type: number
-        notes:
-          type: string
 
     FreelancerUpdate:
       type: object
@@ -1443,8 +1431,6 @@ components:
           type: number
         rating:
           type: number
-        notes:
-          type: string
 
     FreelancerEvaluation:
       type: object

@@ -19,7 +19,6 @@ export const projectsTable = pgTable("pricing_records", {
   remainingAmount: numeric("remaining_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   nextPaymentDate: text("next_payment_date"),
   notes: text("notes"),
-  completedAt: timestamp("completed_at", { withTimezone: true }),
   date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

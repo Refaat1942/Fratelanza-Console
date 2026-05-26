@@ -13,5 +13,4 @@ export interface FreelancerInput {
   position?: string;
   earned?: number;
   balance?: number;
-  notes?: string;
 }

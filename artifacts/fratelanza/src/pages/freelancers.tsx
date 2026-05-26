@@ -9,16 +9,15 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase, BarChart3, Target, TrendingUp } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; notes?: string | null; };
+type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; };
 
-const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5, notes: "" };
+const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5 };
 
 function CardContentLite({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
@@ -101,10 +100,10 @@ export default function Freelancers() {
   );
 
   const openCreate = () => { setForm({ ...emptyForm }); setEditing(null); setShowForm(true); };
-  const openEdit = (fr: Freelancer) => { setEditing(fr); setForm({ name: fr.name, phone: fr.phone ?? "", spec: fr.spec ?? "", position: fr.position ?? "", earned: fr.earned, balance: fr.balance, rating: fr.rating, notes: fr.notes ?? "" }); setShowForm(true); };
+  const openEdit = (fr: Freelancer) => { setEditing(fr); setForm({ name: fr.name, phone: fr.phone ?? "", spec: fr.spec ?? "", position: fr.position ?? "", earned: fr.earned, balance: fr.balance, rating: fr.rating }); setShowForm(true); };
 
   const handleSave = () => {
-    const data = { ...form, earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating), notes: form.notes };
+    const data = { ...form, earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating) };
     if (editing) {
       update.mutate({ code: editing.code, data } as Parameters<typeof update.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Updated" }); },
@@ -126,7 +125,7 @@ export default function Freelancers() {
     });
   };
 
-  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
+  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -250,10 +249,6 @@ export default function Freelancers() {
             <div className="space-y-1"><Label>Rating (1-5)</Label><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={f("rating")} /></div>
             <div className="space-y-1"><Label>Total Earned (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>
             <div className="space-y-1"><Label>Balance (EGP)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
-            <div className="col-span-2 space-y-1">
-              <Label>Notes</Label>
-              <Textarea data-testid="textarea-freelancer-notes" value={form.notes} onChange={f("notes")} rows={3} placeholder="General notes about this freelancer" />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>

@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, DollarSign, Search, X, Users, UserPlus, Star } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Search, X, Users, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 type Project = {
@@ -27,7 +27,7 @@ type Project = {
   nextPaymentDate?: string | null; notes?: string | null; date: string;
 };
 
-type TeamMember = { freelancerName: string; commission: number; rating?: number | null; notes?: string | null };
+type TeamMember = { freelancerName: string; commission: number };
 type Freelancer = { code: string; name: string; spec?: string | null };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -83,11 +83,11 @@ export default function Projects() {
     const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
     fetch(`${apiBase}/projects/${p.id}/team`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : [])
-      .then((t: Array<{ freelancerName: string; commission: number; rating?: number | null; notes?: string | null }>) => {
-        const teamLoaded: TeamMember[] = t.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission), rating: m.rating ?? null, notes: m.notes ?? "" }));
+      .then((t: Array<{ freelancerName: string; commission: number }>) => {
+        const teamLoaded: TeamMember[] = t.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission) }));
         // Migrate legacy lead freelancer into the unified list if not already there
         if (p.freelancerName && !teamLoaded.some((m) => m.freelancerName === p.freelancerName)) {
-          teamLoaded.unshift({ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0), rating: null, notes: "" });
+          teamLoaded.unshift({ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) });
         }
         setTeam(teamLoaded);
         const teamCommissionSum = teamLoaded.reduce((s, m) => s + m.commission, 0);
@@ -97,7 +97,7 @@ export default function Projects() {
       })
       .catch(() => {
         const teamLoaded: TeamMember[] = p.freelancerName
-          ? [{ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0), rating: null, notes: "" }]
+          ? [{ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) }]
           : [];
         setTeam(teamLoaded);
         const otherCosts = Math.max(0, Number(p.totalCost) - teamLoaded.reduce((s, m) => s + m.commission, 0));
@@ -107,7 +107,7 @@ export default function Projects() {
   };
 
   const addFreelancerRow = () => {
-    setTeam((prev) => [...prev, { freelancerName: "", commission: 0, rating: null, notes: "" }]);
+    setTeam((prev) => [...prev, { freelancerName: "", commission: 0 }]);
   };
 
   const removeFreelancerRow = (index: number) => {
@@ -138,12 +138,7 @@ export default function Projects() {
       remainingAmount: Number(form.clientPrice) - Number(form.paidAmount),
       freelancerName: leadName,
       freelancerCommission: leadCommission,
-      team: cleanTeam.slice(1).map((m) => ({
-        freelancerName: m.freelancerName,
-        commission: Number(m.commission || 0),
-        rating: m.rating == null ? null : Number(m.rating),
-        notes: m.notes ?? "",
-      })),
+      team: cleanTeam.slice(1).map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission || 0) })),
     };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
@@ -287,64 +282,29 @@ export default function Projects() {
               {team.length === 0 ? (
                 <div className="text-xs text-muted-foreground py-2 px-1">No freelancers added. Click "Add Freelancer" to add one.</div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {team.map((m, idx) => (
-                    <div key={idx} className="space-y-2 rounded-md border border-border/60 p-2 bg-background/40" data-testid={`row-freelancer-${idx}`}>
-                      <div className="flex gap-2 items-center">
-                        <div className="text-xs font-medium text-muted-foreground w-20 shrink-0">Freelancer {idx + 1}</div>
-                        <Select value={m.freelancerName || undefined} onValueChange={(v) => updateFreelancerRow(idx, { freelancerName: v })}>
-                          <SelectTrigger className="flex-1" data-testid={`select-freelancer-${idx}`}><SelectValue placeholder="Select freelancer" /></SelectTrigger>
-                          <SelectContent className="max-h-72">
-                            {(freelancers as Freelancer[]).map((fr) => (
-                              <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input
-                          type="number"
-                          placeholder="Commission EGP"
-                          className="w-32"
-                          value={m.commission}
-                          onChange={(e) => updateFreelancerRow(idx, { commission: Number(e.target.value) || 0 })}
-                          data-testid={`input-commission-${idx}`}
-                        />
-                        <Button type="button" size="icon" variant="ghost" onClick={() => removeFreelancerRow(idx)} data-testid={`button-remove-freelancer-${idx}`}>
-                          <X className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </div>
-                      <div className="flex gap-2 items-center ps-20">
-                        <div className="text-xs text-muted-foreground w-14 shrink-0">Rating</div>
-                        <div className="flex gap-0.5">
-                          {[1, 2, 3, 4, 5].map((s) => (
-                            <button
-                              type="button"
-                              key={s}
-                              onClick={() => updateFreelancerRow(idx, { rating: m.rating === s ? null : s })}
-                              data-testid={`rating-star-${idx}-${s}`}
-                              className="hover:scale-110 transition-transform"
-                              title={`${s} star${s > 1 ? "s" : ""}`}
-                            >
-                              <Star className={`h-5 w-5 ${s <= Math.round(Number(m.rating ?? 0)) ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground"}`} />
-                            </button>
+                    <div key={idx} className="flex gap-2 items-center" data-testid={`row-freelancer-${idx}`}>
+                      <div className="text-xs font-medium text-muted-foreground w-20 shrink-0">Freelancer {idx + 1}</div>
+                      <Select value={m.freelancerName || undefined} onValueChange={(v) => updateFreelancerRow(idx, { freelancerName: v })}>
+                        <SelectTrigger className="flex-1" data-testid={`select-freelancer-${idx}`}><SelectValue placeholder="Select freelancer" /></SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {(freelancers as Freelancer[]).map((fr) => (
+                            <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
                           ))}
-                        </div>
-                        {m.rating != null && (
-                          <button type="button" onClick={() => updateFreelancerRow(idx, { rating: null })} className="text-xs text-muted-foreground hover:text-destructive ms-2">
-                            clear
-                          </button>
-                        )}
-                      </div>
-                      <div className="flex gap-2 items-start ps-20">
-                        <div className="text-xs text-muted-foreground w-14 shrink-0 pt-2">Notes</div>
-                        <Textarea
-                          placeholder="Notes about this freelancer's work on this project"
-                          rows={2}
-                          value={m.notes ?? ""}
-                          onChange={(e) => updateFreelancerRow(idx, { notes: e.target.value })}
-                          data-testid={`textarea-notes-${idx}`}
-                          className="text-sm"
-                        />
-                      </div>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder="Commission EGP"
+                        className="w-36"
+                        value={m.commission}
+                        onChange={(e) => updateFreelancerRow(idx, { commission: Number(e.target.value) || 0 })}
+                        data-testid={`input-commission-${idx}`}
+                      />
+                      <Button type="button" size="icon" variant="ghost" onClick={() => removeFreelancerRow(idx)} data-testid={`button-remove-freelancer-${idx}`}>
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   ))}
                   <div className="flex justify-between text-xs pt-1 border-t border-border/40">

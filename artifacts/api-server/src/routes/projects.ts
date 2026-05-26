@@ -1,23 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectTeamTable, freelancersTable } from "@workspace/db";
-import { eq, sql, and, ilike, isNull, not, or, inArray } from "drizzle-orm";
-
-// Recompute & persist overall rating (avg of per-project ratings) for a list of freelancer names.
-async function recomputeFreelancerRatings(names: string[]) {
-  const unique = Array.from(new Set(names.filter((n) => n && n.trim() !== "")));
-  for (const name of unique) {
-    const [fr] = await db.select().from(freelancersTable).where(eq(freelancersTable.name, name)).limit(1);
-    if (!fr) continue;
-    const rows = await db.select({ rating: projectTeamTable.rating })
-      .from(projectTeamTable)
-      .where(and(eq(projectTeamTable.freelancerName, name), sql`rating is not null`));
-    if (rows.length === 0) continue;
-    const avg = rows.reduce((s, r) => s + Number(r.rating ?? 0), 0) / rows.length;
-    const clamped = Math.max(1, Math.min(5, avg));
-    await db.update(freelancersTable).set({ rating: clamped.toFixed(1) }).where(eq(freelancersTable.code, fr.code));
-  }
-}
+import { projectsTable, projectTeamTable } from "@workspace/db";
+import { eq, sql, and, ilike, isNull, not } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -49,8 +33,6 @@ function toTeamShape(t: typeof projectTeamTable.$inferSelect) {
     projectId: t.projectId,
     freelancerName: t.freelancerName,
     commission: Number(t.commission),
-    rating: t.rating === null ? null : Number(t.rating),
-    notes: t.notes,
   };
 }
 
@@ -91,22 +73,18 @@ router.post("/projects", async (req, res): Promise<void> => {
     paidAmount: String(paid),
     remainingAmount: String(price - paid),
     freelancerCommission: String(Number(body.freelancerCommission ?? 0)),
-    completedAt: body.status === "Completed" ? new Date() : null,
   };
 
   const [project] = await db.insert(projectsTable).values(values).returning();
 
   if (Array.isArray(team) && team.length > 0) {
     await db.insert(projectTeamTable).values(
-      team.map((m: { freelancerName: string; commission: number; rating?: number | null; notes?: string | null }) => ({
+      team.map((m: { freelancerName: string; commission: number }) => ({
         projectId: project.id,
         freelancerName: m.freelancerName,
         commission: String(m.commission),
-        rating: m.rating == null ? null : String(Math.max(1, Math.min(5, Number(m.rating)))),
-        notes: m.notes ?? null,
       }))
     );
-    await recomputeFreelancerRatings(team.map((m: { freelancerName: string }) => m.freelancerName));
   }
 
   res.status(201).json(toProjectShape(project));
@@ -127,15 +105,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { team, ...body } = req.body ?? {};
 
-  const updates: Record<string, string | Date | null | undefined> = {};
-  const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id)).limit(1);
-  if (body.status !== undefined && existing) {
-    if (body.status === "Completed" && existing.status !== "Completed") {
-      updates.completedAt = new Date();
-    } else if (body.status !== "Completed" && existing.status === "Completed") {
-      updates.completedAt = null;
-    }
-  }
+  const updates: Record<string, string | undefined> = {};
   if (body.clientPrice !== undefined) {
     const price = Number(body.clientPrice);
     const cost = Number(body.totalCost ?? 0);
@@ -175,25 +145,17 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  let affectedNames: string[] = [];
   if (Array.isArray(team)) {
-    const prior = await db.select({ name: projectTeamTable.freelancerName })
-      .from(projectTeamTable).where(eq(projectTeamTable.projectId, id));
-    affectedNames = prior.map((p) => p.name);
     await db.delete(projectTeamTable).where(eq(projectTeamTable.projectId, id));
     if (team.length > 0) {
       await db.insert(projectTeamTable).values(
-        team.map((m: { freelancerName: string; commission: number; rating?: number | null; notes?: string | null }) => ({
+        team.map((m: { freelancerName: string; commission: number }) => ({
           projectId: id,
           freelancerName: m.freelancerName,
           commission: String(m.commission),
-          rating: m.rating == null ? null : String(Math.max(1, Math.min(5, Number(m.rating)))),
-          notes: m.notes ?? null,
         }))
       );
-      affectedNames = affectedNames.concat(team.map((m: { freelancerName: string }) => m.freelancerName));
     }
-    await recomputeFreelancerRatings(affectedNames);
   }
 
   res.json(toProjectShape(project));
@@ -240,15 +202,12 @@ router.get("/projects/:id/team", async (req, res): Promise<void> => {
 
 router.post("/projects/:id/team", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const { freelancerName, commission, rating, notes } = req.body ?? {};
+  const { freelancerName, commission } = req.body ?? {};
   const [member] = await db.insert(projectTeamTable).values({
     projectId: id,
     freelancerName,
     commission: String(Number(commission ?? 0)),
-    rating: rating == null ? null : String(Math.max(1, Math.min(5, Number(rating)))),
-    notes: notes ?? null,
   }).returning();
-  await recomputeFreelancerRatings([freelancerName]);
   res.status(201).json(toTeamShape(member));
 });
 

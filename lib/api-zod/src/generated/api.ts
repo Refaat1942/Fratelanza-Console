@@ -171,9 +171,7 @@ export const CreateProjectBody = zod.object({
   "notes": zod.string().optional(),
   "team": zod.array(zod.object({
   "freelancerName": zod.string(),
-  "commission": zod.number(),
-  "rating": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "commission": zod.number()
 })).optional()
 })
 
@@ -233,9 +231,7 @@ export const GetProjectResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "freelancerName": zod.string(),
-  "commission": zod.number(),
-  "rating": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "commission": zod.number()
 })).optional()
 }))
 
@@ -263,9 +259,7 @@ export const UpdateProjectBody = zod.object({
   "notes": zod.string().optional(),
   "team": zod.array(zod.object({
   "freelancerName": zod.string(),
-  "commission": zod.number(),
-  "rating": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "commission": zod.number()
 })).optional()
 })
 
@@ -342,9 +336,7 @@ export const GetProjectTeamResponseItem = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "freelancerName": zod.string(),
-  "commission": zod.number(),
-  "rating": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "commission": zod.number()
 })
 export const GetProjectTeamResponse = zod.array(GetProjectTeamResponseItem)
 
@@ -358,9 +350,7 @@ export const AddTeamMemberParams = zod.object({
 
 export const AddTeamMemberBody = zod.object({
   "freelancerName": zod.string(),
-  "commission": zod.number(),
-  "rating": zod.number().nullish(),
-  "notes": zod.string().nullish()
+  "commission": zod.number()
 })
 
 
@@ -389,8 +379,7 @@ export const ListFreelancersResponseItem = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number(),
-  "notes": zod.string().nullish()
+  "rating": zod.number()
 })
 export const ListFreelancersResponse = zod.array(ListFreelancersResponseItem)
 
@@ -404,8 +393,7 @@ export const CreateFreelancerBody = zod.object({
   "spec": zod.string().optional(),
   "position": zod.string().optional(),
   "earned": zod.number().optional(),
-  "balance": zod.number().optional(),
-  "notes": zod.string().optional()
+  "balance": zod.number().optional()
 })
 
 
@@ -453,8 +441,7 @@ export const GetFreelancerHistoryResponse = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number(),
-  "notes": zod.string().nullish()
+  "rating": zod.number()
 }),
   "tasks": zod.array(zod.object({
   "id": zod.number(),
@@ -501,8 +488,7 @@ export const UpdateFreelancerBody = zod.object({
   "position": zod.string().optional(),
   "earned": zod.number().optional(),
   "balance": zod.number().optional(),
-  "rating": zod.number().optional(),
-  "notes": zod.string().optional()
+  "rating": zod.number().optional()
 })
 
 export const UpdateFreelancerResponse = zod.object({
@@ -513,8 +499,7 @@ export const UpdateFreelancerResponse = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number(),
-  "notes": zod.string().nullish()
+  "rating": zod.number()
 })
 
 

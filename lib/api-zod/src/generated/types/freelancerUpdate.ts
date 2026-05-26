@@ -14,5 +14,4 @@ export interface FreelancerUpdate {
   earned?: number;
   balance?: number;
   rating?: number;
-  notes?: string;
 }
