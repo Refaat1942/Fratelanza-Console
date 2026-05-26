@@ -404,6 +404,27 @@ paths:
                 items:
                   type: string
 
+  /freelancers/{code}/history:
+    get:
+      operationId: getFreelancerHistory
+      tags: [freelancers]
+      summary: Get freelancer activity history (tasks + projects)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Freelancer history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerHistory"
+        "404":
+          description: Not found
+
   /freelancers/{code}:
     patch:
       operationId: updateFreelancer
@@ -1091,6 +1112,54 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RemainingItem"
+
+    FreelancerHistory:
+      type: object
+      required: [freelancer, tasks, projects, totals]
+      properties:
+        freelancer:
+          $ref: "#/components/schemas/Freelancer"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/FreelancerProjectItem"
+        totals:
+          type: object
+          required: [taskCount, completedTasks, projectCount, totalCommission]
+          properties:
+            taskCount:
+              type: integer
+            completedTasks:
+              type: integer
+            projectCount:
+              type: integer
+            totalCommission:
+              type: number
+
+    FreelancerProjectItem:
+      type: object
+      required: [id, projectName, clientName, status, commission, startDate, deadline, notes]
+      properties:
+        id:
+          type: integer
+        projectName:
+          type: string
+        clientName:
+          type: string
+        status:
+          type: string
+        commission:
+          type: number
+        startDate:
+          type: string
+        deadline:
+          type: string
+        notes:
+          type: string
 
     RemainingItem:
       type: object

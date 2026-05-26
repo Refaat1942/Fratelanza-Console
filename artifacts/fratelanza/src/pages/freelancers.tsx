@@ -1,22 +1,36 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListFreelancers, getListFreelancersQueryKey, useCreateFreelancer, useUpdateFreelancer, useDeleteFreelancer } from "@workspace/api-client-react";
+import { useListFreelancers, getListFreelancersQueryKey, useCreateFreelancer, useUpdateFreelancer, useDeleteFreelancer, useGetFreelancerHistory } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Star, Upload } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; };
 
 const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5 };
+
+function CardContentLite({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
+  return (
+    <CardContent className="px-3 py-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider">{icon}<span>{label}</span></div>
+      <div className="text-lg font-bold mt-1">{value}</div>
+    </CardContent>
+  );
+}
+
+function KanbanSquareLite() {
+  return <span className="text-primary text-xs font-bold">#</span>;
+}
 
 const SPECIALIZATIONS = [
   "Frontend Developer",
@@ -56,6 +70,15 @@ export default function Freelancers() {
   const [editing, setEditing] = useState<Freelancer | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [deleteCode, setDeleteCode] = useState<string | null>(null);
+  const [historyCode, setHistoryCode] = useState<string | null>(null);
+  const historyQ = useGetFreelancerHistory(historyCode ?? "", { query: { enabled: !!historyCode } } as Parameters<typeof useGetFreelancerHistory>[1]);
+  const loadingHistory = historyQ.isLoading;
+  const history = historyQ.data as undefined | {
+    freelancer: { name: string };
+    tasks: Array<{ id: number; title: string; description?: string | null; status: string; priority?: string | null; projectName?: string | null; dueDate?: string | null; createdAt: string }>;
+    projects: Array<{ id: number; projectName: string; clientName: string; status: string; commission: number; startDate: string; deadline: string; notes: string }>;
+    totals: { taskCount: number; completedTasks: number; projectCount: number; totalCommission: number };
+  };
 
   const { data: freelancers = [], isLoading } = useListFreelancers();
   const create = useCreateFreelancer();
@@ -164,7 +187,7 @@ export default function Freelancers() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('freelancers.noFreelancers')}</td></tr>
               ) : filtered.map((fr) => (
-                <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors">
+                <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors cursor-pointer" onClick={(e) => { if ((e.target as HTMLElement).closest('button')) return; setHistoryCode(fr.code); }}>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fr.code}</td>
                   <td className="px-4 py-3 font-medium">{fr.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{fr.phone ?? "—"}</td>
@@ -175,6 +198,7 @@ export default function Freelancers() {
                   <td className="px-4 py-3"><Stars rating={fr.rating} /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
+                      <Button size="icon" variant="ghost" data-testid={`button-history-${fr.code}`} onClick={() => setHistoryCode(fr.code)} title="View history"><History className="h-4 w-4 text-primary" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-edit-${fr.code}`} onClick={() => openEdit(fr)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-delete-${fr.code}`} onClick={() => setDeleteCode(fr.code)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
@@ -211,6 +235,101 @@ export default function Freelancers() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             <Button data-testid="button-save-freelancer" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyCode !== null} onOpenChange={(v) => !v && setHistoryCode(null)}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              {history?.freelancer?.name ? `${history.freelancer.name} — History` : "Freelancer History"}
+            </DialogTitle>
+          </DialogHeader>
+          {loadingHistory ? (
+            <div className="py-10 text-center text-muted-foreground">{t('common.loading')}</div>
+          ) : history ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="bg-card/50"><CardContentLite icon={<Briefcase className="h-4 w-4 text-primary" />} label="Projects" value={history.totals.projectCount} /></Card>
+                <Card className="bg-card/50"><CardContentLite icon={<KanbanSquareLite />} label="Tasks" value={history.totals.taskCount} /></Card>
+                <Card className="bg-card/50"><CardContentLite icon={<CheckCircle2 className="h-4 w-4 text-green-400" />} label="Completed" value={history.totals.completedTasks} /></Card>
+                <Card className="bg-card/50"><CardContentLite icon={<span className="text-primary text-xs font-bold">EGP</span>} label="Commission" value={<PrivacyWrapper value={history.totals.totalCommission} />} /></Card>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2 text-sm font-semibold"><Briefcase className="h-4 w-4 text-primary" /> Projects</div>
+                {history.projects.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-3 px-2">No projects yet</div>
+                ) : (
+                  <div className="rounded-md border border-border overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-card/80 text-xs uppercase tracking-wider text-muted-foreground">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Project</th>
+                          <th className="px-3 py-2 text-left">Client</th>
+                          <th className="px-3 py-2 text-left">Status</th>
+                          <th className="px-3 py-2 text-left">Start</th>
+                          <th className="px-3 py-2 text-left">Deadline</th>
+                          <th className="px-3 py-2 text-right">Commission</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {history.projects.map((p) => (
+                          <tr key={p.id} className="border-t border-border/40">
+                            <td className="px-3 py-2 font-medium">{p.projectName}</td>
+                            <td className="px-3 py-2 text-muted-foreground">{p.clientName || "—"}</td>
+                            <td className="px-3 py-2"><Badge variant="outline" className="text-[10px]">{p.status}</Badge></td>
+                            <td className="px-3 py-2 text-muted-foreground text-xs">{p.startDate || "—"}</td>
+                            <td className="px-3 py-2 text-muted-foreground text-xs">{p.deadline || "—"}</td>
+                            <td className="px-3 py-2 text-right text-green-400"><PrivacyWrapper value={p.commission} /></td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-2 text-sm font-semibold"><Clock className="h-4 w-4 text-primary" /> Tasks</div>
+                {history.tasks.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-3 px-2">No tasks assigned</div>
+                ) : (
+                  <div className="space-y-2">
+                    {history.tasks.map((tk) => (
+                      <div key={tk.id} className="rounded-md border border-border/60 p-3 bg-card/40">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium">{tk.title}</span>
+                              <Badge variant="outline" className={
+                                tk.status === "Done" ? "text-green-400 border-green-500/40 text-[10px]" :
+                                tk.status === "In Progress" ? "text-blue-400 border-blue-500/40 text-[10px]" :
+                                "text-muted-foreground text-[10px]"
+                              }>{tk.status}</Badge>
+                              {tk.priority && <Badge variant="outline" className="text-[10px]">{tk.priority}</Badge>}
+                              {tk.projectName && <Badge variant="outline" className="text-[10px] text-primary border-primary/30">{tk.projectName}</Badge>}
+                            </div>
+                            {tk.description && <div className="text-xs text-muted-foreground mt-1 whitespace-pre-wrap">{tk.description}</div>}
+                          </div>
+                          <div className="text-xs text-muted-foreground text-right shrink-0">
+                            <div>Created: {new Date(tk.createdAt).toLocaleDateString()}</div>
+                            {tk.dueDate && <div>Due: {tk.dueDate}</div>}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="py-10 text-center text-muted-foreground">No data</div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryCode(null)}>{t('common.close', { defaultValue: 'Close' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

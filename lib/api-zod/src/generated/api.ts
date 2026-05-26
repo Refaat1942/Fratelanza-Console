@@ -405,6 +405,55 @@ export const ListSpecializationsResponse = zod.array(ListSpecializationsResponse
 
 
 /**
+ * @summary Get freelancer activity history (tasks + projects)
+ */
+export const GetFreelancerHistoryParams = zod.object({
+  "code": zod.coerce.string()
+})
+
+export const GetFreelancerHistoryResponse = zod.object({
+  "freelancer": zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "phone": zod.string().nullish(),
+  "spec": zod.string().nullish(),
+  "position": zod.string().nullish(),
+  "earned": zod.number(),
+  "balance": zod.number(),
+  "rating": zod.number()
+}),
+  "tasks": zod.array(zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "status": zod.string(),
+  "priority": zod.string().nullish(),
+  "projectId": zod.number().nullish(),
+  "projectName": zod.string().nullish(),
+  "assignedTo": zod.string().nullish(),
+  "dueDate": zod.string().nullish(),
+  "createdAt": zod.string()
+})),
+  "projects": zod.array(zod.object({
+  "id": zod.number(),
+  "projectName": zod.string(),
+  "clientName": zod.string(),
+  "status": zod.string(),
+  "commission": zod.number(),
+  "startDate": zod.string(),
+  "deadline": zod.string(),
+  "notes": zod.string()
+})),
+  "totals": zod.object({
+  "taskCount": zod.number(),
+  "completedTasks": zod.number(),
+  "projectCount": zod.number(),
+  "totalCommission": zod.number()
+})
+})
+
+
+/**
  * @summary Update a freelancer
  */
 export const UpdateFreelancerParams = zod.object({

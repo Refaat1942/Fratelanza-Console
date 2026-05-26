@@ -67,6 +67,64 @@ export interface DashboardSummary {
   remainingBreakdown: RemainingItem[];
 }
 
+export type FreelancerHistoryTotals = {
+  taskCount: number;
+  completedTasks: number;
+  projectCount: number;
+  totalCommission: number;
+};
+
+export interface Freelancer {
+  code: string;
+  name: string;
+  /** @nullable */
+  phone?: string | null;
+  /** @nullable */
+  spec?: string | null;
+  /** @nullable */
+  position?: string | null;
+  earned: number;
+  balance: number;
+  rating: number;
+}
+
+export interface Task {
+  id: number;
+  title: string;
+  /** @nullable */
+  description?: string | null;
+  status: string;
+  /** @nullable */
+  priority?: string | null;
+  /** @nullable */
+  projectId?: number | null;
+  /** @nullable */
+  projectName?: string | null;
+  /** @nullable */
+  assignedTo?: string | null;
+  /** @nullable */
+  dueDate?: string | null;
+  createdAt: string;
+}
+
+export interface FreelancerProjectItem {
+  id: number;
+  projectName: string;
+  clientName: string;
+  status: string;
+  commission: number;
+  startDate: string;
+  deadline: string;
+  notes: string;
+}
+
+export interface FreelancerHistory {
+  freelancer: Freelancer;
+  tasks: Task[];
+  projects: FreelancerProjectItem[];
+  totals: FreelancerHistoryTotals;
+}
+
 export interface ProfitByType {
   type: string;
   netProfit: number;
@@ -162,20 +220,6 @@ export interface ProjectUpdate {
 export interface PaymentInput {
   amount: number;
   nextPaymentDate?: string;
-}
-
-export interface Freelancer {
-  code: string;
-  name: string;
-  /** @nullable */
-  phone?: string | null;
-  /** @nullable */
-  spec?: string | null;
-  /** @nullable */
-  position?: string | null;
-  earned: number;
-  balance: number;
-  rating: number;
 }
 
 export interface FreelancerInput {
@@ -323,25 +367,6 @@ export interface ExpenseInput {
 export interface ExpenseSummary {
   totalExpenses: number;
   count: number;
-}
-
-export interface Task {
-  id: number;
-  title: string;
-  /** @nullable */
-  description?: string | null;
-  status: string;
-  /** @nullable */
-  priority?: string | null;
-  /** @nullable */
-  projectId?: number | null;
-  /** @nullable */
-  projectName?: string | null;
-  /** @nullable */
-  assignedTo?: string | null;
-  /** @nullable */
-  dueDate?: string | null;
-  createdAt: string;
 }
 
 export interface TaskInput {

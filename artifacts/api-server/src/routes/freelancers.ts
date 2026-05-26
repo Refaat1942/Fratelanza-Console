@@ -2,8 +2,8 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
-import { freelancersTable } from "@workspace/db";
-import { eq, sql, ilike, and } from "drizzle-orm";
+import { freelancersTable, projectsTable, projectTeamTable, tasksTable } from "@workspace/db";
+import { eq, or, sql, ilike, and, desc, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -32,6 +32,73 @@ router.get("/freelancers", async (req, res): Promise<void> => {
     : await db.select().from(freelancersTable).orderBy(freelancersTable.name);
 
   res.json(rows.map(toShape));
+});
+
+router.get("/freelancers/:code/history", async (req, res): Promise<void> => {
+  const rawCode = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code;
+  const [fr] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, rawCode)).limit(1);
+  if (!fr) { res.status(404).json({ error: "Freelancer not found" }); return; }
+
+  // Tasks assigned to this freelancer (by name match)
+  const taskRows = await db.select().from(tasksTable)
+    .where(eq(tasksTable.assignedTo, fr.name))
+    .orderBy(desc(tasksTable.createdAt));
+
+  // Projects: either primary freelancer (projects.freelancer_name) OR in project_team
+  const teamRows = await db.select({ projectId: projectTeamTable.projectId, commission: projectTeamTable.commission })
+    .from(projectTeamTable)
+    .where(eq(projectTeamTable.freelancerName, fr.name));
+  const teamIds = teamRows.map((r) => r.projectId);
+  const commissionByProject = new Map<number, number>();
+  for (const r of teamRows) commissionByProject.set(r.projectId, Number(r.commission));
+
+  const projRows = await db.select().from(projectsTable)
+    .where(
+      teamIds.length > 0
+        ? or(eq(projectsTable.freelancerName, fr.name), inArray(projectsTable.id, teamIds))
+        : eq(projectsTable.freelancerName, fr.name)
+    )
+    .orderBy(desc(projectsTable.date));
+
+  let totalCommission = 0;
+  const projects = projRows.map((p) => {
+    const teamCommission = commissionByProject.get(p.id);
+    const commission = teamCommission !== undefined ? teamCommission : Number(p.freelancerCommission);
+    totalCommission += commission;
+    return {
+      id: p.id,
+      projectName: p.projectName,
+      clientName: p.clientName ?? "",
+      status: p.status,
+      commission,
+      startDate: p.startDate ?? "",
+      deadline: p.deadline ?? "",
+      notes: p.notes ?? "",
+    };
+  });
+
+  res.json({
+    freelancer: toShape(fr),
+    tasks: taskRows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      status: r.status,
+      priority: r.priority,
+      projectId: r.projectId,
+      projectName: r.projectName,
+      assignedTo: r.assignedTo,
+      dueDate: r.dueDate,
+      createdAt: r.createdAt.toISOString(),
+    })),
+    projects,
+    totals: {
+      taskCount: taskRows.length,
+      completedTasks: taskRows.filter((t) => t.status === "Done").length,
+      projectCount: projects.length,
+      totalCommission,
+    },
+  });
 });
 
 router.get("/freelancers/specializations", async (req, res): Promise<void> => {

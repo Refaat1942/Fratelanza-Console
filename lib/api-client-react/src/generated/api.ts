@@ -31,6 +31,7 @@ import type {
   ExpenseSummary,
   FinanceReport,
   Freelancer,
+  FreelancerHistory,
   FreelancerInput,
   FreelancerUpdate,
   GetExpenseSummaryParams,
@@ -1570,6 +1571,83 @@ export function useListSpecializations<TData = Awaited<ReturnType<typeof listSpe
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListSpecializationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetFreelancerHistoryUrl = (code: string,) => {
+
+
+
+
+  return `/api/freelancers/${code}/history`
+}
+
+/**
+ * @summary Get freelancer activity history (tasks + projects)
+ */
+export const getFreelancerHistory = async (code: string, options?: RequestInit): Promise<FreelancerHistory> => {
+
+  return customFetch<FreelancerHistory>(getGetFreelancerHistoryUrl(code),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFreelancerHistoryQueryKey = (code: string,) => {
+    return [
+    `/api/freelancers/${code}/history`
+    ] as const;
+    }
+
+
+export const getGetFreelancerHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getFreelancerHistory>>, TError = ErrorType<void>>(code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFreelancerHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFreelancerHistoryQueryKey(code);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFreelancerHistory>>> = ({ signal }) => getFreelancerHistory(code, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(code), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFreelancerHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFreelancerHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getFreelancerHistory>>>
+export type GetFreelancerHistoryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get freelancer activity history (tasks + projects)
+ */
+
+export function useGetFreelancerHistory<TData = Awaited<ReturnType<typeof getFreelancerHistory>>, TError = ErrorType<void>>(
+ code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFreelancerHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFreelancerHistoryQueryOptions(code,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
