@@ -404,6 +404,27 @@ paths:
                 items:
                   type: string
 
+  /freelancers/{code}/evaluation:
+    get:
+      operationId: getFreelancerEvaluation
+      tags: [freelancers]
+      summary: Get auto-evaluation summary (projects, earnings, avg rating, on-time)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Freelancer evaluation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreelancerEvaluation"
+        "404":
+          description: Not found
+
   /freelancers/{code}/history:
     get:
       operationId: getFreelancerHistory
@@ -1344,6 +1365,10 @@ components:
           type: string
         commission:
           type: number
+        rating:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
 
     TeamMemberInput:
       type: object
@@ -1353,6 +1378,10 @@ components:
           type: string
         commission:
           type: number
+        rating:
+          type: ["number", "null"]
+        notes:
+          type: ["string", "null"]
 
     # ── Freelancer ─────────────────────────────────────────────────────
     Freelancer:
@@ -1375,6 +1404,8 @@ components:
           type: number
         rating:
           type: number
+        notes:
+          type: ["string", "null"]
 
     FreelancerInput:
       type: object
@@ -1392,6 +1423,8 @@ components:
           type: number
         balance:
           type: number
+        notes:
+          type: string
 
     FreelancerUpdate:
       type: object
@@ -1410,6 +1443,33 @@ components:
           type: number
         rating:
           type: number
+        notes:
+          type: string
+
+    FreelancerEvaluation:
+      type: object
+      required: [freelancerCode, freelancerName, projectsCount, completedProjects, totalEarned, avgRating, ratedProjects, onTimePct, tasksCount, completedTasks]
+      properties:
+        freelancerCode:
+          type: string
+        freelancerName:
+          type: string
+        projectsCount:
+          type: integer
+        completedProjects:
+          type: integer
+        totalEarned:
+          type: number
+        avgRating:
+          type: number
+        ratedProjects:
+          type: integer
+        onTimePct:
+          type: number
+        tasksCount:
+          type: integer
+        completedTasks:
+          type: integer
 
     # ── Client ─────────────────────────────────────────────────────────
     Client:

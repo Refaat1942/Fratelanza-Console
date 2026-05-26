@@ -11,4 +11,8 @@ export interface TeamMember {
   projectId: number;
   freelancerName: string;
   commission: number;
+  /** @nullable */
+  rating?: number | null;
+  /** @nullable */
+  notes?: string | null;
 }

@@ -31,6 +31,7 @@ import type {
   ExpenseSummary,
   FinanceReport,
   Freelancer,
+  FreelancerEvaluation,
   FreelancerHistory,
   FreelancerInput,
   FreelancerUpdate,
@@ -1571,6 +1572,83 @@ export function useListSpecializations<TData = Awaited<ReturnType<typeof listSpe
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListSpecializationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetFreelancerEvaluationUrl = (code: string,) => {
+
+
+
+
+  return `/api/freelancers/${code}/evaluation`
+}
+
+/**
+ * @summary Get auto-evaluation summary (projects, earnings, avg rating, on-time)
+ */
+export const getFreelancerEvaluation = async (code: string, options?: RequestInit): Promise<FreelancerEvaluation> => {
+
+  return customFetch<FreelancerEvaluation>(getGetFreelancerEvaluationUrl(code),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFreelancerEvaluationQueryKey = (code: string,) => {
+    return [
+    `/api/freelancers/${code}/evaluation`
+    ] as const;
+    }
+
+
+export const getGetFreelancerEvaluationQueryOptions = <TData = Awaited<ReturnType<typeof getFreelancerEvaluation>>, TError = ErrorType<void>>(code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFreelancerEvaluation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFreelancerEvaluationQueryKey(code);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFreelancerEvaluation>>> = ({ signal }) => getFreelancerEvaluation(code, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(code), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFreelancerEvaluation>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFreelancerEvaluationQueryResult = NonNullable<Awaited<ReturnType<typeof getFreelancerEvaluation>>>
+export type GetFreelancerEvaluationQueryError = ErrorType<void>
+
+
+/**
+ * @summary Get auto-evaluation summary (projects, earnings, avg rating, on-time)
+ */
+
+export function useGetFreelancerEvaluation<TData = Awaited<ReturnType<typeof getFreelancerEvaluation>>, TError = ErrorType<void>>(
+ code: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFreelancerEvaluation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFreelancerEvaluationQueryOptions(code,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

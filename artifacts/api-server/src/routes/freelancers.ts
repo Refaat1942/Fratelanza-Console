@@ -18,6 +18,7 @@ function toShape(r: typeof freelancersTable.$inferSelect) {
     earned: Number(r.earned),
     balance: Number(r.balance),
     rating: Number(r.rating),
+    notes: r.notes,
   };
 }
 
@@ -101,6 +102,67 @@ router.get("/freelancers/:code/history", async (req, res): Promise<void> => {
   });
 });
 
+router.get("/freelancers/:code/evaluation", async (req, res): Promise<void> => {
+  const rawCode = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code;
+  const [fr] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, rawCode)).limit(1);
+  if (!fr) { res.status(404).json({ error: "Freelancer not found" }); return; }
+
+  // Per-project team rows for this freelancer (with rating)
+  const teamRows = await db.select().from(projectTeamTable).where(eq(projectTeamTable.freelancerName, fr.name));
+  const teamProjectIds = teamRows.map((r) => r.projectId);
+  const commissionByProject = new Map<number, number>();
+  const ratingByProject = new Map<number, number | null>();
+  for (const r of teamRows) {
+    commissionByProject.set(r.projectId, Number(r.commission));
+    ratingByProject.set(r.projectId, r.rating === null ? null : Number(r.rating));
+  }
+
+  // All projects involving this freelancer (legacy lead OR team)
+  const projRows = await db.select().from(projectsTable).where(
+    teamProjectIds.length > 0
+      ? or(eq(projectsTable.freelancerName, fr.name), inArray(projectsTable.id, teamProjectIds))
+      : eq(projectsTable.freelancerName, fr.name)
+  );
+
+  let totalEarned = 0;
+  let ratingSum = 0;
+  let ratedCount = 0;
+  let onTime = 0;
+  let onTimeEligible = 0;
+  let completedCount = 0;
+
+  for (const p of projRows) {
+    const teamCommission = commissionByProject.get(p.id);
+    totalEarned += teamCommission !== undefined ? teamCommission : Number(p.freelancerCommission);
+    const r = ratingByProject.get(p.id);
+    if (r !== undefined && r !== null) { ratingSum += r; ratedCount += 1; }
+    if (p.status === "Completed") {
+      completedCount += 1;
+      if (p.deadline && p.completedAt) {
+        onTimeEligible += 1;
+        const completedYmd = p.completedAt.toISOString().slice(0, 10);
+        if (completedYmd <= p.deadline) onTime += 1;
+      }
+    }
+  }
+
+  // Task counts
+  const taskRows = await db.select().from(tasksTable).where(eq(tasksTable.assignedTo, fr.name));
+
+  res.json({
+    freelancerCode: fr.code,
+    freelancerName: fr.name,
+    projectsCount: projRows.length,
+    completedProjects: completedCount,
+    totalEarned,
+    avgRating: ratedCount > 0 ? Math.round((ratingSum / ratedCount) * 10) / 10 : 0,
+    ratedProjects: ratedCount,
+    onTimePct: onTimeEligible > 0 ? Math.round((onTime / onTimeEligible) * 100) : 0,
+    tasksCount: taskRows.length,
+    completedTasks: taskRows.filter((t) => t.status === "Done").length,
+  });
+});
+
 router.get("/freelancers/specializations", async (req, res): Promise<void> => {
   const rows = await db
     .selectDistinct({ spec: freelancersTable.spec })
@@ -121,6 +183,7 @@ router.post("/freelancers", async (req, res): Promise<void> => {
     earned: String(Number(body.earned ?? 0)),
     balance: String(Number(body.balance ?? 0)),
     rating: "5",
+    notes: body.notes ?? null,
   }).returning();
   res.status(201).json(toShape(row));
 });
@@ -136,6 +199,7 @@ router.patch("/freelancers/:code", async (req, res): Promise<void> => {
   if (body.earned !== undefined) updates.earned = String(Number(body.earned));
   if (body.balance !== undefined) updates.balance = String(Number(body.balance));
   if (body.rating !== undefined) updates.rating = String(Number(body.rating));
+  if (body.notes !== undefined) updates.notes = body.notes;
 
   const [row] = await db.update(freelancersTable).set(updates).where(eq(freelancersTable.code, rawCode)).returning();
   if (!row) {

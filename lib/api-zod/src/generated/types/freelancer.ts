@@ -18,4 +18,6 @@ export interface Freelancer {
   earned: number;
   balance: number;
   rating: number;
+  /** @nullable */
+  notes?: string | null;
 }

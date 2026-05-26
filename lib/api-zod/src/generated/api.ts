@@ -171,7 +171,9 @@ export const CreateProjectBody = zod.object({
   "notes": zod.string().optional(),
   "team": zod.array(zod.object({
   "freelancerName": zod.string(),
-  "commission": zod.number()
+  "commission": zod.number(),
+  "rating": zod.number().nullish(),
+  "notes": zod.string().nullish()
 })).optional()
 })
 
@@ -231,7 +233,9 @@ export const GetProjectResponse = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "freelancerName": zod.string(),
-  "commission": zod.number()
+  "commission": zod.number(),
+  "rating": zod.number().nullish(),
+  "notes": zod.string().nullish()
 })).optional()
 }))
 
@@ -259,7 +263,9 @@ export const UpdateProjectBody = zod.object({
   "notes": zod.string().optional(),
   "team": zod.array(zod.object({
   "freelancerName": zod.string(),
-  "commission": zod.number()
+  "commission": zod.number(),
+  "rating": zod.number().nullish(),
+  "notes": zod.string().nullish()
 })).optional()
 })
 
@@ -336,7 +342,9 @@ export const GetProjectTeamResponseItem = zod.object({
   "id": zod.number(),
   "projectId": zod.number(),
   "freelancerName": zod.string(),
-  "commission": zod.number()
+  "commission": zod.number(),
+  "rating": zod.number().nullish(),
+  "notes": zod.string().nullish()
 })
 export const GetProjectTeamResponse = zod.array(GetProjectTeamResponseItem)
 
@@ -350,7 +358,9 @@ export const AddTeamMemberParams = zod.object({
 
 export const AddTeamMemberBody = zod.object({
   "freelancerName": zod.string(),
-  "commission": zod.number()
+  "commission": zod.number(),
+  "rating": zod.number().nullish(),
+  "notes": zod.string().nullish()
 })
 
 
@@ -379,7 +389,8 @@ export const ListFreelancersResponseItem = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number(),
+  "notes": zod.string().nullish()
 })
 export const ListFreelancersResponse = zod.array(ListFreelancersResponseItem)
 
@@ -393,7 +404,8 @@ export const CreateFreelancerBody = zod.object({
   "spec": zod.string().optional(),
   "position": zod.string().optional(),
   "earned": zod.number().optional(),
-  "balance": zod.number().optional()
+  "balance": zod.number().optional(),
+  "notes": zod.string().optional()
 })
 
 
@@ -402,6 +414,27 @@ export const CreateFreelancerBody = zod.object({
  */
 export const ListSpecializationsResponseItem = zod.string()
 export const ListSpecializationsResponse = zod.array(ListSpecializationsResponseItem)
+
+
+/**
+ * @summary Get auto-evaluation summary (projects, earnings, avg rating, on-time)
+ */
+export const GetFreelancerEvaluationParams = zod.object({
+  "code": zod.coerce.string()
+})
+
+export const GetFreelancerEvaluationResponse = zod.object({
+  "freelancerCode": zod.string(),
+  "freelancerName": zod.string(),
+  "projectsCount": zod.number(),
+  "completedProjects": zod.number(),
+  "totalEarned": zod.number(),
+  "avgRating": zod.number(),
+  "ratedProjects": zod.number(),
+  "onTimePct": zod.number(),
+  "tasksCount": zod.number(),
+  "completedTasks": zod.number()
+})
 
 
 /**
@@ -420,7 +453,8 @@ export const GetFreelancerHistoryResponse = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number(),
+  "notes": zod.string().nullish()
 }),
   "tasks": zod.array(zod.object({
   "id": zod.number(),
@@ -467,7 +501,8 @@ export const UpdateFreelancerBody = zod.object({
   "position": zod.string().optional(),
   "earned": zod.number().optional(),
   "balance": zod.number().optional(),
-  "rating": zod.number().optional()
+  "rating": zod.number().optional(),
+  "notes": zod.string().optional()
 })
 
 export const UpdateFreelancerResponse = zod.object({
@@ -478,7 +513,8 @@ export const UpdateFreelancerResponse = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number(),
+  "notes": zod.string().nullish()
 })
 
 

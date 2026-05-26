@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListFreelancers, getListFreelancersQueryKey, useCreateFreelancer, useUpdateFreelancer, useDeleteFreelancer, useGetFreelancerHistory } from "@workspace/api-client-react";
+import { useListFreelancers, getListFreelancersQueryKey, useCreateFreelancer, useUpdateFreelancer, useDeleteFreelancer, useGetFreelancerHistory, useGetFreelancerEvaluation } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,15 +9,16 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase, BarChart3, Target, TrendingUp } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; };
+type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; notes?: string | null; };
 
-const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5 };
+const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5, notes: "" };
 
 function CardContentLite({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
@@ -71,6 +72,14 @@ export default function Freelancers() {
   const [form, setForm] = useState({ ...emptyForm });
   const [deleteCode, setDeleteCode] = useState<string | null>(null);
   const [historyCode, setHistoryCode] = useState<string | null>(null);
+  const [evalCode, setEvalCode] = useState<string | null>(null);
+  const evalQ = useGetFreelancerEvaluation(evalCode ?? "", { query: { enabled: !!evalCode } } as Parameters<typeof useGetFreelancerEvaluation>[1]);
+  const evaluation = evalQ.data as undefined | {
+    freelancerCode: string; freelancerName: string;
+    projectsCount: number; completedProjects: number;
+    totalEarned: number; avgRating: number; ratedProjects: number;
+    onTimePct: number; tasksCount: number; completedTasks: number;
+  };
   const historyQ = useGetFreelancerHistory(historyCode ?? "", { query: { enabled: !!historyCode } } as Parameters<typeof useGetFreelancerHistory>[1]);
   const loadingHistory = historyQ.isLoading;
   const history = historyQ.data as undefined | {
@@ -92,10 +101,10 @@ export default function Freelancers() {
   );
 
   const openCreate = () => { setForm({ ...emptyForm }); setEditing(null); setShowForm(true); };
-  const openEdit = (fr: Freelancer) => { setEditing(fr); setForm({ name: fr.name, phone: fr.phone ?? "", spec: fr.spec ?? "", position: fr.position ?? "", earned: fr.earned, balance: fr.balance, rating: fr.rating }); setShowForm(true); };
+  const openEdit = (fr: Freelancer) => { setEditing(fr); setForm({ name: fr.name, phone: fr.phone ?? "", spec: fr.spec ?? "", position: fr.position ?? "", earned: fr.earned, balance: fr.balance, rating: fr.rating, notes: fr.notes ?? "" }); setShowForm(true); };
 
   const handleSave = () => {
-    const data = { ...form, earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating) };
+    const data = { ...form, earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating), notes: form.notes };
     if (editing) {
       update.mutate({ code: editing.code, data } as Parameters<typeof update.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Updated" }); },
@@ -117,7 +126,7 @@ export default function Freelancers() {
     });
   };
 
-  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
+  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -178,14 +187,14 @@ export default function Freelancers() {
           <table className="w-full text-sm">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Code", "Name", "Phone", "Specialization", "Position", "Earned", "Balance", "Rating", "Actions"].map((h) => (
+                {["Code", "Name", "Phone", "Specialization", "Position", "Earned", "Balance", "Rating", "Score", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('freelancers.noFreelancers')}</td></tr>
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">{t('freelancers.noFreelancers')}</td></tr>
               ) : filtered.map((fr) => (
                 <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fr.code}</td>
@@ -197,7 +206,15 @@ export default function Freelancers() {
                   <td className="px-4 py-3 text-yellow-400"><PrivacyWrapper value={fr.balance} /></td>
                   <td className="px-4 py-3"><Stars rating={fr.rating} /></td>
                   <td className="px-4 py-3">
+                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                      <BarChart3 className="h-3.5 w-3.5" /> {Number(fr.rating).toFixed(1)}/5
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
                     <div className="flex gap-1 items-center">
+                      <Button size="sm" variant="outline" data-testid={`button-evaluate-${fr.code}`} onClick={() => setEvalCode(fr.code)} className="border-green-500/40 text-green-400 hover:bg-green-500/10 h-8 px-2">
+                        <BarChart3 className="h-3.5 w-3.5 mr-1" /> Evaluate
+                      </Button>
                       <Button size="sm" variant="outline" data-testid={`button-history-${fr.code}`} onClick={() => setHistoryCode(fr.code)} className="border-primary/40 text-primary hover:bg-primary/10 h-8 px-2">
                         <History className="h-3.5 w-3.5 mr-1" /> History
                       </Button>
@@ -233,10 +250,90 @@ export default function Freelancers() {
             <div className="space-y-1"><Label>Rating (1-5)</Label><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={f("rating")} /></div>
             <div className="space-y-1"><Label>Total Earned (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>
             <div className="space-y-1"><Label>Balance (EGP)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
+            <div className="col-span-2 space-y-1">
+              <Label>Notes</Label>
+              <Textarea data-testid="textarea-freelancer-notes" value={form.notes} onChange={f("notes")} rows={3} placeholder="General notes about this freelancer" />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             <Button data-testid="button-save-freelancer" onClick={handleSave} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? t('common.saving') : t('common.save')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={evalCode !== null} onOpenChange={(v) => !v && setEvalCode(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-green-400" />
+              {evaluation?.freelancerName ? `${evaluation.freelancerName} — Evaluation` : "Freelancer Evaluation"}
+            </DialogTitle>
+          </DialogHeader>
+          {evalQ.isLoading ? (
+            <div className="py-10 text-center text-muted-foreground">{t('common.loading')}</div>
+          ) : evaluation ? (
+            <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="bg-card/50">
+                  <CardContentLite icon={<Briefcase className="h-4 w-4 text-primary" />} label="Projects" value={evaluation.projectsCount} />
+                </Card>
+                <Card className="bg-card/50">
+                  <CardContentLite icon={<CheckCircle2 className="h-4 w-4 text-green-400" />} label="Completed" value={evaluation.completedProjects} />
+                </Card>
+                <Card className="bg-card/50">
+                  <CardContentLite icon={<span className="text-primary text-xs font-bold">EGP</span>} label="Total Earned" value={<PrivacyWrapper value={evaluation.totalEarned} />} />
+                </Card>
+                <Card className="bg-card/50">
+                  <CardContentLite icon={<KanbanSquareLite />} label="Tasks" value={`${evaluation.completedTasks}/${evaluation.tasksCount}`} />
+                </Card>
+              </div>
+
+              <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+                <div className="text-sm font-semibold text-primary mb-1 flex items-center gap-2">
+                  <TrendingUp className="h-4 w-4" /> Performance
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Star className="h-4 w-4 text-yellow-400" /> Average Rating
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Stars rating={evaluation.avgRating} />
+                    <span className="font-semibold text-sm">
+                      {evaluation.avgRating > 0 ? `${evaluation.avgRating.toFixed(1)}/5` : "—"}
+                    </span>
+                    <span className="text-xs text-muted-foreground">({evaluation.ratedProjects} rated)</span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground flex items-center gap-2">
+                    <Target className="h-4 w-4 text-green-400" /> On-Time Delivery
+                  </span>
+                  <span className="font-semibold text-sm">
+                    {evaluation.completedProjects > 0 ? `${evaluation.onTimePct}%` : "—"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-400" /> Completion Rate
+                  </span>
+                  <span className="font-semibold text-sm">
+                    {evaluation.projectsCount > 0
+                      ? `${Math.round((evaluation.completedProjects / evaluation.projectsCount) * 100)}%`
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="text-xs text-muted-foreground px-1">
+                Auto-computed from per-project ratings, deadlines, and earnings. Per-project ratings are set inside each project's edit form.
+              </div>
+            </div>
+          ) : (
+            <div className="py-10 text-center text-muted-foreground">No data</div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEvalCode(null)}>{t('common.close', { defaultValue: 'Close' })}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

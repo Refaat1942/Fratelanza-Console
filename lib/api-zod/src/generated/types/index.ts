@@ -17,6 +17,7 @@ export * from './expenseInput';
 export * from './expenseSummary';
 export * from './financeReport';
 export * from './freelancer';
+export * from './freelancerEvaluation';
 export * from './freelancerHistory';
 export * from './freelancerHistoryTotals';
 export * from './freelancerInput';
