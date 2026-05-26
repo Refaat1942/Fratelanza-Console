@@ -95,13 +95,15 @@ router.get("/finance/report", async (req, res): Promise<void> => {
         totalExpenses: sql<number>`coalesce(sum(amount::numeric), 0)`,
       }).from(expensesTable);
 
-  const totalRevenue = projects.reduce((s, p) => s + Number(p.clientPrice), 0);
   const totalPaid = projects.reduce((s, p) => s + Number(p.paidAmount), 0);
   const totalRemaining = projects.reduce((s, p) => s + Number(p.remainingAmount), 0);
   const totalCost = projects.reduce((s, p) => s + Number(p.totalCost), 0);
-  const totalNetProfit = projects.reduce((s, p) => s + Number(p.netProfit), 0);
+  const projectsNetProfit = projects.reduce((s, p) => s + Number(p.netProfit), 0);
   const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
-  const netBalance = totalNetProfit - totalExpenses;
+  // Revenue = collected money only. Net profit = projects net profit minus expenses.
+  const totalRevenue = totalPaid;
+  const totalNetProfit = projectsNetProfit - totalExpenses;
+  const netBalance = totalNetProfit;
 
   res.json({
     totalRevenue,

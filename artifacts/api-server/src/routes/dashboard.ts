@@ -30,12 +30,17 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .select({ count: sql<number>`count(*)` })
     .from(freelancersTable);
 
+  const totalPaid = Number(projAgg?.totalPaid ?? 0);
+  const projectsNetProfit = Number(projAgg?.totalNetProfit ?? 0);
+  const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
   res.json({
-    totalRevenue: Number(projAgg?.totalRevenue ?? 0),
-    totalPaid: Number(projAgg?.totalPaid ?? 0),
+    // Revenue = money actually collected (paid). Unpaid balances are NOT revenue.
+    totalRevenue: totalPaid,
+    totalPaid,
     totalRemaining: Number(projAgg?.totalRemaining ?? 0),
-    totalNetProfit: Number(projAgg?.totalNetProfit ?? 0),
-    totalExpenses: Number(expAgg?.totalExpenses ?? 0),
+    // Net profit = sum(project net profit) - general expenses
+    totalNetProfit: projectsNetProfit - totalExpenses,
+    totalExpenses,
     activeProjects: Number(projAgg?.activeProjects ?? 0),
     completedProjects: Number(projAgg?.completedProjects ?? 0),
     totalClients: Number(clientCount?.count ?? 0),
