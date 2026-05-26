@@ -15,7 +15,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, DollarSign, Search, X, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Search, X, Users, UserPlus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 type Project = {
@@ -54,8 +54,6 @@ export default function Projects() {
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState({ ...empty });
   const [team, setTeam] = useState<TeamMember[]>([]);
-  const [pickFreelancer, setPickFreelancer] = useState<string>("");
-  const [pickCommission, setPickCommission] = useState<string>("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [paymentProject, setPaymentProject] = useState<Project | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -82,41 +80,55 @@ export default function Projects() {
   const openEdit = (p: Project) => {
     setEditing(p);
     setTeam([]);
-    // Load team first, then back-compute "other costs" = stored totalCost − all commissions.
     const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
     fetch(`${apiBase}/projects/${p.id}/team`, { credentials: "include" })
       .then((r) => r.ok ? r.json() : [])
       .then((t: Array<{ freelancerName: string; commission: number }>) => {
-        const teamLoaded = t.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission) }));
+        const teamLoaded: TeamMember[] = t.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission) }));
+        // Migrate legacy lead freelancer into the unified list if not already there
+        if (p.freelancerName && !teamLoaded.some((m) => m.freelancerName === p.freelancerName)) {
+          teamLoaded.unshift({ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) });
+        }
         setTeam(teamLoaded);
         const teamCommissionSum = teamLoaded.reduce((s, m) => s + m.commission, 0);
-        const otherCosts = Math.max(0, Number(p.totalCost) - teamCommissionSum - Number(p.freelancerCommission ?? 0));
-        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: p.freelancerName ?? "", freelancerCommission: p.freelancerCommission, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
+        const legacyLeadCommission = p.freelancerName ? 0 : Number(p.freelancerCommission ?? 0);
+        const otherCosts = Math.max(0, Number(p.totalCost) - teamCommissionSum - legacyLeadCommission);
+        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: "", freelancerCommission: 0, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
       })
       .catch(() => {
-        // Fallback: no team, use stored totalCost minus lead commission only
-        const otherCosts = Math.max(0, Number(p.totalCost) - Number(p.freelancerCommission ?? 0));
-        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: p.freelancerName ?? "", freelancerCommission: p.freelancerCommission, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
+        const teamLoaded: TeamMember[] = p.freelancerName
+          ? [{ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) }]
+          : [];
+        setTeam(teamLoaded);
+        const otherCosts = Math.max(0, Number(p.totalCost) - teamLoaded.reduce((s, m) => s + m.commission, 0));
+        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: "", freelancerCommission: 0, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
       });
     setShowForm(true);
   };
 
-  const addTeamMember = () => {
-    if (!pickFreelancer) return;
-    if (team.some((m) => m.freelancerName === pickFreelancer)) {
-      toast({ title: "Already added", variant: "destructive" });
-      return;
-    }
-    setTeam((prev) => [...prev, { freelancerName: pickFreelancer, commission: Number(pickCommission) || 0 }]);
-    setPickFreelancer(""); setPickCommission("");
+  const addFreelancerRow = () => {
+    setTeam((prev) => [...prev, { freelancerName: "", commission: 0 }]);
   };
 
-  const removeTeamMember = (name: string) => {
-    setTeam((prev) => prev.filter((m) => m.freelancerName !== name));
+  const removeFreelancerRow = (index: number) => {
+    setTeam((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updateFreelancerRow = (index: number, patch: Partial<TeamMember>) => {
+    setTeam((prev) => prev.map((m, i) => (i === index ? { ...m, ...patch } : m)));
   };
 
   const handleSave = () => {
-    const totalCommission = team.reduce((s, m) => s + m.commission, 0) + Number(form.freelancerCommission || 0);
+    const cleanTeam = team.filter((m) => m.freelancerName.trim() !== "");
+    const names = cleanTeam.map((m) => m.freelancerName);
+    const dupes = names.filter((n, i) => names.indexOf(n) !== i);
+    if (dupes.length > 0) {
+      toast({ title: `Duplicate freelancer: ${dupes[0]}`, variant: "destructive" });
+      return;
+    }
+    const totalCommission = cleanTeam.reduce((s, m) => s + Number(m.commission || 0), 0);
+    const leadName = cleanTeam[0]?.freelancerName ?? "";
+    const leadCommission = Number(cleanTeam[0]?.commission ?? 0);
     const data = {
       ...form,
       clientPrice: Number(form.clientPrice),
@@ -124,8 +136,9 @@ export default function Projects() {
       netProfit: Number(form.clientPrice) - (Number(form.totalCost) + totalCommission),
       paidAmount: Number(form.paidAmount),
       remainingAmount: Number(form.clientPrice) - Number(form.paidAmount),
-      freelancerCommission: Number(form.freelancerCommission),
-      team,
+      freelancerName: leadName,
+      freelancerCommission: leadCommission,
+      team: cleanTeam.slice(1).map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission || 0) })),
     };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
@@ -251,54 +264,53 @@ export default function Projects() {
               <Label>Status</Label>
               <Select value={form.status} onValueChange={fs("status")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Ongoing">Ongoing</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Cancelled">Cancelled</SelectItem></SelectContent></Select>
             </div>
-            <div className="space-y-1">
+            <div className="md:col-span-2 space-y-1">
               <Label>Client</Label>
               <Input data-testid="input-client-name" value={form.clientName} onChange={f("clientName")} />
             </div>
-            <div className="space-y-1">
-              <Label>Lead Freelancer</Label>
-              <Select value={form.freelancerName || undefined} onValueChange={fs("freelancerName")}>
-                <SelectTrigger><SelectValue placeholder="Select lead freelancer" /></SelectTrigger>
-                <SelectContent className="max-h-72">
-                  {(freelancers as Freelancer[]).map((fr) => (
-                    <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Lead Commission (EGP)</Label>
-              <Input type="number" value={form.freelancerCommission} onChange={f("freelancerCommission")} />
-            </div>
 
-            {/* Multi-freelancer team */}
+            {/* Freelancers list */}
             <div className="md:col-span-2 space-y-2 border border-border rounded-md p-3 bg-card/40">
-              <div className="flex items-center gap-2 text-sm font-semibold">
-                <Users className="h-4 w-4 text-primary" /> Additional Team Members
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <Users className="h-4 w-4 text-primary" /> Freelancers
+                </div>
+                <Button type="button" size="sm" variant="outline" onClick={addFreelancerRow} data-testid="button-add-freelancer-row" className="h-8">
+                  <UserPlus className="h-3.5 w-3.5 mr-1" /> Add Freelancer
+                </Button>
               </div>
-              <div className="flex gap-2 flex-wrap">
-                <Select value={pickFreelancer || undefined} onValueChange={setPickFreelancer}>
-                  <SelectTrigger className="flex-1 min-w-[200px]" data-testid="select-team-freelancer"><SelectValue placeholder="Select freelancer" /></SelectTrigger>
-                  <SelectContent className="max-h-72">
-                    {(freelancers as Freelancer[]).map((fr) => (
-                      <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Input type="number" placeholder="Commission EGP" className="w-40" value={pickCommission} onChange={(e) => setPickCommission(e.target.value)} data-testid="input-team-commission" />
-                <Button type="button" variant="outline" onClick={addTeamMember} data-testid="button-add-team"><Plus className="h-4 w-4" /></Button>
-              </div>
-              {team.length > 0 && (
-                <div className="space-y-1">
-                  {team.map((m) => (
-                    <div key={m.freelancerName} className="flex items-center justify-between px-3 py-2 rounded border border-border text-sm">
-                      <span>{m.freelancerName}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-primary font-medium"><PrivacyWrapper value={m.commission} /></span>
-                        <button onClick={() => removeTeamMember(m.freelancerName)} className="text-muted-foreground hover:text-destructive"><X className="h-3 w-3" /></button>
-                      </div>
+              {team.length === 0 ? (
+                <div className="text-xs text-muted-foreground py-2 px-1">No freelancers added. Click "Add Freelancer" to add one.</div>
+              ) : (
+                <div className="space-y-2">
+                  {team.map((m, idx) => (
+                    <div key={idx} className="flex gap-2 items-center" data-testid={`row-freelancer-${idx}`}>
+                      <div className="text-xs font-medium text-muted-foreground w-20 shrink-0">Freelancer {idx + 1}</div>
+                      <Select value={m.freelancerName || undefined} onValueChange={(v) => updateFreelancerRow(idx, { freelancerName: v })}>
+                        <SelectTrigger className="flex-1" data-testid={`select-freelancer-${idx}`}><SelectValue placeholder="Select freelancer" /></SelectTrigger>
+                        <SelectContent className="max-h-72">
+                          {(freelancers as Freelancer[]).map((fr) => (
+                            <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        placeholder="Commission EGP"
+                        className="w-36"
+                        value={m.commission}
+                        onChange={(e) => updateFreelancerRow(idx, { commission: Number(e.target.value) || 0 })}
+                        data-testid={`input-commission-${idx}`}
+                      />
+                      <Button type="button" size="icon" variant="ghost" onClick={() => removeFreelancerRow(idx)} data-testid={`button-remove-freelancer-${idx}`}>
+                        <X className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   ))}
+                  <div className="flex justify-between text-xs pt-1 border-t border-border/40">
+                    <span className="text-muted-foreground">Total commissions</span>
+                    <span className="font-semibold text-primary"><PrivacyWrapper value={team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span>
+                  </div>
                 </div>
               )}
             </div>
@@ -322,8 +334,8 @@ export default function Projects() {
 
             <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Down payment</span><span className="font-semibold">{downPaymentPct}% of price</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={team.reduce((s, m) => s + m.commission, 0) + Number(form.freelancerCommission || 0)} /></span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className="text-green-500 font-semibold"><PrivacyWrapper value={Number(form.clientPrice) - Number(form.totalCost) - team.reduce((s, m) => s + m.commission, 0) - Number(form.freelancerCommission || 0)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className="text-green-500 font-semibold"><PrivacyWrapper value={Number(form.clientPrice) - Number(form.totalCost) - team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span></div>
             </div>
 
             <div className="space-y-1">
