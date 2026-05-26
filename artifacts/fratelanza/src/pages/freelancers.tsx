@@ -182,8 +182,8 @@ export default function Freelancers() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="rounded-lg border border-border overflow-x-auto">
+          <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
                 {["Code", "Name", "Phone", "Specialization", "Position", "Earned", "Balance", "Rating", "Score", "Actions"].map((h) => (
@@ -267,6 +267,15 @@ export default function Freelancers() {
           </DialogHeader>
           {evalQ.isLoading ? (
             <div className="py-10 text-center text-muted-foreground">{t('common.loading')}</div>
+          ) : evaluation && evaluation.completedProjects === 0 ? (
+            <div className="py-10 px-4 text-center space-y-2">
+              <Clock className="h-10 w-10 text-muted-foreground mx-auto" />
+              <div className="font-semibold">No evaluation available yet</div>
+              <div className="text-sm text-muted-foreground max-w-md mx-auto">
+                {evaluation.freelancerName} has {evaluation.projectsCount} project{evaluation.projectsCount === 1 ? "" : "s"} in progress.
+                Evaluation will become available once at least one project is marked as Completed.
+              </div>
+            </div>
           ) : evaluation ? (
             <div className="space-y-4 py-2">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
