@@ -187,7 +187,7 @@ export default function Freelancers() {
               {filtered.length === 0 ? (
                 <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('freelancers.noFreelancers')}</td></tr>
               ) : filtered.map((fr) => (
-                <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors cursor-pointer" onClick={(e) => { if ((e.target as HTMLElement).closest('button')) return; setHistoryCode(fr.code); }}>
+                <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fr.code}</td>
                   <td className="px-4 py-3 font-medium">{fr.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{fr.phone ?? "—"}</td>
@@ -197,8 +197,10 @@ export default function Freelancers() {
                   <td className="px-4 py-3 text-yellow-400"><PrivacyWrapper value={fr.balance} /></td>
                   <td className="px-4 py-3"><Stars rating={fr.rating} /></td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" data-testid={`button-history-${fr.code}`} onClick={() => setHistoryCode(fr.code)} title="View history"><History className="h-4 w-4 text-primary" /></Button>
+                    <div className="flex gap-1 items-center">
+                      <Button size="sm" variant="outline" data-testid={`button-history-${fr.code}`} onClick={() => setHistoryCode(fr.code)} className="border-primary/40 text-primary hover:bg-primary/10 h-8 px-2">
+                        <History className="h-3.5 w-3.5 mr-1" /> History
+                      </Button>
                       <Button size="icon" variant="ghost" data-testid={`button-edit-${fr.code}`} onClick={() => openEdit(fr)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-delete-${fr.code}`} onClick={() => setDeleteCode(fr.code)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
