@@ -5,15 +5,19 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { RemainingItem } from './remainingItem';
 
 export interface DashboardSummary {
+  /** Gross revenue = total paid amounts only */
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
+  /** Net profit = gross revenue - total expenses */
   totalNetProfit: number;
   totalExpenses: number;
   activeProjects: number;
   completedProjects: number;
   totalClients: number;
   totalFreelancers: number;
+  remainingBreakdown: RemainingItem[];
 }

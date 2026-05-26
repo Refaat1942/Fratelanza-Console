@@ -1065,16 +1065,18 @@ components:
     # ── Dashboard ──────────────────────────────────────────────────────
     DashboardSummary:
       type: object
-      required: [totalRevenue, totalPaid, totalRemaining, totalNetProfit, totalExpenses, activeProjects, completedProjects, totalClients, totalFreelancers]
+      required: [totalRevenue, totalPaid, totalRemaining, totalNetProfit, totalExpenses, activeProjects, completedProjects, totalClients, totalFreelancers, remainingBreakdown]
       properties:
         totalRevenue:
           type: number
+          description: Gross revenue = total paid amounts only
         totalPaid:
           type: number
         totalRemaining:
           type: number
         totalNetProfit:
           type: number
+          description: Net profit = gross revenue - total expenses
         totalExpenses:
           type: number
         activeProjects:
@@ -1085,6 +1087,23 @@ components:
           type: integer
         totalFreelancers:
           type: integer
+        remainingBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemainingItem"
+
+    RemainingItem:
+      type: object
+      required: [id, projectName, clientName, remaining]
+      properties:
+        id:
+          type: integer
+        projectName:
+          type: string
+        clientName:
+          type: string
+        remaining:
+          type: number
 
     ProfitByType:
       type: object
@@ -1616,10 +1635,11 @@ components:
     # ── Finance Report ─────────────────────────────────────────────────
     FinanceReport:
       type: object
-      required: [totalRevenue, totalPaid, totalRemaining, totalCost, totalNetProfit, totalExpenses, netBalance, projects]
+      required: [totalRevenue, totalPaid, totalRemaining, totalCost, totalNetProfit, totalExpenses, netBalance, projects, remainingBreakdown]
       properties:
         totalRevenue:
           type: number
+          description: Gross revenue = total paid amounts only
         totalPaid:
           type: number
         totalRemaining:
@@ -1628,6 +1648,7 @@ components:
           type: number
         totalNetProfit:
           type: number
+          description: Net profit = gross revenue - total expenses
         totalExpenses:
           type: number
         netBalance:
@@ -1636,3 +1657,7 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/Project"
+        remainingBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/RemainingItem"

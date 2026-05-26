@@ -45,16 +45,26 @@ export interface UserUpdate {
   pagePermissions?: string[];
 }
 
+export interface RemainingItem {
+  id: number;
+  projectName: string;
+  clientName: string;
+  remaining: number;
+}
+
 export interface DashboardSummary {
+  /** Gross revenue = total paid amounts only */
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
+  /** Net profit = gross revenue - total expenses */
   totalNetProfit: number;
   totalExpenses: number;
   activeProjects: number;
   completedProjects: number;
   totalClients: number;
   totalFreelancers: number;
+  remainingBreakdown: RemainingItem[];
 }
 
 export interface ProfitByType {
@@ -355,14 +365,17 @@ export interface TaskUpdate {
 }
 
 export interface FinanceReport {
+  /** Gross revenue = total paid amounts only */
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
   totalCost: number;
+  /** Net profit = gross revenue - total expenses */
   totalNetProfit: number;
   totalExpenses: number;
   netBalance: number;
   projects: Project[];
+  remainingBreakdown: RemainingItem[];
 }
 
 export type ListProjectsParams = {

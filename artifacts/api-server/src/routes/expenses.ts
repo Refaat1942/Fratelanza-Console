@@ -98,12 +98,20 @@ router.get("/finance/report", async (req, res): Promise<void> => {
   const totalPaid = projects.reduce((s, p) => s + Number(p.paidAmount), 0);
   const totalRemaining = projects.reduce((s, p) => s + Number(p.remainingAmount), 0);
   const totalCost = projects.reduce((s, p) => s + Number(p.totalCost), 0);
-  const projectsNetProfit = projects.reduce((s, p) => s + Number(p.netProfit), 0);
   const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
-  // Revenue = collected money only. Net profit = projects net profit minus expenses.
+  // Gross revenue = paid only. Net profit = gross revenue - expenses.
   const totalRevenue = totalPaid;
-  const totalNetProfit = projectsNetProfit - totalExpenses;
+  const totalNetProfit = totalRevenue - totalExpenses;
   const netBalance = totalNetProfit;
+  const remainingBreakdown = projects
+    .filter((p) => Number(p.remainingAmount) > 0)
+    .sort((a, b) => Number(b.remainingAmount) - Number(a.remainingAmount))
+    .map((p) => ({
+      id: p.id,
+      projectName: p.projectName,
+      clientName: p.clientName ?? "",
+      remaining: Number(p.remainingAmount),
+    }));
 
   res.json({
     totalRevenue,
@@ -113,6 +121,7 @@ router.get("/finance/report", async (req, res): Promise<void> => {
     totalNetProfit,
     totalExpenses,
     netBalance,
+    remainingBreakdown,
     projects: projects.map((r) => ({
       id: r.id,
       type: r.type,

@@ -40,9 +40,10 @@ export const ar: Translations = {
     previewHeader: "معاينة", logoHint: "PNG أو JPG أو SVG. يفضل: مربع، 256×256 أو أكبر.",
   },
   dashboard: {
-    title: "الرئيسية", totalRevenue: "إجمالي الإيرادات", totalPaid: "المدفوع",
+    title: "الرئيسية", totalRevenue: "الإيراد الإجمالي", totalPaid: "المدفوع",
     totalRemaining: "المتبقي", netProfit: "صافي الربح", totalExpenses: "إجمالي المصروفات",
     profitByType: "الربح حسب النوع", paymentAlerts: "تنبيهات الدفع", noAlerts: "لا توجد تنبيهات",
+    remainingBreakdown: "تفاصيل المتبقي", noRemaining: "لا توجد مبالغ متبقية",
     overdue: "متأخر", upcoming: "قادم",
     activeProjects: "المشاريع النشطة", completedProjects: "المشاريع المكتملة",
   },

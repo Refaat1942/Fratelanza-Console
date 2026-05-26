@@ -37,9 +37,10 @@ export const en = {
     previewHeader: "Preview", logoHint: "PNG, JPG or SVG. Recommended: square, 256x256+.",
   },
   dashboard: {
-    title: "Dashboard", totalRevenue: "Total Revenue", totalPaid: "Total Paid",
+    title: "Dashboard", totalRevenue: "Gross Revenue", totalPaid: "Total Paid",
     totalRemaining: "Total Remaining", netProfit: "Net Profit", totalExpenses: "Total Expenses",
     profitByType: "Profit by Type", paymentAlerts: "Payment Alerts", noAlerts: "No payment alerts",
+    remainingBreakdown: "Remaining Breakdown", noRemaining: "No outstanding balances",
     overdue: "Overdue", upcoming: "Upcoming",
     activeProjects: "Active Projects", completedProjects: "Completed Projects",
   },

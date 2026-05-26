@@ -40,6 +40,7 @@ export * from './projectUpdate';
 export * from './quote';
 export * from './quoteInput';
 export * from './quoteUpdate';
+export * from './remainingItem';
 export * from './task';
 export * from './taskInput';
 export * from './taskUpdate';

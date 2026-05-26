@@ -6,14 +6,18 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { Project } from './project';
+import type { RemainingItem } from './remainingItem';
 
 export interface FinanceReport {
+  /** Gross revenue = total paid amounts only */
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
   totalCost: number;
+  /** Net profit = gross revenue - total expenses */
   totalNetProfit: number;
   totalExpenses: number;
   netBalance: number;
   projects: Project[];
+  remainingBreakdown: RemainingItem[];
 }

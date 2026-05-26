@@ -24,13 +24,13 @@ export default function Finance() {
   const clearFilter = () => { setStartDate(""); setEndDate(""); setApplied({ startDate: "", endDate: "" }); };
 
   const kpis = report ? [
-    { label: "Total Revenue", value: report.totalRevenue, color: "text-foreground" },
-    { label: "Total Paid", value: report.totalPaid, color: "text-blue-400" },
-    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400" },
-    { label: "Total Cost", value: report.totalCost, color: "text-red-400" },
-    { label: "Net Profit", value: report.totalNetProfit, color: "text-primary" },
-    { label: "Expenses", value: report.totalExpenses, color: "text-red-400" },
-    { label: "Net Balance", value: report.netBalance, color: (report.netBalance ?? 0) >= 0 ? "text-green-400" : "text-red-400" },
+    { label: "Gross Revenue", value: report.totalRevenue, color: "text-foreground", negative: false },
+    { label: "Total Paid", value: report.totalPaid, color: "text-blue-400", negative: false },
+    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400", negative: false },
+    { label: "Project Cost", value: report.totalCost, color: "text-muted-foreground", negative: false },
+    { label: "Expenses", value: report.totalExpenses, color: "text-red-400", negative: true },
+    { label: "Net Profit", value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", negative: false },
+    { label: "Net Balance", value: report.netBalance, color: (report.netBalance ?? 0) >= 0 ? "text-green-400" : "text-red-400", negative: false },
   ] : [];
 
   const chartData = report?.projects
@@ -73,7 +73,10 @@ export default function Finance() {
               <Card key={kpi.label} className="bg-card/50">
                 <CardHeader className="pb-1 pt-3 px-3"><CardTitle className="text-xs text-muted-foreground">{kpi.label}</CardTitle></CardHeader>
                 <CardContent className="px-3 pb-3">
-                  <div className={`text-lg font-bold ${kpi.color}`}><PrivacyWrapper value={kpi.value ?? 0} /></div>
+                  <div className={`text-lg font-bold ${kpi.color}`}>
+                    {kpi.negative && (kpi.value ?? 0) !== 0 ? <span>- </span> : null}
+                    <PrivacyWrapper value={Math.abs(kpi.value ?? 0)} />
+                  </div>
                 </CardContent>
               </Card>
             ))}

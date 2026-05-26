@@ -52,15 +52,21 @@ export const VerifyPasswordResponse = zod.object({
  * @summary Get overall financial summary stats
  */
 export const GetDashboardSummaryResponse = zod.object({
-  "totalRevenue": zod.number(),
+  "totalRevenue": zod.number().describe('Gross revenue = total paid amounts only'),
   "totalPaid": zod.number(),
   "totalRemaining": zod.number(),
-  "totalNetProfit": zod.number(),
+  "totalNetProfit": zod.number().describe('Net profit = gross revenue - total expenses'),
   "totalExpenses": zod.number(),
   "activeProjects": zod.number(),
   "completedProjects": zod.number(),
   "totalClients": zod.number(),
-  "totalFreelancers": zod.number()
+  "totalFreelancers": zod.number(),
+  "remainingBreakdown": zod.array(zod.object({
+  "id": zod.number(),
+  "projectName": zod.string(),
+  "clientName": zod.string(),
+  "remaining": zod.number()
+}))
 })
 
 
@@ -880,11 +886,11 @@ export const GetFinanceReportQueryParams = zod.object({
 })
 
 export const GetFinanceReportResponse = zod.object({
-  "totalRevenue": zod.number(),
+  "totalRevenue": zod.number().describe('Gross revenue = total paid amounts only'),
   "totalPaid": zod.number(),
   "totalRemaining": zod.number(),
   "totalCost": zod.number(),
-  "totalNetProfit": zod.number(),
+  "totalNetProfit": zod.number().describe('Net profit = gross revenue - total expenses'),
   "totalExpenses": zod.number(),
   "netBalance": zod.number(),
   "projects": zod.array(zod.object({
@@ -905,6 +911,12 @@ export const GetFinanceReportResponse = zod.object({
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "date": zod.string()
+})),
+  "remainingBreakdown": zod.array(zod.object({
+  "id": zod.number(),
+  "projectName": zod.string(),
+  "clientName": zod.string(),
+  "remaining": zod.number()
 }))
 })
 

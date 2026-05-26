@@ -31,20 +31,38 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .from(freelancersTable);
 
   const totalPaid = Number(projAgg?.totalPaid ?? 0);
-  const projectsNetProfit = Number(projAgg?.totalNetProfit ?? 0);
   const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
+
+  // Per-project remaining breakdown (only projects with balance > 0)
+  const remainingRows = await db
+    .select({
+      id: projectsTable.id,
+      projectName: projectsTable.projectName,
+      clientName: projectsTable.clientName,
+      remaining: projectsTable.remainingAmount,
+    })
+    .from(projectsTable)
+    .where(sql`remaining_amount::numeric > 0`)
+    .orderBy(sql`remaining_amount::numeric desc`);
+
   res.json({
-    // Revenue = money actually collected (paid). Unpaid balances are NOT revenue.
+    // Gross revenue = money actually collected (paid). Unpaid balances are NOT revenue.
     totalRevenue: totalPaid,
     totalPaid,
     totalRemaining: Number(projAgg?.totalRemaining ?? 0),
-    // Net profit = sum(project net profit) - general expenses
-    totalNetProfit: projectsNetProfit - totalExpenses,
+    // Net profit = gross revenue - total expenses
+    totalNetProfit: totalPaid - totalExpenses,
     totalExpenses,
     activeProjects: Number(projAgg?.activeProjects ?? 0),
     completedProjects: Number(projAgg?.completedProjects ?? 0),
     totalClients: Number(clientCount?.count ?? 0),
     totalFreelancers: Number(freelancerCount?.count ?? 0),
+    remainingBreakdown: remainingRows.map((r) => ({
+      id: r.id,
+      projectName: r.projectName,
+      clientName: r.clientName ?? "",
+      remaining: Number(r.remaining),
+    })),
   });
 });
 
