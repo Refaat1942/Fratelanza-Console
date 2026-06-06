@@ -1,4 +1,6 @@
-export type QuoteLineItem = { desc: string; price: number };
+import { resolveQuoteLineItems, type QuoteLineItem } from "./quote-line-items";
+
+export type { QuoteLineItem };
 
 export type QuoteForPdf = {
   clientName: string;
@@ -50,14 +52,6 @@ function formatQuoteDate(date?: string | null): string {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const yyyy = d.getFullYear();
   return `${dd}-${mm}-${yyyy}`;
-}
-
-export function resolveQuoteLineItems(q: QuoteForPdf): QuoteLineItem[] {
-  if (q.lineItems?.length) return q.lineItems;
-  const parts = (q.projectName ?? "").split(";").map((s) => s.trim()).filter(Boolean);
-  if (parts.length === 0) return q.projectName ? [{ desc: q.projectName, price: q.price }] : [];
-  if (parts.length === 1) return [{ desc: parts[0], price: q.price }];
-  return parts.map((desc) => ({ desc, price: 0 }));
 }
 
 function totalFromItems(items: QuoteLineItem[], fallback: number): number {

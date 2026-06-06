@@ -113,6 +113,7 @@ export const ar: Translations = {
     notes: "ملاحظات إضافية",
     searchPlaceholder: "تصفية حسب العميل...", date: "تاريخ العرض",
     lineItems: "بنود العرض", addItem: "إضافة بند", total: "الإجمالي",
+    lineItemsHint: "أضف كل خدمة في سطر منفصل بزر + (لا تجمعها بعلامة + في حقل واحد).",
     itemDescription: "وصف الخدمة", itemPrice: "السعر (ج.م)",
     selectClient: "اختر العميل", clientRequired: "يرجى اختيار عميل صالح",
     itemsRequired: "أضف بنداً واحداً على الأقل",

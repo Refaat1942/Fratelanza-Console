@@ -12,7 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, X, Printer } from "lucide-react";
-import { printQuote, resolveQuoteLineItems, type QuoteLineItem } from "@/lib/quote-pdf";
+import { printQuote } from "@/lib/quote-pdf";
+import { displayProjectName, packProjectName, resolveQuoteLineItems, type QuoteLineItem } from "@/lib/quote-line-items";
 import { useBranding } from "@/lib/branding-context";
 import { useTranslation } from "react-i18next";
 
@@ -99,10 +100,9 @@ export default function Quotes() {
       return;
     }
 
-    const summary = lineItems.map((i) => i.desc).join(" + ");
     const data = {
       ...form,
-      projectName: summary.length > 200 ? `${lineItems.length} Items Included` : summary,
+      projectName: packProjectName(lineItems),
       lineItems,
       price: totalPrice,
     };
@@ -129,7 +129,8 @@ export default function Quotes() {
   };
 
   const handlePrint = (q: Quote) => {
-    printQuote(q, { logoDataUrl: branding.logoDataUrl, brandName: branding.brandName });
+    const items = resolveQuoteLineItems(q);
+    printQuote({ ...q, lineItems: items }, { logoDataUrl: branding.logoDataUrl, brandName: branding.brandName });
   };
 
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -182,7 +183,7 @@ export default function Quotes() {
               ) : (quotes as Quote[]).map((q) => (
                 <tr key={q.id} data-testid={`row-quote-${q.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-medium">{q.clientName}</td>
-                  <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{q.projectName ?? "—"}</td>
+                  <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{displayProjectName(q.projectName)}</td>
                   <td className="px-4 py-3 font-semibold text-primary"><PrivacyWrapper value={q.price} /></td>
                   <td className="px-4 py-3 text-muted-foreground">
                     {q.language === "Arabic" ? t("quotes.languageArabic") : t("quotes.languageEnglish")}
@@ -250,6 +251,7 @@ export default function Quotes() {
             <Separator />
             <div className="space-y-2">
               <Label className="text-sm font-semibold">{t("quotes.lineItems")}</Label>
+              <p className="text-xs text-muted-foreground">{t("quotes.lineItemsHint")}</p>
               <div className="flex gap-2">
                 <Input
                   placeholder={t("quotes.itemDescription")}

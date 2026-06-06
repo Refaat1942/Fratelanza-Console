@@ -109,6 +109,7 @@ export const en = {
     paymentTerms: "Payment Terms", milestones: "Milestones", notes: "Additional Notes",
     searchPlaceholder: "Filter by client...", date: "Quote Date",
     lineItems: "Line Items", addItem: "Add Item", total: "Total",
+    lineItemsHint: "Add each service on its own row using the + button (do not combine with + in one field).",
     itemDescription: "Service description", itemPrice: "Price (EGP)",
     selectClient: "Select client", clientRequired: "Select a valid client",
     itemsRequired: "Add at least one line item",
