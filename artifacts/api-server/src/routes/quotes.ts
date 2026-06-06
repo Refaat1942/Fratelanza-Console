@@ -5,11 +5,32 @@ import { eq, ilike, and, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
+type QuoteLineItem = { desc: string; price: number };
+
+function parseLineItems(raw: string | null | undefined): QuoteLineItem[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as QuoteLineItem[];
+    if (!Array.isArray(parsed)) return null;
+    return parsed
+      .filter((item) => item && typeof item.desc === "string")
+      .map((item) => ({ desc: item.desc, price: Number(item.price ?? 0) }));
+  } catch {
+    return null;
+  }
+}
+
+function serializeLineItems(items: QuoteLineItem[] | null | undefined): string | null {
+  if (!items?.length) return null;
+  return JSON.stringify(items);
+}
+
 function toShape(r: typeof quotesTable.$inferSelect) {
   return {
     id: r.id,
     clientName: r.clientName,
     projectName: r.projectName,
+    lineItems: parseLineItems(r.lineItems),
     price: Number(r.price),
     language: r.language,
     date: r.date,
@@ -38,6 +59,7 @@ router.post("/quotes", async (req, res): Promise<void> => {
   const [row] = await db.insert(quotesTable).values({
     clientName: body.clientName,
     projectName: body.projectName ?? null,
+    lineItems: serializeLineItems(body.lineItems),
     price: String(Number(body.price ?? 0)),
     language: body.language ?? "English",
     date: body.date ?? today,
@@ -54,6 +76,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
   const updates: Record<string, string | null | undefined> = {};
   if (body.clientName !== undefined) updates.clientName = body.clientName;
   if (body.projectName !== undefined) updates.projectName = body.projectName;
+  if (body.lineItems !== undefined) updates.lineItems = serializeLineItems(body.lineItems);
   if (body.price !== undefined) updates.price = String(Number(body.price));
   if (body.language !== undefined) updates.language = body.language;
   if (body.paymentTerms !== undefined) updates.paymentTerms = body.paymentTerms;

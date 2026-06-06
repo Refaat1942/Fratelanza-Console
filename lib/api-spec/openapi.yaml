@@ -1588,6 +1588,15 @@ components:
           type: integer
 
     # ── Quote ──────────────────────────────────────────────────────────
+    QuoteLineItem:
+      type: object
+      required: [desc, price]
+      properties:
+        desc:
+          type: string
+        price:
+          type: number
+
     Quote:
       type: object
       required: [id, clientName, price, date]
@@ -1598,6 +1607,10 @@ components:
           type: string
         projectName:
           type: ["string", "null"]
+        lineItems:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/QuoteLineItem"
         price:
           type: number
         language:
@@ -1619,6 +1632,10 @@ components:
           type: string
         projectName:
           type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteLineItem"
         price:
           type: number
         language:
@@ -1639,6 +1656,10 @@ components:
           type: string
         projectName:
           type: string
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteLineItem"
         price:
           type: number
         language:

@@ -1,6 +1,9 @@
-type QuoteForPdf = {
+export type QuoteLineItem = { desc: string; price: number };
+
+export type QuoteForPdf = {
   clientName: string;
   projectName?: string | null;
+  lineItems?: QuoteLineItem[] | null;
   price: number;
   language?: string | null;
   date?: string | null;
@@ -9,9 +12,16 @@ type QuoteForPdf = {
   notes?: string | null;
 };
 
-function fmtEGP(n: number) {
-  return `EGP ${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
+export type QuotePdfOptions = {
+  logoDataUrl?: string | null;
+  brandName?: string;
+  taxId?: string;
+};
+
+const TAX_ID = "779-103-211";
+const ACCENT = "#00BFFF";
+const NAVY = "#0a192f";
+const MUTED = "#646464";
 
 function esc(s: string | null | undefined): string {
   if (s === null || s === undefined) return "";
@@ -27,47 +37,117 @@ function escMultiline(s: string | null | undefined): string {
   return esc(s).replace(/\n/g, "<br>");
 }
 
-export function printQuote(q: QuoteForPdf) {
+function formatNum(n: number): string {
+  if (Number.isInteger(n)) return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  return n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatQuoteDate(date?: string | null): string {
+  if (!date) return "";
+  const d = new Date(date.includes("T") ? date : `${date}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return date;
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  return `${dd}-${mm}-${yyyy}`;
+}
+
+export function resolveQuoteLineItems(q: QuoteForPdf): QuoteLineItem[] {
+  if (q.lineItems?.length) return q.lineItems;
+  const parts = (q.projectName ?? "").split(";").map((s) => s.trim()).filter(Boolean);
+  if (parts.length === 0) return q.projectName ? [{ desc: q.projectName, price: q.price }] : [];
+  if (parts.length === 1) return [{ desc: parts[0], price: q.price }];
+  return parts.map((desc) => ({ desc, price: 0 }));
+}
+
+function totalFromItems(items: QuoteLineItem[], fallback: number): number {
+  const sum = items.reduce((s, i) => s + i.price, 0);
+  return sum > 0 ? sum : fallback;
+}
+
+export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
   const isArabic = q.language === "Arabic";
   const dir = isArabic ? "rtl" : "ltr";
   const lang = isArabic ? "ar" : "en";
+  const taxId = opts.taxId ?? TAX_ID;
+  const brandName = opts.brandName ?? "Fratelanza";
+  const companyDisplay = isArabic ? "فراتيلانزا" : brandName;
+  const items = resolveQuoteLineItems(q);
+  const total = totalFromItems(items, q.price);
+  const quoteDate = formatQuoteDate(q.date);
 
   const labels = isArabic
     ? {
-        title: "عرض سعر",
-        client: "العميل",
-        date: "التاريخ",
-        items: "البنود",
-        description: "الوصف",
-        amount: "المبلغ",
-        total: "الإجمالي",
-        paymentTerms: "شروط الدفع",
-        milestones: "المراحل",
-        notes: "ملاحظات",
-        company: "فراتي لانزا",
-        thanks: "شكراً لتعاملكم معنا",
+        title: "عرض سعر رسمي",
+        taxReg: `رقم التسجيل الضريبي: ${taxId}`,
+        date: `التاريخ: ${quoteDate}`,
+        client: `مقدم إلى السيد/الشركة: ${q.clientName}`,
+        priceHeader: "السعر (جنيه مصري)",
+        descHeader: "وصف الخدمة / المشروع",
+        total: "الإجمــــالـــي",
+        paymentTerms: "آليات وشروط الدفع:",
+        milestones: "مراحل التسليم والجدول الزمني:",
+        notes: "ملاحظات إضافية:",
+        thanks: "شكراً لثقتكم في فراتيلانزا!",
+        validity: "عرض السعر ساري لمدة 14 يوم من تاريخ الإصدار.",
+        priceSuffix: "ج.م",
       }
     : {
-        title: "Sales Quote",
-        client: "Client",
-        date: "Date",
-        items: "Items",
-        description: "Description",
-        amount: "Amount",
-        total: "Total",
-        paymentTerms: "Payment Terms",
-        milestones: "Milestones",
-        notes: "Notes",
-        company: "Fratelanza",
-        thanks: "Thank you for your business",
+        title: "Official Sales Quotation",
+        taxReg: `Tax Reg No: ${taxId}`,
+        date: `Date: ${quoteDate}`,
+        client: `Prepared For: ${q.clientName}`,
+        priceHeader: " Price (EGP)",
+        descHeader: " Service / Project Description",
+        total: " TOTAL",
+        paymentTerms: "Payment Terms:",
+        milestones: "Project Milestones & Delivery:",
+        notes: "Additional Notes:",
+        thanks: "Thank you for trusting Fratelanza!",
+        validity: "This quotation is valid for 14 days from the date of issuance.",
+        priceSuffix: "EGP",
       };
 
-  const items = (q.projectName ?? "").split(";").map((s) => s.trim()).filter(Boolean);
-  const alignAmount = isArabic ? "left" : "right";
+  const logoHtml = opts.logoDataUrl
+    ? `<img src="${esc(opts.logoDataUrl)}" alt="" class="logo" />`
+    : "";
 
-  const itemsHtml = items.length
-    ? items.map((it) => `<tr><td>${esc(it)}</td><td style="text-align:${alignAmount}">—</td></tr>`).join("")
-    : `<tr><td>${esc(q.projectName ?? "")}</td><td style="text-align:${alignAmount}">${esc(fmtEGP(q.price))}</td></tr>`;
+  const itemRows = items
+    .map((item) => {
+      const priceCell = `${formatNum(item.price)} ${labels.priceSuffix}`;
+      if (isArabic) {
+        return `<tr>
+          <td class="price-col">${esc(priceCell)}</td>
+          <td class="desc-col">${esc(item.desc)}</td>
+        </tr>`;
+      }
+      return `<tr>
+        <td class="desc-col">${esc(item.desc)}</td>
+        <td class="price-col">${esc(priceCell)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const totalPriceCell = `${formatNum(total)} ${labels.priceSuffix}`;
+  const totalRow = isArabic
+    ? `<tr class="total-row">
+        <td class="price-col">${esc(totalPriceCell)}</td>
+        <td class="desc-col">${esc(labels.total)}</td>
+      </tr>`
+    : `<tr class="total-row">
+        <td class="desc-col">${esc(labels.total)}</td>
+        <td class="price-col">${esc(totalPriceCell)}</td>
+      </tr>`;
+
+  const headerRow = isArabic
+    ? `<tr>
+        <th class="price-col">${esc(labels.priceHeader)}</th>
+        <th class="desc-col">${esc(labels.descHeader)}</th>
+      </tr>`
+    : `<tr>
+        <th class="desc-col">${esc(labels.descHeader)}</th>
+        <th class="price-col">${esc(labels.priceHeader)}</th>
+      </tr>`;
 
   const html = `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}">
@@ -75,53 +155,158 @@ export function printQuote(q: QuoteForPdf) {
 <meta charset="utf-8">
 <title>${esc(labels.title)} — ${esc(q.clientName)}</title>
 <style>
+  @page { margin: 12mm; }
   * { box-sizing: border-box; }
-  body { font-family: ${isArabic ? "'Tahoma','Amiri',sans-serif" : "'Inter',sans-serif"}; padding: 32px; color: #0a192f; }
-  header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #00BFFF; padding-bottom: 16px; margin-bottom: 24px; }
-  h1 { color: #00BFFF; margin: 0; font-size: 28px; }
-  .company { font-size: 20px; font-weight: bold; }
-  .meta { color: #555; font-size: 14px; margin-top: 8px; }
-  .meta strong { color: #0a192f; }
-  table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-  th, td { padding: 10px; border-bottom: 1px solid #ddd; text-align: ${isArabic ? "right" : "left"}; }
-  th { background: #f5f7fa; color: #0a192f; font-size: 13px; text-transform: uppercase; }
-  .total-row td { border-top: 2px solid #0a192f; border-bottom: none; font-weight: bold; font-size: 16px; }
-  .total-row .price { color: #00BFFF; }
-  .section { margin: 16px 0; }
-  .section h3 { font-size: 14px; color: #0a192f; margin: 0 0 6px 0; text-transform: uppercase; }
-  .section p { margin: 0; color: #333; }
-  footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid #ddd; text-align: center; color: #888; font-size: 12px; }
-  @media print { body { padding: 16px; } }
+  body {
+    font-family: ${isArabic ? "'Segoe UI','Tahoma','Arial',sans-serif" : "'Helvetica Neue','Helvetica','Arial',sans-serif"};
+    margin: 0;
+    padding: 24px 28px;
+    color: ${NAVY};
+    background: #fff;
+    font-size: 16px;
+    line-height: 1.4;
+  }
+  .header {
+    position: relative;
+    min-height: 72px;
+    margin-bottom: 8px;
+  }
+  .logo {
+    position: absolute;
+    top: 0;
+    ${isArabic ? "left: 0;" : "right: 0;"}
+    width: 45mm;
+    max-height: 18mm;
+    object-fit: contain;
+  }
+  .company {
+    font-size: 32px;
+    font-weight: 700;
+    color: ${NAVY};
+    margin: 0 0 4px 0;
+    text-align: ${isArabic ? "right" : "left"};
+    ${isArabic ? "padding-left: 50mm;" : "padding-right: 50mm;"}
+  }
+  .tax-reg {
+    font-size: 12px;
+    color: ${MUTED};
+    margin: 0 0 12px 0;
+    text-align: ${isArabic ? "right" : "left"};
+    ${isArabic ? "padding-left: 50mm;" : "padding-right: 50mm;"}
+  }
+  .divider {
+    border: none;
+    border-top: 2px solid ${ACCENT};
+    margin: 0 0 16px 0;
+  }
+  .doc-title {
+    font-size: ${isArabic ? "18px" : "16px"};
+    font-style: ${isArabic ? "normal" : "italic"};
+    color: ${MUTED};
+    margin: 0 0 12px 0;
+    text-align: ${isArabic ? "right" : "left"};
+  }
+  .meta {
+    font-size: 14px;
+    margin: 0 0 6px 0;
+    text-align: ${isArabic ? "right" : "left"};
+  }
+  .meta strong { font-weight: 700; color: #000; }
+  table.items {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0 8px 0;
+    table-layout: fixed;
+  }
+  table.items th,
+  table.items td {
+    border: 1px solid #ccc;
+    padding: 10px 12px;
+    vertical-align: middle;
+    word-wrap: break-word;
+  }
+  table.items th {
+    background: ${ACCENT};
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+  }
+  table.items td.desc-col {
+    text-align: ${isArabic ? "center" : "left"};
+    width: 68%;
+  }
+  table.items td.price-col {
+    text-align: center;
+    width: 32%;
+    white-space: nowrap;
+  }
+  table.items tr.total-row td {
+    background: #f0f8ff;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  table.items tr.total-row td.desc-col {
+    text-align: ${isArabic ? "center" : "right"};
+  }
+  .section { margin: 14px 0 0 0; text-align: ${isArabic ? "right" : "left"}; }
+  .section h3 {
+    margin: 0 0 6px 0;
+    font-size: ${isArabic ? "16px" : "14px"};
+    font-weight: 700;
+  }
+  .section.payment h3 { color: ${ACCENT}; }
+  .section.milestones h3 { color: #28a745; }
+  .section.notes h3 { color: #ffc107; }
+  .section p {
+    margin: 0;
+    font-size: ${isArabic ? "14px" : "12px"};
+    color: #000;
+    line-height: 1.6;
+  }
+  .footer {
+    margin-top: 28px;
+    font-size: 12px;
+    font-style: italic;
+    color: ${MUTED};
+    text-align: ${isArabic ? "right" : "left"};
+  }
+  .footer p { margin: 0 0 6px 0; }
+  @media print {
+    body { padding: 0; }
+    .no-print { display: none; }
+  }
 </style>
 </head>
 <body>
-  <header>
-    <div>
-      <h1>${esc(labels.title)}</h1>
-      <div class="meta"><strong>${esc(labels.client)}:</strong> ${esc(q.clientName)}</div>
-      ${q.date ? `<div class="meta"><strong>${esc(labels.date)}:</strong> ${esc(q.date)}</div>` : ""}
-    </div>
-    <div class="company">${esc(labels.company)}</div>
-  </header>
+  <div class="header">
+    ${logoHtml}
+    <h1 class="company">${esc(companyDisplay)}</h1>
+    <p class="tax-reg">${esc(labels.taxReg)}</p>
+  </div>
+  <hr class="divider" />
+  <p class="doc-title">${esc(labels.title)}</p>
+  <p class="meta">${isArabic ? esc(labels.date) : `<strong>Date:</strong> ${esc(quoteDate)}`}</p>
+  <p class="meta">${isArabic ? esc(labels.client) : `<strong>Prepared For:</strong> ${esc(q.clientName)}`}</p>
 
-  <div class="section">
-    <h3>${esc(labels.items)}</h3>
-    <table>
-      <thead><tr><th>${esc(labels.description)}</th><th style="width:160px;text-align:${alignAmount}">${esc(labels.amount)}</th></tr></thead>
-      <tbody>
-        ${itemsHtml}
-        <tr class="total-row"><td>${esc(labels.total)}</td><td class="price" style="text-align:${alignAmount}">${esc(fmtEGP(q.price))}</td></tr>
-      </tbody>
-    </table>
+  <table class="items">
+    <thead>${headerRow}</thead>
+    <tbody>
+      ${itemRows}
+      ${totalRow}
+    </tbody>
+  </table>
+
+  ${q.paymentTerms ? `<div class="section payment"><h3>${esc(labels.paymentTerms)}</h3><p>${escMultiline(q.paymentTerms)}</p></div>` : ""}
+  ${q.milestones ? `<div class="section milestones"><h3>${esc(labels.milestones)}</h3><p>${escMultiline(q.milestones)}</p></div>` : ""}
+  ${q.notes ? `<div class="section notes"><h3>${esc(labels.notes)}</h3><p>${escMultiline(q.notes)}</p></div>` : ""}
+
+  <div class="footer">
+    <p>${esc(labels.thanks)}</p>
+    <p>${esc(labels.validity)}</p>
   </div>
 
-  ${q.paymentTerms ? `<div class="section"><h3>${esc(labels.paymentTerms)}</h3><p>${escMultiline(q.paymentTerms)}</p></div>` : ""}
-  ${q.milestones ? `<div class="section"><h3>${esc(labels.milestones)}</h3><p>${escMultiline(q.milestones)}</p></div>` : ""}
-  ${q.notes ? `<div class="section"><h3>${esc(labels.notes)}</h3><p>${escMultiline(q.notes)}</p></div>` : ""}
-
-  <footer>${esc(labels.thanks)}</footer>
-
-  <script>window.onload = function () { setTimeout(function () { window.print(); }, 100); };</script>
+  <script>window.onload = function () { setTimeout(function () { window.print(); }, 150); };</script>
 </body>
 </html>`;
 

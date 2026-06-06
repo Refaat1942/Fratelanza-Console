@@ -704,6 +704,10 @@ export const ListQuotesResponseItem = zod.object({
   "id": zod.number(),
   "clientName": zod.string(),
   "projectName": zod.string().nullish(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+})).nullish(),
   "price": zod.number(),
   "language": zod.string().nullish(),
   "date": zod.string(),
@@ -720,6 +724,10 @@ export const ListQuotesResponse = zod.array(ListQuotesResponseItem)
 export const CreateQuoteBody = zod.object({
   "clientName": zod.string(),
   "projectName": zod.string().optional(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+})).optional(),
   "price": zod.number(),
   "language": zod.string().optional(),
   "date": zod.string().optional(),
@@ -739,6 +747,10 @@ export const UpdateQuoteParams = zod.object({
 export const UpdateQuoteBody = zod.object({
   "clientName": zod.string().optional(),
   "projectName": zod.string().optional(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+})).optional(),
   "price": zod.number().optional(),
   "language": zod.string().optional(),
   "paymentTerms": zod.string().optional(),
@@ -750,6 +762,10 @@ export const UpdateQuoteResponse = zod.object({
   "id": zod.number(),
   "clientName": zod.string(),
   "projectName": zod.string().nullish(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+})).nullish(),
   "price": zod.number(),
   "language": zod.string().nullish(),
   "date": zod.string(),

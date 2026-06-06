@@ -6,6 +6,7 @@ export const quotesTable = pgTable("sales_quotes", {
   id: serial("id").primaryKey(),
   clientName: text("client_name").notNull(),
   projectName: text("project_name"),
+  lineItems: text("line_items"),
   price: numeric("price", { precision: 12, scale: 2 }).notNull().default("0"),
   language: text("language").default("English"),
   date: text("date"),

@@ -5,10 +5,12 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { QuoteLineItem } from './quoteLineItem';
 
 export interface QuoteUpdate {
   clientName?: string;
   projectName?: string;
+  lineItems?: QuoteLineItem[];
   price?: number;
   language?: string;
   paymentTerms?: string;

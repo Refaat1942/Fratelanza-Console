@@ -43,6 +43,7 @@ export * from './projectInput';
 export * from './projectUpdate';
 export * from './quote';
 export * from './quoteInput';
+export * from './quoteLineItem';
 export * from './quoteUpdate';
 export * from './remainingItem';
 export * from './task';

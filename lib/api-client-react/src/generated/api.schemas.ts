@@ -326,11 +326,18 @@ export interface TemplateUpdate {
   students?: number;
 }
 
+export interface QuoteLineItem {
+  desc: string;
+  price: number;
+}
+
 export interface Quote {
   id: number;
   clientName: string;
   /** @nullable */
   projectName?: string | null;
+  /** @nullable */
+  lineItems?: QuoteLineItem[] | null;
   price: number;
   /** @nullable */
   language?: string | null;
@@ -346,6 +353,7 @@ export interface Quote {
 export interface QuoteInput {
   clientName: string;
   projectName?: string;
+  lineItems?: QuoteLineItem[];
   price: number;
   language?: string;
   date?: string;
@@ -357,6 +365,7 @@ export interface QuoteInput {
 export interface QuoteUpdate {
   clientName?: string;
   projectName?: string;
+  lineItems?: QuoteLineItem[];
   price?: number;
   language?: string;
   paymentTerms?: string;
