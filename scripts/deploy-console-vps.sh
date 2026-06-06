@@ -12,11 +12,6 @@ echo "==> Fratelanza Console deploy (isolated)"
 echo "    APP_DIR=$APP_DIR"
 echo "    REPO_DIR=$REPO_DIR"
 
-if [[ "${PWD:-}" == "/opt/fratelanza" ]]; then
-  echo "NOTE: Your shell is in /opt/fratelanza (a different project)."
-  echo "      This script will still deploy only to $APP_DIR"
-fi
-
 if [[ ! -d "$APP_DIR" ]]; then
   echo "ERROR: APP_DIR not found: $APP_DIR"
   echo "Create it first: mkdir -p $APP_DIR/web-static"
