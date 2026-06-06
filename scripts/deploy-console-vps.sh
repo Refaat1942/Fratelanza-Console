@@ -13,9 +13,8 @@ echo "    APP_DIR=$APP_DIR"
 echo "    REPO_DIR=$REPO_DIR"
 
 if [[ "${PWD:-}" == "/opt/fratelanza" ]]; then
-  echo "ERROR: You are in /opt/fratelanza — that is a different project."
-  echo "       Run this script from anywhere; it always uses $APP_DIR"
-  exit 1
+  echo "NOTE: Your shell is in /opt/fratelanza (a different project)."
+  echo "      This script will still deploy only to $APP_DIR"
 fi
 
 if [[ ! -d "$APP_DIR" ]]; then
