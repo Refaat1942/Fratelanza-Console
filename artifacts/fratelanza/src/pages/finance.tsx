@@ -23,15 +23,36 @@ export default function Finance() {
   const applyFilter = () => setApplied({ startDate, endDate });
   const clearFilter = () => { setStartDate(""); setEndDate(""); setApplied({ startDate: "", endDate: "" }); };
 
-  const kpis = report ? [
-    { label: "Gross Revenue", value: report.totalRevenue, color: "text-foreground", negative: false },
-    { label: "Total Paid", value: report.totalPaid, color: "text-blue-400", negative: false },
-    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400", negative: false },
-    { label: "Project Cost", value: report.totalCost, color: "text-muted-foreground", negative: false },
-    { label: "Expenses", value: report.totalExpenses, color: "text-red-400", negative: true },
-    { label: "Net Profit", value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", negative: false },
-    { label: "Net Balance", value: report.netBalance, color: (report.netBalance ?? 0) >= 0 ? "text-green-400" : "text-red-400", negative: false },
+type FinanceKpi = {
+  label: string;
+  value: number;
+  color: string;
+  forceNegative?: boolean;
+  useSign?: boolean;
+};
+
+  const kpis: FinanceKpi[] = report ? [
+    { label: "Gross Revenue", value: report.totalRevenue, color: "text-foreground" },
+    { label: "Total Paid", value: report.totalPaid, color: "text-blue-400" },
+    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400" },
+    { label: "Project Cost", value: report.totalCost, color: "text-muted-foreground" },
+    { label: "Expenses", value: report.totalExpenses, color: "text-red-400", forceNegative: true },
+    { label: "Net Profit", value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", useSign: true },
+    { label: "Net Balance", value: report.netBalance, color: (report.netBalance ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true },
   ] : [];
+
+  const formatKpiValue = (value: number, opts?: { forceNegative?: boolean; useSign?: boolean }) => {
+    let displayValue = value;
+    if (opts?.forceNegative) displayValue = -Math.abs(value);
+    else if (!opts?.useSign) displayValue = Math.abs(value);
+
+    return (
+      <>
+        {displayValue < 0 ? <span>- </span> : null}
+        <PrivacyWrapper value={Math.abs(displayValue)} />
+      </>
+    );
+  };
 
   const chartData = report?.projects
     ? Object.entries(
@@ -74,8 +95,7 @@ export default function Finance() {
                 <CardHeader className="pb-1 pt-3 px-3"><CardTitle className="text-xs text-muted-foreground">{kpi.label}</CardTitle></CardHeader>
                 <CardContent className="px-3 pb-3">
                   <div className={`text-lg font-bold ${kpi.color}`}>
-                    {kpi.negative && (kpi.value ?? 0) !== 0 ? <span>- </span> : null}
-                    <PrivacyWrapper value={Math.abs(kpi.value ?? 0)} />
+                    {formatKpiValue(kpi.value ?? 0, { forceNegative: kpi.forceNegative, useSign: kpi.useSign })}
                   </div>
                 </CardContent>
               </Card>
