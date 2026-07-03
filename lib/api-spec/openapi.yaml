@@ -1664,6 +1664,8 @@ components:
           type: number
         language:
           type: string
+        date:
+          type: string
         paymentTerms:
           type: string
         milestones:

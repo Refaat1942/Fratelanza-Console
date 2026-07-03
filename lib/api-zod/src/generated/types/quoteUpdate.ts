@@ -13,6 +13,7 @@ export interface QuoteUpdate {
   lineItems?: QuoteLineItem[];
   price?: number;
   language?: string;
+  date?: string;
   paymentTerms?: string;
   milestones?: string;
   notes?: string;

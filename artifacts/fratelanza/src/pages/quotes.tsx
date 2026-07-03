@@ -16,6 +16,7 @@ import { printQuote } from "@/lib/quote-pdf";
 import { displayProjectName, packProjectName, resolveQuoteLineItems, type QuoteLineItem } from "@/lib/quote-line-items";
 import { useBranding } from "@/lib/branding-context";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/lib/auth-context";
 
 type Quote = {
   id: number;
@@ -41,6 +42,8 @@ const emptyForm = {
 
 export default function Quotes() {
   const { t } = useTranslation();
+  const { state } = useAuth();
+  const canWrite = state.status === "auth" && state.role !== "viewer";
   const branding = useBranding();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -62,16 +65,37 @@ export default function Quotes() {
   const invalidate = () => qc.invalidateQueries({ queryKey: getListQuotesQueryKey() });
   const totalPrice = lineItems.reduce((s, i) => s + i.price, 0);
 
-  const addLine = () => {
-    if (!lineDesc || !linePrice) return;
-    setLineItems((prev) => [...prev, { desc: lineDesc, price: Number(linePrice) }]);
+  const clearLineFields = () => {
     setLineDesc("");
     setLinePrice("");
+  };
+
+  const addLine = () => {
+    if (!lineDesc.trim() || linePrice === "") return;
+    setLineItems((prev) => [...prev, { desc: lineDesc.trim(), price: Number(linePrice) }]);
+    clearLineFields();
+  };
+
+  const updateLineItem = (index: number, field: "desc" | "price", value: string) => {
+    setLineItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? field === "desc"
+            ? { ...item, desc: value }
+            : { ...item, price: value === "" ? 0 : Number(value) }
+          : item,
+      ),
+    );
+  };
+
+  const removeLineItem = (index: number) => {
+    setLineItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const openCreate = () => {
     setForm({ ...emptyForm });
     setLineItems([]);
+    clearLineFields();
     setEditing(null);
     setShowForm(true);
   };
@@ -87,6 +111,7 @@ export default function Quotes() {
       notes: q.notes ?? "",
     });
     setLineItems(resolveQuoteLineItems(q));
+    clearLineFields();
     setShowForm(true);
   };
 
@@ -150,9 +175,11 @@ export default function Quotes() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">{t("quotes.title")}</h1>
-        <Button onClick={openCreate} data-testid="button-create-quote" className="bg-primary text-primary-foreground hover:bg-primary/90">
-          <Plus className="h-4 w-4 me-2" /> {t("quotes.new")}
-        </Button>
+        {canWrite && (
+          <Button onClick={openCreate} data-testid="button-create-quote" className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <Plus className="h-4 w-4 me-2" /> {t("quotes.new")}
+          </Button>
+        )}
       </div>
 
       <div className="relative max-w-xs">
@@ -181,7 +208,13 @@ export default function Quotes() {
               {(quotes as Quote[]).length === 0 ? (
                 <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{t("quotes.noQuotes")}</td></tr>
               ) : (quotes as Quote[]).map((q) => (
-                <tr key={q.id} data-testid={`row-quote-${q.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
+                <tr
+                  key={q.id}
+                  data-testid={`row-quote-${q.id}`}
+                  className={`border-b border-border hover:bg-card/50 transition-colors${canWrite ? " cursor-pointer" : ""}`}
+                  onDoubleClick={canWrite ? () => openEdit(q) : undefined}
+                  title={canWrite ? t("quotes.doubleClickEdit") : undefined}
+                >
                   <td className="px-4 py-3 font-medium">{q.clientName}</td>
                   <td className="px-4 py-3 text-muted-foreground max-w-xs truncate">{displayProjectName(q.projectName)}</td>
                   <td className="px-4 py-3 font-semibold text-primary"><PrivacyWrapper value={q.price} /></td>
@@ -194,12 +227,16 @@ export default function Quotes() {
                       <Button size="icon" variant="ghost" title={t("quotes.printPdf")} data-testid={`button-print-quote-${q.id}`} onClick={() => handlePrint(q)}>
                         <Printer className="h-4 w-4 text-primary" />
                       </Button>
-                      <Button size="icon" variant="ghost" data-testid={`button-edit-quote-${q.id}`} onClick={() => openEdit(q)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button size="icon" variant="ghost" data-testid={`button-delete-quote-${q.id}`} onClick={() => setDeleteId(q.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
+                      {canWrite && (
+                        <>
+                          <Button size="icon" variant="ghost" title={t("quotes.edit")} data-testid={`button-edit-quote-${q.id}`} onClick={() => openEdit(q)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" title={t("common.delete")} data-testid={`button-delete-quote-${q.id}`} onClick={() => setDeleteId(q.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -252,37 +289,33 @@ export default function Quotes() {
             <div className="space-y-2">
               <Label className="text-sm font-semibold">{t("quotes.lineItems")}</Label>
               <p className="text-xs text-muted-foreground">{t("quotes.lineItemsHint")}</p>
-              <div className="flex gap-2">
-                <Input
-                  placeholder={t("quotes.itemDescription")}
-                  value={lineDesc}
-                  onChange={(e) => setLineDesc(e.target.value)}
-                  className="flex-1"
-                  data-testid="input-line-desc"
-                />
-                <Input
-                  placeholder={t("quotes.itemPrice")}
-                  type="number"
-                  value={linePrice}
-                  onChange={(e) => setLinePrice(e.target.value)}
-                  className="w-32"
-                  data-testid="input-line-price"
-                />
-                <Button variant="outline" onClick={addLine} data-testid="button-add-line">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
               {lineItems.length > 0 && (
                 <div className="rounded border border-border">
                   {lineItems.map((item, i) => (
-                    <div key={i} className="flex items-center justify-between px-3 py-2 border-b border-border last:border-0">
-                      <span className="text-sm">{item.desc}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-primary"><PrivacyWrapper value={item.price} /></span>
-                        <button type="button" onClick={() => setLineItems((prev) => prev.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive">
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
+                    <div key={i} className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0">
+                      <Input
+                        value={item.desc}
+                        onChange={(e) => updateLineItem(i, "desc", e.target.value)}
+                        className="flex-1"
+                        data-testid={`input-line-desc-${i}`}
+                        placeholder={t("quotes.itemDescription")}
+                      />
+                      <Input
+                        type="number"
+                        value={item.price === 0 ? "" : item.price}
+                        onChange={(e) => updateLineItem(i, "price", e.target.value)}
+                        className="w-32"
+                        data-testid={`input-line-price-${i}`}
+                        placeholder={t("quotes.itemPrice")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeLineItem(i)}
+                        className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
+                        title={t("common.delete")}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   ))}
                   <div className="flex justify-between px-3 py-2 bg-card font-semibold text-sm">
@@ -291,6 +324,28 @@ export default function Quotes() {
                   </div>
                 </div>
               )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder={t("quotes.itemDescription")}
+                  value={lineDesc}
+                  onChange={(e) => setLineDesc(e.target.value)}
+                  className="flex-1"
+                  data-testid="input-line-desc"
+                  onKeyDown={(e) => e.key === "Enter" && addLine()}
+                />
+                <Input
+                  placeholder={t("quotes.itemPrice")}
+                  type="number"
+                  value={linePrice}
+                  onChange={(e) => setLinePrice(e.target.value)}
+                  className="w-32"
+                  data-testid="input-line-price"
+                  onKeyDown={(e) => e.key === "Enter" && addLine()}
+                />
+                <Button variant="outline" onClick={addLine} data-testid="button-add-line">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <Separator />
@@ -310,9 +365,9 @@ export default function Quotes() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowForm(false)}>{t("common.cancel")}</Button>
+            <Button variant="outline" onClick={() => { setShowForm(false); clearLineFields(); }}>{t("common.cancel")}</Button>
             <Button data-testid="button-save-quote" onClick={handleSave} disabled={create.isPending || update.isPending}>
-              {create.isPending || update.isPending ? t("common.saving") : t("common.save")}
+              {create.isPending || update.isPending ? t("common.saving") : (editing ? t("quotes.saveChanges") : t("common.save"))}
             </Button>
           </DialogFooter>
         </DialogContent>
