@@ -753,6 +753,7 @@ export const UpdateQuoteBody = zod.object({
 })).optional(),
   "price": zod.number().optional(),
   "language": zod.string().optional(),
+  "date": zod.string().optional(),
   "paymentTerms": zod.string().optional(),
   "milestones": zod.string().optional(),
   "notes": zod.string().optional()

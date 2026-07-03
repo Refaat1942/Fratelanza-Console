@@ -79,6 +79,7 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
   if (body.lineItems !== undefined) updates.lineItems = serializeLineItems(body.lineItems);
   if (body.price !== undefined) updates.price = String(Number(body.price));
   if (body.language !== undefined) updates.language = body.language;
+  if (body.date !== undefined) updates.date = body.date;
   if (body.paymentTerms !== undefined) updates.paymentTerms = body.paymentTerms;
   if (body.milestones !== undefined) updates.milestones = body.milestones;
   if (body.notes !== undefined) updates.notes = body.notes;
