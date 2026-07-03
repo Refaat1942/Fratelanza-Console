@@ -54,7 +54,6 @@ export default function Quotes() {
   const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
   const [lineDesc, setLineDesc] = useState("");
   const [linePrice, setLinePrice] = useState("");
-  const [editingLineIndex, setEditingLineIndex] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: quotes = [], isLoading } = useListQuotes({ client: search || undefined });
@@ -69,26 +68,28 @@ export default function Quotes() {
   const clearLineFields = () => {
     setLineDesc("");
     setLinePrice("");
-    setEditingLineIndex(null);
   };
 
-  const addOrUpdateLine = () => {
-    if (!lineDesc.trim() || !linePrice) return;
-    const item = { desc: lineDesc.trim(), price: Number(linePrice) };
-    if (editingLineIndex !== null) {
-      setLineItems((prev) => prev.map((existing, i) => (i === editingLineIndex ? item : existing)));
-    } else {
-      setLineItems((prev) => [...prev, item]);
-    }
+  const addLine = () => {
+    if (!lineDesc.trim() || linePrice === "") return;
+    setLineItems((prev) => [...prev, { desc: lineDesc.trim(), price: Number(linePrice) }]);
     clearLineFields();
   };
 
-  const editLineItem = (index: number) => {
-    const item = lineItems[index];
-    if (!item) return;
-    setLineDesc(item.desc);
-    setLinePrice(String(item.price));
-    setEditingLineIndex(index);
+  const updateLineItem = (index: number, field: "desc" | "price", value: string) => {
+    setLineItems((prev) =>
+      prev.map((item, i) =>
+        i === index
+          ? field === "desc"
+            ? { ...item, desc: value }
+            : { ...item, price: value === "" ? 0 : Number(value) }
+          : item,
+      ),
+    );
+  };
+
+  const removeLineItem = (index: number) => {
+    setLineItems((prev) => prev.filter((_, i) => i !== index));
   };
 
   const openCreate = () => {
@@ -288,48 +289,33 @@ export default function Quotes() {
             <div className="space-y-2">
               <Label className="text-sm font-semibold">{t("quotes.lineItems")}</Label>
               <p className="text-xs text-muted-foreground">{t("quotes.lineItemsHint")}</p>
-              {editingLineIndex !== null && (
-                <p className="text-xs text-primary">{t("quotes.editingLineItem")}</p>
-              )}
-              <div className="flex gap-2">
-                <Input
-                  placeholder={t("quotes.itemDescription")}
-                  value={lineDesc}
-                  onChange={(e) => setLineDesc(e.target.value)}
-                  className="flex-1"
-                  data-testid="input-line-desc"
-                />
-                <Input
-                  placeholder={t("quotes.itemPrice")}
-                  type="number"
-                  value={linePrice}
-                  onChange={(e) => setLinePrice(e.target.value)}
-                  className="w-32"
-                  data-testid="input-line-price"
-                />
-                <Button variant="outline" onClick={addOrUpdateLine} data-testid="button-add-line">
-                  {editingLineIndex !== null ? t("quotes.updateItem") : <Plus className="h-4 w-4" />}
-                </Button>
-                {editingLineIndex !== null && (
-                  <Button variant="ghost" onClick={clearLineFields} title={t("common.cancel")}>
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
-              </div>
               {lineItems.length > 0 && (
                 <div className="rounded border border-border">
                   {lineItems.map((item, i) => (
-                    <div key={i} className={`flex items-center justify-between px-3 py-2 border-b border-border last:border-0${editingLineIndex === i ? " bg-primary/5" : ""}`}>
-                      <span className="text-sm">{item.desc}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-primary"><PrivacyWrapper value={item.price} /></span>
-                        <button type="button" onClick={() => editLineItem(i)} className="text-muted-foreground hover:text-primary" title={t("quotes.editItem")}>
-                          <Pencil className="h-3 w-3" />
-                        </button>
-                        <button type="button" onClick={() => { setLineItems((prev) => prev.filter((_, j) => j !== i)); if (editingLineIndex === i) clearLineFields(); else if (editingLineIndex !== null && i < editingLineIndex) setEditingLineIndex(editingLineIndex - 1); }} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}>
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
+                    <div key={i} className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0">
+                      <Input
+                        value={item.desc}
+                        onChange={(e) => updateLineItem(i, "desc", e.target.value)}
+                        className="flex-1"
+                        data-testid={`input-line-desc-${i}`}
+                        placeholder={t("quotes.itemDescription")}
+                      />
+                      <Input
+                        type="number"
+                        value={item.price === 0 ? "" : item.price}
+                        onChange={(e) => updateLineItem(i, "price", e.target.value)}
+                        className="w-32"
+                        data-testid={`input-line-price-${i}`}
+                        placeholder={t("quotes.itemPrice")}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeLineItem(i)}
+                        className="shrink-0 p-1 text-muted-foreground hover:text-destructive"
+                        title={t("common.delete")}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
                     </div>
                   ))}
                   <div className="flex justify-between px-3 py-2 bg-card font-semibold text-sm">
@@ -338,6 +324,28 @@ export default function Quotes() {
                   </div>
                 </div>
               )}
+              <div className="flex gap-2">
+                <Input
+                  placeholder={t("quotes.itemDescription")}
+                  value={lineDesc}
+                  onChange={(e) => setLineDesc(e.target.value)}
+                  className="flex-1"
+                  data-testid="input-line-desc"
+                  onKeyDown={(e) => e.key === "Enter" && addLine()}
+                />
+                <Input
+                  placeholder={t("quotes.itemPrice")}
+                  type="number"
+                  value={linePrice}
+                  onChange={(e) => setLinePrice(e.target.value)}
+                  className="w-32"
+                  data-testid="input-line-price"
+                  onKeyDown={(e) => e.key === "Enter" && addLine()}
+                />
+                <Button variant="outline" onClick={addLine} data-testid="button-add-line">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <Separator />
