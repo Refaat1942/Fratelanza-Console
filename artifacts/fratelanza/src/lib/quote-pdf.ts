@@ -59,27 +59,8 @@ function totalFromItems(items: QuoteLineItem[], fallback: number): number {
   return sum > 0 ? sum : fallback;
 }
 
-function isLegacyBundledItems(items: QuoteLineItem[], quotePrice: number): boolean {
-  if (items.length <= 1) return false;
-  const sum = items.reduce((s, i) => s + i.price, 0);
-  return sum === 0 && quotePrice > 0;
-}
-
-function formatLinePrice(item: QuoteLineItem, items: QuoteLineItem[], quotePrice: number, suffix: string): string {
-  if (isLegacyBundledItems(items, quotePrice)) return "—";
-  if (items.length === 1 && item.price === 0 && quotePrice > 0) {
-    return `${formatNum(quotePrice)} ${suffix}`;
-  }
-  if (item.price === 0) return "—";
-  return `${formatNum(item.price)} ${suffix}`;
-}
-
-function renderItemRow(item: QuoteLineItem, items: QuoteLineItem[], quotePrice: number, suffix: string): string {
-  const priceCell = formatLinePrice(item, items, quotePrice, suffix);
-  return `<tr>
-    <td class="desc-col">${esc(item.desc)}</td>
-    <td class="price-col">${esc(priceCell)}</td>
-  </tr>`;
+function renderItemRow(item: QuoteLineItem): string {
+  return `<tr><td class="desc-col">${esc(item.desc)}</td></tr>`;
 }
 
 export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
@@ -99,7 +80,6 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         taxReg: `رقم التسجيل الضريبي: ${taxId}`,
         date: `التاريخ: ${quoteDate}`,
         client: `مقدم إلى السيد/الشركة: ${q.clientName}`,
-        priceHeader: "السعر (جنيه مصري)",
         descHeader: "وصف الخدمة / المشروع",
         total: "الإجمالي النهائي",
         paymentTerms: "آليات وشروط الدفع:",
@@ -114,8 +94,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         taxReg: `Tax Reg No: ${taxId}`,
         date: `Date: ${quoteDate}`,
         client: `Prepared For: ${q.clientName}`,
-        priceHeader: " Price (EGP)",
-        descHeader: " Service / Project Description",
+        descHeader: "Service / Project Description",
         total: "Grand Total",
         paymentTerms: "Payment Terms:",
         milestones: "Project Milestones & Delivery:",
@@ -129,7 +108,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     ? `<img src="${esc(opts.logoDataUrl)}" alt="" class="logo" />`
     : "";
 
-  const itemRows = items.map((item) => renderItemRow(item, items, q.price, labels.priceSuffix)).join("");
+  const itemRows = items.map((item) => renderItemRow(item)).join("");
 
   const totalPriceCell = `${formatNum(total)} ${labels.priceSuffix}`;
   const grandTotalHtml = `<div class="grand-total">
@@ -137,10 +116,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     <span class="grand-total-value">${esc(totalPriceCell)}</span>
   </div>`;
 
-  const headerRow = `<tr>
-    <th class="desc-col">${esc(labels.descHeader)}</th>
-    <th class="price-col">${esc(labels.priceHeader)}</th>
-  </tr>`;
+  const headerRow = `<tr><th class="desc-col">${esc(labels.descHeader)}</th></tr>`;
 
   const html = `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}">
@@ -223,10 +199,6 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     vertical-align: middle;
     word-wrap: break-word;
   }
-  table.items th:not(:last-child),
-  table.items td:not(:last-child) {
-    border-right: 1px solid #d0d0d0;
-  }
   table.items tbody tr:last-child td {
     border-bottom: none;
   }
@@ -237,14 +209,10 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     font-weight: 700;
     text-align: center;
   }
-  table.items td.desc-col {
+  table.items td.desc-col,
+  table.items th.desc-col {
     text-align: ${isArabic ? "right" : "left"};
-    width: 68%;
-  }
-  table.items td.price-col {
-    text-align: center;
-    width: 32%;
-    white-space: nowrap;
+    width: 100%;
   }
   .grand-total {
     display: flex;
