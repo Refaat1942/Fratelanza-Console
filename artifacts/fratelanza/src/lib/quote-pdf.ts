@@ -82,7 +82,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         paymentTerms: "آليات وشروط الدفع:",
         milestones: "مراحل التسليم والجدول الزمني:",
         notes: "ملاحظات إضافية:",
-        thanks: "شكراً لثقتكم في فراتيلانزا!",
+        thanks: "شكراً لثقتكم في فراتيلانزا، ونتطلع للتعاون معكم.",
         validity: "عرض السعر ساري لمدة 14 يوم من تاريخ الإصدار.",
         priceSuffix: "ج.م",
       }
@@ -97,7 +97,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         paymentTerms: "Payment Terms:",
         milestones: "Project Milestones & Delivery:",
         notes: "Additional Notes:",
-        thanks: "Thank you for trusting Fratelanza!",
+        thanks: "Thank you for trusting Fratelanza. We look forward to working with you.",
         validity: "This quotation is valid for 14 days from the date of issuance.",
         priceSuffix: "EGP",
       };
