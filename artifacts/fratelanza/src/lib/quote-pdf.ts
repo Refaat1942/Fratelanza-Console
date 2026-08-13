@@ -84,7 +84,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         total: "الإجمالي النهائي",
         paymentTerms: "آليات وشروط الدفع:",
         milestones: "مراحل التسليم والجدول الزمني:",
-        notes: "ملاحظات إضافية:",
+        notes: "مخطط المشروع:",
         thanks: "شكراً لثقتكم في فراتيلانزا، ونتطلع للتعاون معكم.",
         validity: "عرض السعر ساري لمدة 14 يوم من تاريخ الإصدار.",
         priceSuffix: "ج.م",
@@ -98,7 +98,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         total: "Grand Total",
         paymentTerms: "Payment Terms:",
         milestones: "Project Milestones & Delivery:",
-        notes: "Additional Notes:",
+        notes: "Project Outline:",
         thanks: "Thank you for trusting Fratelanza. We look forward to working with you.",
         validity: "This quotation is valid for 14 days from the date of issuance.",
         priceSuffix: "EGP",
@@ -244,7 +244,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
   }
   .section.payment h3 { color: ${ACCENT}; }
   .section.milestones h3 { color: #28a745; }
-  .section.notes h3 { color: #ffc107; }
+  .section.outline h3 { color: #ffc107; }
   .section p {
     margin: 0;
     font-size: ${isArabic ? "14px" : "12px"};
@@ -283,9 +283,9 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     </tbody>
   </table>
 
+  ${q.notes ? `<div class="section outline"><h3>${esc(labels.notes)}</h3><p>${escMultiline(q.notes)}</p></div>` : ""}
   ${q.paymentTerms ? `<div class="section payment"><h3>${esc(labels.paymentTerms)}</h3><p>${escMultiline(q.paymentTerms)}</p></div>` : ""}
   ${q.milestones ? `<div class="section milestones"><h3>${esc(labels.milestones)}</h3><p>${escMultiline(q.milestones)}</p></div>` : ""}
-  ${q.notes ? `<div class="section notes"><h3>${esc(labels.notes)}</h3><p>${escMultiline(q.notes)}</p></div>` : ""}
 
   ${grandTotalHtml}
 

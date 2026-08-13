@@ -349,6 +349,10 @@ export default function Quotes() {
             </div>
 
             <Separator />
+            <div className="space-y-1">
+              <Label>{t("quotes.notes")}</Label>
+              <Textarea value={form.notes} onChange={f("notes")} rows={3} placeholder={t("quotes.notesPlaceholder")} />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t("quotes.paymentTerms")}</Label>
@@ -357,10 +361,6 @@ export default function Quotes() {
               <div className="space-y-1">
                 <Label>{t("quotes.milestones")}</Label>
                 <Textarea value={form.milestones} onChange={f("milestones")} rows={3} placeholder={t("quotes.milestonesPlaceholder")} />
-              </div>
-              <div className="col-span-2 space-y-1">
-                <Label>{t("quotes.notes")}</Label>
-                <Textarea value={form.notes} onChange={f("notes")} rows={2} placeholder={t("quotes.notesPlaceholder")} />
               </div>
             </div>
           </div>
