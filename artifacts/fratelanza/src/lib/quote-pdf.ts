@@ -59,6 +59,29 @@ function totalFromItems(items: QuoteLineItem[], fallback: number): number {
   return sum > 0 ? sum : fallback;
 }
 
+function isLegacyBundledItems(items: QuoteLineItem[], quotePrice: number): boolean {
+  if (items.length <= 1) return false;
+  const sum = items.reduce((s, i) => s + i.price, 0);
+  return sum === 0 && quotePrice > 0;
+}
+
+function formatLinePrice(item: QuoteLineItem, items: QuoteLineItem[], quotePrice: number, suffix: string): string {
+  if (isLegacyBundledItems(items, quotePrice)) return "—";
+  if (items.length === 1 && item.price === 0 && quotePrice > 0) {
+    return `${formatNum(quotePrice)} ${suffix}`;
+  }
+  if (item.price === 0) return "—";
+  return `${formatNum(item.price)} ${suffix}`;
+}
+
+function renderItemRow(item: QuoteLineItem, items: QuoteLineItem[], quotePrice: number, suffix: string): string {
+  const priceCell = formatLinePrice(item, items, quotePrice, suffix);
+  return `<tr>
+    <td class="desc-col">${esc(item.desc)}</td>
+    <td class="price-col">${esc(priceCell)}</td>
+  </tr>`;
+}
+
 export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
   const isArabic = q.language === "Arabic";
   const dir = isArabic ? "rtl" : "ltr";
@@ -78,7 +101,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         client: `مقدم إلى السيد/الشركة: ${q.clientName}`,
         priceHeader: "السعر (جنيه مصري)",
         descHeader: "وصف الخدمة / المشروع",
-        total: "الإجمــــالـــي",
+        total: "الإجمالي النهائي",
         paymentTerms: "آليات وشروط الدفع:",
         milestones: "مراحل التسليم والجدول الزمني:",
         notes: "ملاحظات إضافية:",
@@ -93,7 +116,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
         client: `Prepared For: ${q.clientName}`,
         priceHeader: " Price (EGP)",
         descHeader: " Service / Project Description",
-        total: " TOTAL",
+        total: "Grand Total",
         paymentTerms: "Payment Terms:",
         milestones: "Project Milestones & Delivery:",
         notes: "Additional Notes:",
@@ -106,42 +129,18 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     ? `<img src="${esc(opts.logoDataUrl)}" alt="" class="logo" />`
     : "";
 
-  const itemRows = items
-    .map((item) => {
-      const priceCell = `${formatNum(item.price)} ${labels.priceSuffix}`;
-      if (isArabic) {
-        return `<tr>
-          <td class="price-col">${esc(priceCell)}</td>
-          <td class="desc-col">${esc(item.desc)}</td>
-        </tr>`;
-      }
-      return `<tr>
-        <td class="desc-col">${esc(item.desc)}</td>
-        <td class="price-col">${esc(priceCell)}</td>
-      </tr>`;
-    })
-    .join("");
+  const itemRows = items.map((item) => renderItemRow(item, items, q.price, labels.priceSuffix)).join("");
 
   const totalPriceCell = `${formatNum(total)} ${labels.priceSuffix}`;
-  const totalRow = isArabic
-    ? `<tr class="total-row">
-        <td class="price-col">${esc(totalPriceCell)}</td>
-        <td class="desc-col">${esc(labels.total)}</td>
-      </tr>`
-    : `<tr class="total-row">
-        <td class="desc-col">${esc(labels.total)}</td>
-        <td class="price-col">${esc(totalPriceCell)}</td>
-      </tr>`;
+  const grandTotalHtml = `<div class="grand-total">
+    <span class="grand-total-label">${esc(labels.total)}</span>
+    <span class="grand-total-value">${esc(totalPriceCell)}</span>
+  </div>`;
 
-  const headerRow = isArabic
-    ? `<tr>
-        <th class="price-col">${esc(labels.priceHeader)}</th>
-        <th class="desc-col">${esc(labels.descHeader)}</th>
-      </tr>`
-    : `<tr>
-        <th class="desc-col">${esc(labels.descHeader)}</th>
-        <th class="price-col">${esc(labels.priceHeader)}</th>
-      </tr>`;
+  const headerRow = `<tr>
+    <th class="desc-col">${esc(labels.descHeader)}</th>
+    <th class="price-col">${esc(labels.priceHeader)}</th>
+  </tr>`;
 
   const html = `<!DOCTYPE html>
 <html lang="${lang}" dir="${dir}">
@@ -239,7 +238,7 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     text-align: center;
   }
   table.items td.desc-col {
-    text-align: ${isArabic ? "center" : "left"};
+    text-align: ${isArabic ? "right" : "left"};
     width: 68%;
   }
   table.items td.price-col {
@@ -247,13 +246,27 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     width: 32%;
     white-space: nowrap;
   }
-  table.items tr.total-row td {
+  .grand-total {
+    display: flex;
+    justify-content: ${isArabic ? "flex-start" : "flex-end"};
+    align-items: center;
+    gap: 16px;
+    margin: 24px 0 8px 0;
+    padding: 14px 18px;
     background: #f0f8ff;
-    font-weight: 700;
-    font-size: 16px;
+    border: 2px solid ${ACCENT};
+    border-radius: 10px;
   }
-  table.items tr.total-row td.desc-col {
-    text-align: ${isArabic ? "center" : "right"};
+  .grand-total-label {
+    font-size: ${isArabic ? "18px" : "16px"};
+    font-weight: 700;
+    color: ${NAVY};
+  }
+  .grand-total-value {
+    font-size: ${isArabic ? "22px" : "20px"};
+    font-weight: 700;
+    color: ${ACCENT};
+    white-space: nowrap;
   }
   .section { margin: 14px 0 0 0; text-align: ${isArabic ? "right" : "left"}; }
   .section h3 {
@@ -299,13 +312,14 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
     <thead>${headerRow}</thead>
     <tbody>
       ${itemRows}
-      ${totalRow}
     </tbody>
   </table>
 
   ${q.paymentTerms ? `<div class="section payment"><h3>${esc(labels.paymentTerms)}</h3><p>${escMultiline(q.paymentTerms)}</p></div>` : ""}
   ${q.milestones ? `<div class="section milestones"><h3>${esc(labels.milestones)}</h3><p>${escMultiline(q.milestones)}</p></div>` : ""}
   ${q.notes ? `<div class="section notes"><h3>${esc(labels.notes)}</h3><p>${escMultiline(q.notes)}</p></div>` : ""}
+
+  ${grandTotalHtml}
 
   <div class="footer">
     <p>${esc(labels.thanks)}</p>
