@@ -149,12 +149,12 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
 <meta charset="utf-8">
 <title>${esc(labels.title)} — ${esc(q.clientName)}</title>
 <style>
-  @page { margin: 12mm; }
+  @page { margin: 10mm; }
   * { box-sizing: border-box; }
   body {
     font-family: ${isArabic ? "'Segoe UI','Tahoma','Arial',sans-serif" : "'Helvetica Neue','Helvetica','Arial',sans-serif"};
     margin: 0;
-    padding: 24px 28px;
+    padding: 16px 20px;
     color: ${NAVY};
     background: #fff;
     font-size: 16px;
@@ -208,16 +208,28 @@ export function printQuote(q: QuoteForPdf, opts: QuotePdfOptions = {}) {
   .meta strong { font-weight: 700; color: #000; }
   table.items {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     margin: 20px 0 8px 0;
     table-layout: fixed;
+    border: 1px solid #d0d0d0;
+    border-radius: 10px;
+    overflow: hidden;
   }
   table.items th,
   table.items td {
-    border: 1px solid #ccc;
+    border: none;
+    border-bottom: 1px solid #d0d0d0;
     padding: 10px 12px;
     vertical-align: middle;
     word-wrap: break-word;
+  }
+  table.items th:not(:last-child),
+  table.items td:not(:last-child) {
+    border-right: 1px solid #d0d0d0;
+  }
+  table.items tbody tr:last-child td {
+    border-bottom: none;
   }
   table.items th {
     background: ${ACCENT};
