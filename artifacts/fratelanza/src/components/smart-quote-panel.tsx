@@ -42,7 +42,7 @@ type Props = {
   onLanguageDetected?: (lang: string) => void;
 };
 
-const QUOTE_ENGINE_VERSION = "2026.08.15-b";
+const QUOTE_ENGINE_VERSION = "2026.08.15-c";
 
 const TIER_STYLES: Record<string, string> = {
   min: "border-blue-500/40 bg-blue-500/5",

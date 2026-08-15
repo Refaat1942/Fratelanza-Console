@@ -49,15 +49,20 @@ async function parseFileOnServer(file: File): Promise<{
     body: fd,
   });
 
-  let data: { text?: string; detectedLanguage?: string; error?: string };
-  try {
-    data = await r.json();
-  } catch {
-    throw new Error(`Server error (${r.status}). Try again or paste the outline manually.`);
+  let data: { text?: string; detectedLanguage?: string; error?: string } = {};
+  const contentType = r.headers.get("content-type") ?? "";
+  if (contentType.includes("application/json")) {
+    try {
+      data = await r.json();
+    } catch {
+      /* fall through */
+    }
   }
 
   if (!r.ok) {
-    throw new Error(data.error ?? `Upload failed (${r.status})`);
+    const err = new Error(data.error ?? `Upload failed (${r.status})`) as Error & { status?: number };
+    err.status = r.status;
+    throw err;
   }
 
   const text = normalizeOutlineText(data.text ?? "");
@@ -72,8 +77,15 @@ let pdfWorkerReady = false;
 
 async function ensurePdfWorker(pdfjs: typeof import("pdfjs-dist")): Promise<void> {
   if (pdfWorkerReady) return;
-  pdfjs.GlobalWorkerOptions.workerSrc =
-    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  try {
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.min.mjs",
+      import.meta.url,
+    ).toString();
+  } catch {
+    pdfjs.GlobalWorkerOptions.workerSrc =
+      `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  }
   pdfWorkerReady = true;
 }
 
@@ -133,6 +145,31 @@ export async function extractPdfTextInBrowser(file: File): Promise<string> {
   return pages.length > 0 ? joinOutlinePages(pages) : "";
 }
 
+async function parsePdfFile(file: File): Promise<{ text: string; detectedLanguage: "English" | "Arabic" }> {
+  let browserError: unknown;
+  try {
+    const text = await extractPdfTextInBrowser(file);
+    validateOutlineText(text);
+    return { text, detectedLanguage: detectOutlineLanguage(text) };
+  } catch (err) {
+    browserError = err;
+  }
+
+  try {
+    return await parseFileOnServer(file);
+  } catch (serverErr) {
+    const browserMsg = browserError instanceof Error ? browserError.message : String(browserError);
+    const serverMsg = serverErr instanceof Error ? serverErr.message : String(serverErr);
+    const serverStatus = (serverErr as Error & { status?: number }).status;
+    if (serverStatus === 404) {
+      throw new Error(
+        `PDF could not be read in the browser (${browserMsg}). Redeploy the API container for server-side parsing.`,
+      );
+    }
+    throw new Error(`${browserMsg}. Server fallback: ${serverMsg}`);
+  }
+}
+
 export async function extractOutlineFromFile(file: File): Promise<{
   text: string;
   detectedLanguage: "English" | "Arabic";
@@ -147,21 +184,9 @@ export async function extractOutlineFromFile(file: File): Promise<{
     return { text, detectedLanguage: detectOutlineLanguage(text) };
   }
 
-  // PDF: server parser first (reliable on VPS), browser fallback if server unavailable
   if (isPdf) {
-    try {
-      return await parseFileOnServer(file);
-    } catch (serverErr) {
-      try {
-        const text = await extractPdfTextInBrowser(file);
-        validateOutlineText(text);
-        return { text, detectedLanguage: detectOutlineLanguage(text) };
-      } catch {
-        throw serverErr instanceof Error ? serverErr : new Error(String(serverErr));
-      }
-    }
+    return parsePdfFile(file);
   }
 
-  // DOCX and other formats — server only
   return parseFileOnServer(file);
 }
