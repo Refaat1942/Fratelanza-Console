@@ -114,10 +114,30 @@ certbot --nginx -d console.yourdomain.com
 ## Updating to a new version
 
 ```bash
+# Default: deploy main branch
 /tmp/deploy-console-vps.sh
+
+# Deploy a feature branch (e.g. before merge):
+BRANCH=cursor/smart-platform-phase1-924f /tmp/deploy-console-vps.sh
 ```
 
 Hard-refresh the browser: **Ctrl+Shift+R**
+
+> **Note:** The app runs in **Docker** containers (`fratelanza-console-web`, `fratelanza-console-api`), not systemd. Do not use `systemctl restart fratelanza-console-web`. Use `docker restart fratelanza-console-web` instead.
+
+### Manual build (without Docker)
+
+If you build on the VPS directly, set env vars and use the correct output path:
+
+```bash
+cd /opt/fratelanza-console/source
+git pull origin cursor/smart-platform-phase1-924f
+export PORT=3000 BASE_PATH=/
+pnpm install
+pnpm --filter @workspace/fratelanza run build
+cp -r artifacts/fratelanza/dist/public/* /opt/fratelanza-console/web-static/
+docker restart fratelanza-console-web fratelanza-console-api
+```
 
 ---
 
