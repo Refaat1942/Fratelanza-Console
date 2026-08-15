@@ -76,6 +76,7 @@
   },
   "dependencies": {
     "i18next": "^26.2.0",
+    "pdfjs-dist": "^6.2.108",
     "react-i18next": "^17.0.8"
   }
 }
