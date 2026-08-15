@@ -42,6 +42,8 @@ type Props = {
   onLanguageDetected?: (lang: string) => void;
 };
 
+const QUOTE_ENGINE_VERSION = "2026.08.15-b";
+
 const TIER_STYLES: Record<string, string> = {
   min: "border-blue-500/40 bg-blue-500/5",
   med: "border-primary/50 bg-primary/5 ring-1 ring-primary/30",
@@ -187,6 +189,7 @@ export function SmartQuotePanel({
           {t("quotes.smartEngine")}
         </div>
         <p className="text-sm text-muted-foreground mt-1">{t("quotes.smartEngineUploadHint")}</p>
+        <p className="text-[10px] text-muted-foreground/50 mt-0.5">Engine {QUOTE_ENGINE_VERSION}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">

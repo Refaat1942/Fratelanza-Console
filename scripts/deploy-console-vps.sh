@@ -51,4 +51,6 @@ docker restart fratelanza-console-api
 docker restart fratelanza-console-web
 
 echo "==> Done. Hard-refresh the browser (Ctrl+Shift+R)."
+echo "    Deployed branch: $BRANCH"
+echo "    Git commit: $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 docker ps --filter "name=fratelanza-console" --format "table {{.Names}}\t{{.Status}}"
