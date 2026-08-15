@@ -148,6 +148,11 @@ export const ar: Translations = {
     tierApplied: "تم تطبيق باقة {{tier}}",
     generatedReport: "تقرير العميل (قابل للتعديل)",
     reportEditableHint: "يُرسل هذا التقرير للعميل. يمكنك تعديله في أي وقت قبل الحفظ أو الطباعة.",
+    parsingFile: "جاري قراءة الملف...",
+    generatedFromFile: "تم إنشاء الباقات من الملف المرفوع",
+    uploadFailed: "تعذر قراءة الملف",
+    pdfBinaryError: "يبدو أن هذا محتوى PDF خام — استخدم رفع ملف للـ PDF",
+    parseOkGenerateFailed: "تم استخراج النص لكن فشل إنشاء الباقات — اضغط إنشاء الباقات",
   },
   expenses: {
     title: "المصروفات", new: "مصروف جديد", edit: "تعديل المصروف",

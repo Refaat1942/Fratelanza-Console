@@ -19,7 +19,9 @@
     "drizzle-orm": "catalog:",
     "express": "^5.2.1",
     "express-session": "^1.18.0",
+    "mammoth": "^1.12.1",
     "multer": "^2.0.1",
+    "pdf-parse": "^2.4.5",
     "pino": "^9.14.0",
     "pino-http": "^10.5.0",
     "xlsx": "^0.18.5"

@@ -21,6 +21,8 @@ export type SmartQuoteApplyPayload = {
   tierPackages: QuoteTierPackage[];
   selectedTier: "min" | "med" | "max";
   generatedReport: string;
+  paymentTerms?: string;
+  language?: string;
 };
 
 type Props = {
@@ -32,6 +34,7 @@ type Props = {
   onApply: (payload: SmartQuoteApplyPayload) => void;
   onOutlineChange: (v: string) => void;
   onReportChange: (v: string) => void;
+  onLanguageDetected?: (lang: string) => void;
 };
 
 const TIER_STYLES: Record<string, string> = {
@@ -49,6 +52,7 @@ export function SmartQuotePanel({
   onApply,
   onOutlineChange,
   onReportChange,
+  onLanguageDetected,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -57,6 +61,21 @@ export function SmartQuotePanel({
   const [localTiers, setLocalTiers] = useState<QuoteTierPackage[] | null>(tierPackages);
   const [localSelected, setLocalSelected] = useState(selectedTier);
   const [localReport, setLocalReport] = useState(generatedReport);
+  const [parsing, setParsing] = useState(false);
+  const [localPaymentTerms, setLocalPaymentTerms] = useState<string | undefined>();
+
+  const applyGenerateResult = (result: {
+    tiers: QuoteTierPackage[];
+    recommendedTier: "min" | "med" | "max";
+    generatedReport: string;
+    paymentTerms?: string;
+  }) => {
+    setLocalTiers(result.tiers);
+    setLocalSelected(result.recommendedTier);
+    setLocalReport(result.generatedReport);
+    setLocalPaymentTerms(result.paymentTerms);
+    onReportChange(result.generatedReport);
+  };
 
   const handleGenerate = () => {
     if (!technicalOutline.trim()) {
@@ -72,10 +91,7 @@ export function SmartQuotePanel({
       },
       {
         onSuccess: (result) => {
-          setLocalTiers(result.tiers);
-          setLocalSelected(result.recommendedTier);
-          setLocalReport(result.generatedReport);
-          onReportChange(result.generatedReport);
+          applyGenerateResult(result);
           toast({ title: t("quotes.generated") });
         },
         onError: () => toast({ title: t("common.error"), variant: "destructive" }),
@@ -86,14 +102,58 @@ export function SmartQuotePanel({
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    setParsing(true);
+    const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+    const fd = new FormData();
+    fd.append("file", file);
     try {
-      const text = await file.text();
-      onOutlineChange(text);
-      toast({ title: t("quotes.outlineLoaded"), description: file.name });
-    } catch {
-      toast({ title: t("common.error"), variant: "destructive" });
+      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+      const textTypes = new Set(["txt", "md", "csv"]);
+      if (textTypes.has(ext)) {
+        const text = await file.text();
+        if (text.startsWith("%PDF")) {
+          throw new Error(t("quotes.pdfBinaryError"));
+        }
+        onOutlineChange(text);
+        toast({ title: t("quotes.outlineLoaded"), description: file.name });
+      } else {
+        const r = await fetch(`${apiBase}/quotes/parse-outline-file`, {
+          method: "POST",
+          credentials: "include",
+          body: fd,
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? t("common.error"));
+        onOutlineChange(data.text);
+        if (data.detectedLanguage && onLanguageDetected) {
+          onLanguageDetected(data.detectedLanguage);
+        }
+        toast({
+          title: t("quotes.outlineLoaded"),
+          description: `${file.name} — ${data.text.length.toLocaleString()} chars extracted`,
+        });
+        generate.mutate(
+          {
+            data: {
+              outline: data.text,
+              language: data.detectedLanguage === "Arabic" ? "Arabic" : "English",
+            },
+          },
+          {
+            onSuccess: (result) => {
+              applyGenerateResult(result);
+              toast({ title: t("quotes.generatedFromFile") });
+            },
+            onError: () => toast({ title: t("quotes.parseOkGenerateFailed"), variant: "destructive" }),
+          },
+        );
+      }
+    } catch (err) {
+      toast({ title: t("quotes.uploadFailed"), description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setParsing(false);
+      if (fileRef.current) fileRef.current.value = "";
     }
-    if (fileRef.current) fileRef.current.value = "";
   };
 
   const applyTier = (tier: QuoteTierPackage) => {
@@ -108,6 +168,8 @@ export function SmartQuotePanel({
       tierPackages: localTiers,
       selectedTier: tier.tier,
       generatedReport: localReport || generatedReport,
+      paymentTerms: localPaymentTerms,
+      language,
     };
     onApply(payload);
     toast({ title: t("quotes.tierApplied", { tier: tier.label }) });
@@ -127,11 +189,18 @@ export function SmartQuotePanel({
         <div className="flex items-center justify-between gap-2">
           <Label>{t("quotes.technicalOutline")}</Label>
           <div className="flex gap-2">
-            <input ref={fileRef} type="file" accept=".txt,.md,.doc,.docx" className="hidden" onChange={handleUpload} />
-            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()}>
-              <Upload className="h-3.5 w-3.5 mr-1" /> {t("quotes.uploadOutline")}
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".pdf,.doc,.docx,.txt,.md,.csv"
+              className="hidden"
+              onChange={handleUpload}
+            />
+            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={parsing}>
+              <Upload className="h-3.5 w-3.5 mr-1" />
+              {parsing ? t("quotes.parsingFile") : t("quotes.uploadOutline")}
             </Button>
-            <Button type="button" size="sm" onClick={handleGenerate} disabled={generate.isPending}>
+            <Button type="button" size="sm" onClick={handleGenerate} disabled={generate.isPending || parsing}>
               <Sparkles className="h-3.5 w-3.5 mr-1" />
               {generate.isPending ? t("quotes.generating") : t("quotes.generateTiers")}
             </Button>

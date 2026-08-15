@@ -140,6 +140,8 @@ export default function Quotes() {
       technicalOutline: payload.technicalOutline,
       generatedReport: payload.generatedReport,
       selectedTier: payload.selectedTier,
+      ...(payload.paymentTerms ? { paymentTerms: payload.paymentTerms } : {}),
+      ...(payload.language ? { language: payload.language } : {}),
     }));
   };
 
@@ -294,6 +296,7 @@ export default function Quotes() {
                 generatedReport={form.generatedReport}
                 onOutlineChange={(v) => setForm((prev) => ({ ...prev, technicalOutline: v }))}
                 onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v, notes: v }))}
+                onLanguageDetected={(lang) => setForm((prev) => ({ ...prev, language: lang }))}
                 onApply={applySmartQuote}
               />
             )}

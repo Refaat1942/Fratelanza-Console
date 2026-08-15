@@ -1,11 +1,14 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
 import { db } from "@workspace/db";
 import { quotesTable } from "@workspace/db";
 import { eq, ilike, and, sql } from "drizzle-orm";
 import { generateQuoteFromOutline } from "../lib/quote-engine.js";
 import type { QuoteTierPackage } from "../lib/quote-engine.js";
+import { extractTextFromUpload } from "../lib/document-parser.js";
 
 const router: IRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 type QuoteLineItem = { desc: string; price: number };
 
@@ -60,6 +63,20 @@ function toShape(r: typeof quotesTable.$inferSelect) {
     generatedReport: r.generatedReport,
   };
 }
+
+router.post("/quotes/parse-outline-file", upload.single("file"), async (req, res): Promise<void> => {
+  const file = (req as unknown as { file?: Express.Multer.File }).file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
+    return;
+  }
+  try {
+    const parsed = await extractTextFromUpload(file.buffer, file.originalname);
+    res.json(parsed);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
 
 router.post("/quotes/generate-from-outline", async (req, res): Promise<void> => {
   const body = req.body ?? {};

@@ -144,6 +144,11 @@ export const en = {
     tierApplied: "{{tier}} package applied",
     generatedReport: "Customer report (editable)",
     reportEditableHint: "This report is sent to the customer. Edit anytime before saving or printing.",
+    parsingFile: "Reading file...",
+    generatedFromFile: "Packages generated from uploaded file",
+    uploadFailed: "Could not read file",
+    pdfBinaryError: "This looks like raw PDF data — use Upload file for PDFs, not paste",
+    parseOkGenerateFailed: "Text extracted but package generation failed — click Generate packages",
   },
   expenses: {
     title: "Expenses", new: "New Expense", edit: "Edit Expense",
