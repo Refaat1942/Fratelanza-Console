@@ -5,7 +5,9 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { QuoteInputSelectedTier } from './quoteInputSelectedTier';
 import type { QuoteLineItem } from './quoteLineItem';
+import type { QuoteTierPackage } from './quoteTierPackage';
 
 export interface QuoteInput {
   clientName: string;
@@ -17,4 +19,8 @@ export interface QuoteInput {
   paymentTerms?: string;
   milestones?: string;
   notes?: string;
+  technicalOutline?: string;
+  tierPackages?: QuoteTierPackage[];
+  selectedTier?: QuoteInputSelectedTier;
+  generatedReport?: string;
 }

@@ -9,6 +9,13 @@ const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 function toShape(r: typeof freelancersTable.$inferSelect) {
+  let skills: string[] | null = null;
+  if (r.skills) {
+    try {
+      const parsed = JSON.parse(r.skills) as unknown;
+      if (Array.isArray(parsed)) skills = parsed.map(String);
+    } catch { /* ignore */ }
+  }
   return {
     code: r.code,
     name: r.name,
@@ -18,6 +25,11 @@ function toShape(r: typeof freelancersTable.$inferSelect) {
     earned: Number(r.earned),
     balance: Number(r.balance),
     rating: Number(r.rating),
+    bio: r.bio,
+    portfolioUrl: r.portfolioUrl,
+    cvFileName: r.cvFileName,
+    hasCv: Boolean(r.cvData),
+    skills,
   };
 }
 
@@ -192,8 +204,45 @@ router.patch("/freelancers/:code", async (req, res): Promise<void> => {
   if (body.earned !== undefined) updates.earned = String(Number(body.earned));
   if (body.balance !== undefined) updates.balance = String(Number(body.balance));
   if (body.rating !== undefined) updates.rating = String(Number(body.rating));
+  if (body.bio !== undefined) updates.bio = body.bio;
+  if (body.portfolioUrl !== undefined) updates.portfolioUrl = body.portfolioUrl;
+  if (body.skills !== undefined) updates.skills = Array.isArray(body.skills) ? JSON.stringify(body.skills) : null;
 
   const [row] = await db.update(freelancersTable).set(updates).where(eq(freelancersTable.code, rawCode)).returning();
+  if (!row) {
+    res.status(404).json({ error: "Freelancer not found" });
+    return;
+  }
+  res.json(toShape(row));
+});
+
+router.get("/freelancers/:code/cv", async (req, res): Promise<void> => {
+  const rawCode = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code;
+  const [row] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, rawCode)).limit(1);
+  if (!row || !row.cvData) {
+    res.status(404).json({ error: "CV not found" });
+    return;
+  }
+  res.json({ fileName: row.cvFileName ?? "cv.pdf", dataBase64: row.cvData });
+});
+
+router.post("/freelancers/:code/cv", async (req, res): Promise<void> => {
+  const rawCode = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code;
+  const body = req.body ?? {};
+  const fileName = String(body.fileName ?? "").trim();
+  const dataBase64 = String(body.dataBase64 ?? "").trim();
+  if (!fileName || !dataBase64) {
+    res.status(400).json({ error: "fileName and dataBase64 are required" });
+    return;
+  }
+  if (dataBase64.length > 3_000_000) {
+    res.status(400).json({ error: "CV file too large (max ~2MB)" });
+    return;
+  }
+  const [row] = await db.update(freelancersTable).set({
+    cvFileName: fileName,
+    cvData: dataBase64,
+  }).where(eq(freelancersTable.code, rawCode)).returning();
   if (!row) {
     res.status(404).json({ error: "Freelancer not found" });
     return;

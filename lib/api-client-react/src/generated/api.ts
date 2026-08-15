@@ -31,10 +31,13 @@ import type {
   ExpenseSummary,
   FinanceReport,
   Freelancer,
+  FreelancerCvUpload,
   FreelancerEvaluation,
   FreelancerHistory,
   FreelancerInput,
   FreelancerUpdate,
+  GenerateQuoteFromOutlineInput,
+  GenerateQuoteFromOutlineResult,
   GetExpenseSummaryParams,
   GetFinanceReportParams,
   HealthStatus,
@@ -1738,6 +1741,78 @@ export function useGetFreelancerHistory<TData = Awaited<ReturnType<typeof getFre
 
 
 
+export const getUploadFreelancerCvUrl = (code: string,) => {
+
+
+
+
+  return `/api/freelancers/${code}/cv`
+}
+
+/**
+ * @summary Upload freelancer CV attachment
+ */
+export const uploadFreelancerCv = async (code: string,
+    freelancerCvUpload: FreelancerCvUpload, options?: RequestInit): Promise<Freelancer> => {
+
+  return customFetch<Freelancer>(getUploadFreelancerCvUrl(code),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      freelancerCvUpload,)
+  }
+);}
+
+
+
+
+export const getUploadFreelancerCvMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadFreelancerCv>>, TError,{code: string;data: BodyType<FreelancerCvUpload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof uploadFreelancerCv>>, TError,{code: string;data: BodyType<FreelancerCvUpload>}, TContext> => {
+
+const mutationKey = ['uploadFreelancerCv'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof uploadFreelancerCv>>, {code: string;data: BodyType<FreelancerCvUpload>}> = (props) => {
+          const {code,data} = props ?? {};
+
+          return  uploadFreelancerCv(code,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UploadFreelancerCvMutationResult = NonNullable<Awaited<ReturnType<typeof uploadFreelancerCv>>>
+    export type UploadFreelancerCvMutationBody = BodyType<FreelancerCvUpload>
+    export type UploadFreelancerCvMutationError = ErrorType<void>
+
+    /**
+ * @summary Upload freelancer CV attachment
+ */
+export const useUploadFreelancerCv = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof uploadFreelancerCv>>, TError,{code: string;data: BodyType<FreelancerCvUpload>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof uploadFreelancerCv>>,
+        TError,
+        {code: string;data: BodyType<FreelancerCvUpload>},
+        TContext
+      > => {
+      return useMutation(getUploadFreelancerCvMutationOptions(options));
+    }
+
 export const getUpdateFreelancerUrl = (code: string,) => {
 
 
@@ -2846,6 +2921,77 @@ export const useDeleteQuote = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getDeleteQuoteMutationOptions(options));
+    }
+
+export const getGenerateQuoteFromOutlineUrl = () => {
+
+
+
+
+  return `/api/quotes/generate-from-outline`
+}
+
+/**
+ * @summary Generate min/med/max quote tiers from a technical outline
+ */
+export const generateQuoteFromOutline = async (generateQuoteFromOutlineInput: GenerateQuoteFromOutlineInput, options?: RequestInit): Promise<GenerateQuoteFromOutlineResult> => {
+
+  return customFetch<GenerateQuoteFromOutlineResult>(getGenerateQuoteFromOutlineUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      generateQuoteFromOutlineInput,)
+  }
+);}
+
+
+
+
+export const getGenerateQuoteFromOutlineMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateQuoteFromOutline>>, TError,{data: BodyType<GenerateQuoteFromOutlineInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateQuoteFromOutline>>, TError,{data: BodyType<GenerateQuoteFromOutlineInput>}, TContext> => {
+
+const mutationKey = ['generateQuoteFromOutline'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateQuoteFromOutline>>, {data: BodyType<GenerateQuoteFromOutlineInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateQuoteFromOutline(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateQuoteFromOutlineMutationResult = NonNullable<Awaited<ReturnType<typeof generateQuoteFromOutline>>>
+    export type GenerateQuoteFromOutlineMutationBody = BodyType<GenerateQuoteFromOutlineInput>
+    export type GenerateQuoteFromOutlineMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Generate min/med/max quote tiers from a technical outline
+ */
+export const useGenerateQuoteFromOutline = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateQuoteFromOutline>>, TError,{data: BodyType<GenerateQuoteFromOutlineInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateQuoteFromOutline>>,
+        TError,
+        {data: BodyType<GenerateQuoteFromOutlineInput>},
+        TContext
+      > => {
+      return useMutation(getGenerateQuoteFromOutlineMutationOptions(options));
     }
 
 export const getListExpensesUrl = (params?: ListExpensesParams,) => {

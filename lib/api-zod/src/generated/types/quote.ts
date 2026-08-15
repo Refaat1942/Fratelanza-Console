@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { QuoteLineItem } from './quoteLineItem';
+import type { QuoteSelectedTier } from './quoteSelectedTier';
+import type { QuoteTierPackage } from './quoteTierPackage';
 
 export interface Quote {
   id: number;
@@ -24,4 +26,12 @@ export interface Quote {
   milestones?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  technicalOutline?: string | null;
+  /** @nullable */
+  tierPackages?: QuoteTierPackage[] | null;
+  /** @nullable */
+  selectedTier?: QuoteSelectedTier;
+  /** @nullable */
+  generatedReport?: string | null;
 }

@@ -98,10 +98,12 @@ router.get("/finance/report", async (req, res): Promise<void> => {
   const totalPaid = projects.reduce((s, p) => s + Number(p.paidAmount), 0);
   const totalRemaining = projects.reduce((s, p) => s + Number(p.remainingAmount), 0);
   const totalCost = projects.reduce((s, p) => s + Number(p.totalCost), 0);
+  const totalContractValue = projects.reduce((s, p) => s + Number(p.clientPrice), 0);
   const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
-  // Gross revenue = paid only. Net profit = gross revenue - expenses.
+  const grossMarginSum = projects.reduce((s, p) => s + Number(p.netProfit), 0);
   const totalRevenue = totalPaid;
-  const totalNetProfit = totalRevenue - totalExpenses;
+  const totalNetProfit = totalPaid - totalCost - totalExpenses;
+  const grossMargin = grossMarginSum - totalExpenses;
   const netBalance = totalNetProfit;
   const remainingBreakdown = projects
     .filter((p) => Number(p.remainingAmount) > 0)
@@ -118,6 +120,8 @@ router.get("/finance/report", async (req, res): Promise<void> => {
     totalPaid,
     totalRemaining,
     totalCost,
+    totalContractValue,
+    grossMargin,
     totalNetProfit,
     totalExpenses,
     netBalance,

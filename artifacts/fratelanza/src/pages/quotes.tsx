@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useListQuotes, getListQuotesQueryKey, useCreateQuote, useUpdateQuote, useDeleteQuote, useListClients } from "@workspace/api-client-react";
+import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
+import { SmartQuotePanel, type SmartQuoteApplyPayload } from "@/components/smart-quote-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +31,10 @@ type Quote = {
   paymentTerms?: string | null;
   milestones?: string | null;
   notes?: string | null;
+  technicalOutline?: string | null;
+  tierPackages?: QuoteTierPackage[] | null;
+  selectedTier?: "min" | "med" | "max" | null;
+  generatedReport?: string | null;
 };
 
 const emptyForm = {
@@ -38,6 +44,9 @@ const emptyForm = {
   paymentTerms: "",
   milestones: "",
   notes: "",
+  technicalOutline: "",
+  generatedReport: "",
+  selectedTier: "med" as "min" | "med" | "max",
 };
 
 export default function Quotes() {
@@ -52,6 +61,7 @@ export default function Quotes() {
   const [editing, setEditing] = useState<Quote | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
+  const [tierPackages, setTierPackages] = useState<QuoteTierPackage[] | null>(null);
   const [lineDesc, setLineDesc] = useState("");
   const [linePrice, setLinePrice] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -95,6 +105,7 @@ export default function Quotes() {
   const openCreate = () => {
     setForm({ ...emptyForm });
     setLineItems([]);
+    setTierPackages(null);
     clearLineFields();
     setEditing(null);
     setShowForm(true);
@@ -109,10 +120,27 @@ export default function Quotes() {
       paymentTerms: q.paymentTerms ?? "",
       milestones: q.milestones ?? "",
       notes: q.notes ?? "",
+      technicalOutline: q.technicalOutline ?? "",
+      generatedReport: q.generatedReport ?? "",
+      selectedTier: (q.selectedTier ?? "med") as "min" | "med" | "max",
     });
     setLineItems(resolveQuoteLineItems(q));
+    setTierPackages(q.tierPackages ?? null);
     clearLineFields();
     setShowForm(true);
+  };
+
+  const applySmartQuote = (payload: SmartQuoteApplyPayload) => {
+    setLineItems(payload.lineItems);
+    setTierPackages(payload.tierPackages);
+    setForm((prev) => ({
+      ...prev,
+      milestones: payload.milestones,
+      notes: payload.notes,
+      technicalOutline: payload.technicalOutline,
+      generatedReport: payload.generatedReport,
+      selectedTier: payload.selectedTier,
+    }));
   };
 
   const handleSave = () => {
@@ -130,6 +158,10 @@ export default function Quotes() {
       projectName: packProjectName(lineItems),
       lineItems,
       price: totalPrice,
+      technicalOutline: form.technicalOutline || null,
+      tierPackages: tierPackages ?? null,
+      selectedTier: form.selectedTier,
+      generatedReport: form.generatedReport || form.notes || null,
     };
 
     if (editing) {
@@ -247,11 +279,25 @@ export default function Quotes() {
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? t("quotes.edit") : t("quotes.new")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            {canWrite && (
+              <SmartQuotePanel
+                key={editing?.id ?? "new"}
+                language={form.language}
+                technicalOutline={form.technicalOutline}
+                tierPackages={tierPackages}
+                selectedTier={form.selectedTier}
+                generatedReport={form.generatedReport}
+                onOutlineChange={(v) => setForm((prev) => ({ ...prev, technicalOutline: v }))}
+                onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v, notes: v }))}
+                onApply={applySmartQuote}
+              />
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t("quotes.clientName")}</Label>

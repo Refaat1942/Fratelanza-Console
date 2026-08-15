@@ -86,6 +86,15 @@ export interface Freelancer {
   earned: number;
   balance: number;
   rating: number;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  portfolioUrl?: string | null;
+  /** @nullable */
+  cvFileName?: string | null;
+  hasCv?: boolean;
+  /** @nullable */
+  skills?: string[] | null;
 }
 
 export interface Task {
@@ -239,6 +248,14 @@ export interface FreelancerUpdate {
   earned?: number;
   balance?: number;
   rating?: number;
+  bio?: string;
+  portfolioUrl?: string;
+  skills?: string[];
+}
+
+export interface FreelancerCvUpload {
+  fileName: string;
+  dataBase64: string;
 }
 
 export interface FreelancerEvaluation {
@@ -331,6 +348,36 @@ export interface QuoteLineItem {
   price: number;
 }
 
+/**
+ * @nullable
+ */
+export type QuoteSelectedTier = typeof QuoteSelectedTier[keyof typeof QuoteSelectedTier] | null;
+
+
+export const QuoteSelectedTier = {
+  min: 'min',
+  med: 'med',
+  max: 'max',
+} as const;
+
+export type QuoteTierPackageTier = typeof QuoteTierPackageTier[keyof typeof QuoteTierPackageTier];
+
+
+export const QuoteTierPackageTier = {
+  min: 'min',
+  med: 'med',
+  max: 'max',
+} as const;
+
+export interface QuoteTierPackage {
+  tier: QuoteTierPackageTier;
+  label: string;
+  durationWeeks: number;
+  durationLabel: string;
+  price: number;
+  lineItems: QuoteLineItem[];
+}
+
 export interface Quote {
   id: number;
   clientName: string;
@@ -348,7 +395,53 @@ export interface Quote {
   milestones?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  technicalOutline?: string | null;
+  /** @nullable */
+  tierPackages?: QuoteTierPackage[] | null;
+  /** @nullable */
+  selectedTier?: QuoteSelectedTier;
+  /** @nullable */
+  generatedReport?: string | null;
 }
+
+export type GenerateQuoteFromOutlineInputLanguage = typeof GenerateQuoteFromOutlineInputLanguage[keyof typeof GenerateQuoteFromOutlineInputLanguage];
+
+
+export const GenerateQuoteFromOutlineInputLanguage = {
+  English: 'English',
+  Arabic: 'Arabic',
+} as const;
+
+export interface GenerateQuoteFromOutlineInput {
+  outline: string;
+  language?: GenerateQuoteFromOutlineInputLanguage;
+}
+
+export type GenerateQuoteFromOutlineResultRecommendedTier = typeof GenerateQuoteFromOutlineResultRecommendedTier[keyof typeof GenerateQuoteFromOutlineResultRecommendedTier];
+
+
+export const GenerateQuoteFromOutlineResultRecommendedTier = {
+  min: 'min',
+  med: 'med',
+  max: 'max',
+} as const;
+
+export interface GenerateQuoteFromOutlineResult {
+  sections: string[];
+  tiers: QuoteTierPackage[];
+  generatedReport: string;
+  recommendedTier: GenerateQuoteFromOutlineResultRecommendedTier;
+}
+
+export type QuoteInputSelectedTier = typeof QuoteInputSelectedTier[keyof typeof QuoteInputSelectedTier];
+
+
+export const QuoteInputSelectedTier = {
+  min: 'min',
+  med: 'med',
+  max: 'max',
+} as const;
 
 export interface QuoteInput {
   clientName: string;
@@ -360,7 +453,20 @@ export interface QuoteInput {
   paymentTerms?: string;
   milestones?: string;
   notes?: string;
+  technicalOutline?: string;
+  tierPackages?: QuoteTierPackage[];
+  selectedTier?: QuoteInputSelectedTier;
+  generatedReport?: string;
 }
+
+export type QuoteUpdateSelectedTier = typeof QuoteUpdateSelectedTier[keyof typeof QuoteUpdateSelectedTier];
+
+
+export const QuoteUpdateSelectedTier = {
+  min: 'min',
+  med: 'med',
+  max: 'max',
+} as const;
 
 export interface QuoteUpdate {
   clientName?: string;
@@ -372,6 +478,10 @@ export interface QuoteUpdate {
   paymentTerms?: string;
   milestones?: string;
   notes?: string;
+  technicalOutline?: string;
+  tierPackages?: QuoteTierPackage[];
+  selectedTier?: QuoteUpdateSelectedTier;
+  generatedReport?: string;
 }
 
 export interface Expense {
@@ -413,12 +523,17 @@ export interface TaskUpdate {
 }
 
 export interface FinanceReport {
-  /** Gross revenue = total paid amounts only */
+  /** Cash collected (paid amounts) */
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
+  /** Direct project delivery costs */
   totalCost: number;
-  /** Net profit = gross revenue - total expenses */
+  /** Total contract value (client prices) */
+  totalContractValue: number;
+  /** Sum of project net profit minus operating expenses */
+  grossMargin: number;
+  /** Cash net = paid - direct costs - operating expenses */
   totalNetProfit: number;
   totalExpenses: number;
   netBalance: number;

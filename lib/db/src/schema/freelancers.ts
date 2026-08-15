@@ -12,6 +12,11 @@ export const freelancersTable = pgTable("freelancers", {
   earned: numeric("earned", { precision: 12, scale: 2 }).notNull().default("0"),
   balance: numeric("balance", { precision: 12, scale: 2 }).notNull().default("0"),
   rating: numeric("rating", { precision: 3, scale: 1 }).notNull().default("5"),
+  bio: text("bio"),
+  portfolioUrl: text("portfolio_url"),
+  cvFileName: text("cv_file_name"),
+  cvData: text("cv_data"),
+  skills: text("skills"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
