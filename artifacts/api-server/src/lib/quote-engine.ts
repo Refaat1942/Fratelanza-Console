@@ -29,39 +29,37 @@ const TIER_META: Record<QuoteTierId, { labelEn: string; labelAr: string; priceFa
 const BASE_WEEKS_PER_SECTION = 2;
 const BASE_PRICE_PER_SECTION = 8000;
 
+import {
+  extractMeaningfulSections,
+  genericScopeItems,
+  isBoilerplateLine,
+  isLowQualitySection,
+} from "@workspace/outline-utils";
+
 function parsePrice(raw: string): number {
   return Number(raw.replace(/,/g, "").replace(/[^\d.]/g, ""));
 }
 
 function parseOutlineSections(outline: string): string[] {
-  const lines = outline
-    .split(/\r?\n/)
-    .map((l) => l.trim())
-    .filter(Boolean);
-
-  const sections: string[] = [];
-  for (const line of lines) {
-    const cleaned = line
-      .replace(/^[-*•]\s*/, "")
-      .replace(/^\d+[\).\]]\s*/, "")
-      .trim();
-    if (cleaned.length >= 3 && !cleaned.startsWith("%PDF")) sections.push(cleaned);
-  }
-
-  if (sections.length === 0 && outline.trim()) {
-    return outline
-      .split(/\n\s*\n/)
-      .map((p) => p.trim())
-      .filter((p) => p.length >= 3);
-  }
-
-  return sections;
+  return extractMeaningfulSections(outline);
 }
 
 /** Parse numbered scope modules (01 Security, 02 Users, …) from official outlines */
 function parseNumberedModules(outline: string): string[] {
   const modules: string[] = [];
   const lines = outline.split(/\r?\n/).map((l) => l.trim());
+
+  for (const line of lines) {
+    const inline = line.match(/^(0[1-9]|[1-9]\d)[\.\)\:\-]\s+(.+)$/);
+    if (inline) {
+      const title = inline[2]!.replace(/\s+/g, " ").trim();
+      if (title.length >= 3 && !isBoilerplateLine(title)) {
+        modules.push(`${inline[1]}. ${title}`);
+      }
+    }
+  }
+
+  if (modules.length > 0) return modules;
 
   for (let i = 0; i < lines.length; i++) {
     const numMatch = lines[i]?.match(/^(0[1-9]|[1-9]\d)$/);
@@ -161,11 +159,15 @@ function distributeLineItems(
   sections: string[],
   totalPrice: number,
   tier: QuoteTierId,
+  language: "English" | "Arabic",
 ): QuoteTierLineItem[] {
   const meta = TIER_META[tier];
   const count = Math.max(1, Math.ceil(sections.length * meta.scopeRatio));
-  const picked = sections.slice(0, count);
-  if (picked.length === 0) return [{ desc: "Project delivery", price: totalPrice }];
+  const quality = sections.filter((s) => !isLowQualitySection(s));
+  const picked =
+    quality.length >= 2
+      ? quality.slice(0, count)
+      : genericScopeItems(count, language);
 
   const unit = Math.round(totalPrice / picked.length / 100) * 100 || Math.round(totalPrice / picked.length);
   const items = picked.map((desc) => ({ desc, price: unit }));
@@ -191,7 +193,7 @@ function buildTierFromExtracted(
     durationWeeks,
     durationLabel,
     price,
-    lineItems: distributeLineItems(sections, price, tier),
+    lineItems: distributeLineItems(sections, price, tier, language),
   };
 }
 
@@ -235,8 +237,10 @@ function buildTier(
   language: "English" | "Arabic",
 ): QuoteTierPackage {
   const meta = TIER_META[tier];
-  const count = Math.max(1, Math.ceil(sections.length * meta.scopeRatio));
-  const picked = sections.slice(0, count);
+  const quality = sections.filter((s) => !isLowQualitySection(s));
+  const scope = quality.length >= 2 ? quality : genericScopeItems(Math.max(3, sections.length), language);
+  const count = Math.max(1, Math.ceil(scope.length * meta.scopeRatio));
+  const picked = scope.slice(0, count);
   const durationWeeks = Math.max(1, picked.length * BASE_WEEKS_PER_SECTION * meta.durationFactor);
   const unitPrice = Math.round((BASE_PRICE_PER_SECTION * meta.priceFactor) / 100) * 100;
   const lineItems = picked.map((desc) => ({ desc, price: unitPrice }));

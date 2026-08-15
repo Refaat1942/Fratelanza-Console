@@ -1,5 +1,6 @@
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
+import { normalizeOutlineText } from "@workspace/outline-utils";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -27,12 +28,11 @@ export function isPdfOrBinaryJunk(text: string): boolean {
 }
 
 function normalizeExtractedText(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
-    .replace(/^--\s*\d+\s+of\s+\d+\s*--\s*$/gim, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  return normalizeOutlineText(
+    text
+      .replace(/\r\n/g, "\n")
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, ""),
+  );
 }
 
 function validateReadableText(text: string): void {

@@ -1,4 +1,4 @@
-import { cleanOutlineText, joinOutlinePages, splitOutlineIntoPages } from "@/lib/outline-pages";
+import { cleanOutlineText, joinOutlinePages, normalizeOutlineText } from "@/lib/outline-pages";
 
 /** Returns true when text looks like raw PDF/binary instead of readable outline */
 export function isPdfOrBinaryJunk(text: string): boolean {
@@ -19,15 +19,6 @@ export function detectOutlineLanguage(text: string): "English" | "Arabic" {
   const arabic = (text.match(/[\u0600-\u06FF]/g) ?? []).length;
   const latin = (text.match(/[A-Za-z]/g) ?? []).length;
   return arabic > latin * 0.4 ? "Arabic" : "English";
-}
-
-export function normalizeOutlineText(text: string): string {
-  if (!text.trim()) return "";
-  if (text.includes("---PAGE---")) {
-    const pages = text.split(/\n*---PAGE---\n*/).map(cleanOutlineText).filter(Boolean);
-    return pages.length > 0 ? joinOutlinePages(pages) : "";
-  }
-  return joinOutlinePages(splitOutlineIntoPages(text));
 }
 
 export function validateOutlineText(text: string): void {
@@ -81,10 +72,46 @@ let pdfWorkerReady = false;
 
 async function ensurePdfWorker(pdfjs: typeof import("pdfjs-dist")): Promise<void> {
   if (pdfWorkerReady) return;
-  // Version-matched CDN worker avoids broken hashed asset paths in production builds
   pdfjs.GlobalWorkerOptions.workerSrc =
     `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
   pdfWorkerReady = true;
+}
+
+type PdfTextItem = { str?: string; transform?: number[] };
+
+/** Group PDF text fragments by vertical position into readable lines */
+function groupPdfItemsIntoLines(items: PdfTextItem[]): string[] {
+  type Positioned = { str: string; x: number; y: number };
+  const positioned: Positioned[] = [];
+
+  for (const item of items) {
+    if (!item.str?.trim()) continue;
+    const t = item.transform ?? [];
+    positioned.push({ str: item.str, x: t[4] ?? 0, y: t[5] ?? 0 });
+  }
+
+  positioned.sort((a, b) => b.y - a.y || a.x - b.x);
+
+  const rows: { y: number; parts: Positioned[] }[] = [];
+  const yTolerance = 4;
+
+  for (const p of positioned) {
+    const row = rows.find((r) => Math.abs(r.y - p.y) <= yTolerance);
+    if (row) {
+      row.parts.push(p);
+      row.y = (row.y + p.y) / 2;
+    } else {
+      rows.push({ y: p.y, parts: [p] });
+    }
+  }
+
+  return rows
+    .sort((a, b) => b.y - a.y)
+    .map((row) => {
+      row.parts.sort((a, b) => a.x - b.x);
+      return cleanOutlineText(row.parts.map((p) => p.str).join(" "));
+    })
+    .filter((line) => line.length > 0);
 }
 
 export async function extractPdfTextInBrowser(file: File): Promise<string> {
@@ -98,13 +125,8 @@ export async function extractPdfTextInBrowser(file: File): Promise<string> {
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
     const content = await page.getTextContent();
-    const line = content.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    const cleaned = cleanOutlineText(line);
-    if (cleaned) pages.push(cleaned);
+    const pageLines = groupPdfItemsIntoLines(content.items as PdfTextItem[]);
+    if (pageLines.length > 0) pages.push(pageLines.join("\n"));
     page.cleanup();
   }
 

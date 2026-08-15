@@ -7,6 +7,7 @@ COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
 COPY lib/api-spec/package.json ./lib/api-spec/
 COPY lib/api-zod/package.json ./lib/api-zod/
 COPY lib/api-client-react/package.json ./lib/api-client-react/
+COPY lib/outline-utils/package.json ./lib/outline-utils/
 COPY lib/db/package.json ./lib/db/
 COPY artifacts/api-server/package.json ./artifacts/api-server/
 RUN pnpm install --frozen-lockfile

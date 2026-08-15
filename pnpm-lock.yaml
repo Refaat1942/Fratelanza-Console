@@ -172,6 +172,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/outline-utils':
+        specifier: workspace:*
+        version: link:../../lib/outline-utils
       bcryptjs:
         specifier: ^2.4.3
         version: 2.4.3
@@ -378,6 +381,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/outline-utils':
+        specifier: workspace:*
+        version: link:../../lib/outline-utils
       class-variance-authority:
         specifier: 'catalog:'
         version: 0.7.1
@@ -676,6 +682,8 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  lib/outline-utils: {}
 
   scripts:
     devDependencies:
