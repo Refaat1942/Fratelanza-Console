@@ -148,6 +148,8 @@ export const ar: Translations = {
     tierApplied: "تم تطبيق باقة {{tier}}",
     generatedReport: "تقرير العميل (قابل للتعديل)",
     reportEditableHint: "يُرسل هذا التقرير للعميل. يمكنك تعديله في أي وقت قبل الحفظ أو الطباعة.",
+    allEditableHint: "جميع الحقول أدناه قابلة للتعديل — الأسعار، المدة، بنود النطاق، ونص التقرير.",
+    duration: "المدة / الجدول الزمني",
     parsingFile: "جاري قراءة الملف...",
     generatedFromFile: "تم إنشاء الباقات من الملف المرفوع",
     uploadFailed: "تعذر قراءة الملف",

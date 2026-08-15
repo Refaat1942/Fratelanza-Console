@@ -281,11 +281,11 @@ export default function Quotes() {
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? t("quotes.edit") : t("quotes.new")}</DialogTitle>
+        <DialogContent className="max-w-[min(1400px,98vw)] w-[98vw] h-[96vh] max-h-[96vh] overflow-hidden flex flex-col gap-0 p-0 sm:max-w-[98vw]">
+          <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
+            <DialogTitle className="text-xl">{editing ? t("quotes.edit") : t("quotes.new")}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
             {canWrite && (
               <SmartQuotePanel
                 key={editing?.id ?? "new"}
@@ -294,8 +294,11 @@ export default function Quotes() {
                 tierPackages={tierPackages}
                 selectedTier={form.selectedTier}
                 generatedReport={form.generatedReport}
+                paymentTerms={form.paymentTerms}
                 onOutlineChange={(v) => setForm((prev) => ({ ...prev, technicalOutline: v }))}
                 onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v, notes: v }))}
+                onTierPackagesChange={setTierPackages}
+                onPaymentTermsChange={(v) => setForm((prev) => ({ ...prev, paymentTerms: v }))}
                 onLanguageDetected={(lang) => setForm((prev) => ({ ...prev, language: lang }))}
                 onApply={applySmartQuote}
               />
@@ -400,20 +403,20 @@ export default function Quotes() {
             <Separator />
             <div className="space-y-1">
               <Label>{t("quotes.notes")}</Label>
-              <Textarea value={form.notes} onChange={f("notes")} rows={3} placeholder={t("quotes.notesPlaceholder")} />
+              <Textarea value={form.notes} onChange={f("notes")} rows={5} className="min-h-[120px]" placeholder={t("quotes.notesPlaceholder")} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t("quotes.paymentTerms")}</Label>
-                <Textarea value={form.paymentTerms} onChange={f("paymentTerms")} rows={3} placeholder={t("quotes.paymentTermsPlaceholder")} />
+                <Textarea value={form.paymentTerms} onChange={f("paymentTerms")} rows={5} className="min-h-[120px]" placeholder={t("quotes.paymentTermsPlaceholder")} />
               </div>
               <div className="space-y-1">
                 <Label>{t("quotes.milestones")}</Label>
-                <Textarea value={form.milestones} onChange={f("milestones")} rows={3} placeholder={t("quotes.milestonesPlaceholder")} />
+                <Textarea value={form.milestones} onChange={f("milestones")} rows={5} className="min-h-[120px]" placeholder={t("quotes.milestonesPlaceholder")} />
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t border-border shrink-0 bg-background">
             <Button variant="outline" onClick={() => { setShowForm(false); clearLineFields(); }}>{t("common.cancel")}</Button>
             <Button data-testid="button-save-quote" onClick={handleSave} disabled={create.isPending || update.isPending}>
               {create.isPending || update.isPending ? t("common.saving") : (editing ? t("quotes.saveChanges") : t("common.save"))}

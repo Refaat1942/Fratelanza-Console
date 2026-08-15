@@ -144,6 +144,8 @@ export const en = {
     tierApplied: "{{tier}} package applied",
     generatedReport: "Customer report (editable)",
     reportEditableHint: "This report is sent to the customer. Edit anytime before saving or printing.",
+    allEditableHint: "All fields below are editable — prices, duration, scope items, and report text.",
+    duration: "Duration / timeline",
     parsingFile: "Reading file...",
     generatedFromFile: "Packages generated from uploaded file",
     uploadFailed: "Could not read file",
