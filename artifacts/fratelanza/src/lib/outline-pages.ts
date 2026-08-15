@@ -1,6 +1,7 @@
 export {
   cleanOutlineText,
   dedupeLines,
+  dedupeReportLines,
   extractMeaningfulSections,
   genericScopeItems,
   isBoilerplateLine,

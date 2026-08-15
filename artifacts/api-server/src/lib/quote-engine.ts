@@ -34,6 +34,8 @@ import {
   genericScopeItems,
   isBoilerplateLine,
   isLowQualitySection,
+  dedupeReportLines,
+  dedupeLines,
 } from "@workspace/outline-utils";
 
 function parsePrice(raw: string): number {
@@ -218,7 +220,7 @@ function tryParseOfficialQuote(outline: string, language: "English" | "Arabic"):
   return {
     sections,
     tiers,
-    generatedReport: buildReport(sections, tiers, language, projectTitle),
+    generatedReport: buildReport(sections, tiers, language, projectTitle, paymentTerms, "med"),
     recommendedTier: "med",
     paymentTerms,
     projectTitle,
@@ -256,34 +258,74 @@ function buildTier(
   };
 }
 
+function buildCustomerReport(
+  tiers: QuoteTierPackage[],
+  language: "English" | "Arabic",
+  options: {
+    projectTitle?: string;
+    paymentTerms?: string;
+    focusTier?: QuoteTierId;
+  } = {},
+): string {
+  const focusTier = options.focusTier ?? "med";
+  const focus = tiers.find((t) => t.tier === focusTier) ?? tiers[1] ?? tiers[0]!;
+  const lines: string[] = [];
+
+  if (options.projectTitle) {
+    lines.push(options.projectTitle, "");
+  }
+
+  const pricingHeader = language === "Arabic" ? "التسعير والمدة" : "Pricing & Timeline";
+  lines.push(pricingHeader, "────────────────────");
+  for (const tier of tiers) {
+    const row =
+      language === "Arabic"
+        ? `${tier.label}: ${tier.price.toLocaleString()} ج.م — ${tier.durationLabel}`
+        : `${tier.label}: EGP ${tier.price.toLocaleString()} — ${tier.durationLabel}`;
+    lines.push(row);
+  }
+  lines.push("");
+
+  const scopeHeader =
+    language === "Arabic"
+      ? `نطاق العمل (${focus.label})`
+      : `Scope of Work (${focus.label})`;
+  lines.push(scopeHeader, "────────────────────");
+
+  const scopeItems = dedupeLines(
+    focus.lineItems
+      .map((i) => i.desc.trim())
+      .filter((d) => d.length > 0 && !isLowQualitySection(d)),
+  );
+  for (const item of scopeItems) {
+    lines.push(`• ${item}`);
+  }
+
+  if (options.paymentTerms?.trim()) {
+    lines.push(
+      "",
+      language === "Arabic" ? "شروط الدفع" : "Payment Terms",
+      "────────────────────",
+      options.paymentTerms.trim(),
+    );
+  }
+
+  return dedupeReportLines(lines.join("\n"));
+}
+
 function buildReport(
-  sections: string[],
+  _sections: string[],
   tiers: QuoteTierPackage[],
   language: "English" | "Arabic",
   projectTitle?: string,
+  paymentTerms?: string,
+  recommendedTier: QuoteTierId = "med",
 ): string {
-  const header = language === "Arabic" ? "مخطط المشروع المقترح" : "Proposed Project Outline";
-  const tierHeader = language === "Arabic" ? "خيارات التسعير والمدة (min · med · max)" : "Pricing & Timeline Options (min · med · max)";
-  const lines: string[] = [];
-
-  if (projectTitle) {
-    lines.push(projectTitle, "");
-  }
-
-  lines.push(header, "================", "", ...sections.map((s, i) => `${i + 1}. ${s}`), "", tierHeader, "----------------");
-
-  for (const tier of tiers) {
-    const prefix = language === "Arabic"
-      ? `${tier.label}: ${tier.price.toLocaleString()} ج.م — ${tier.durationLabel}`
-      : `${tier.label}: EGP ${tier.price.toLocaleString()} — ${tier.durationLabel}`;
-    lines.push(prefix);
-    for (const item of tier.lineItems) {
-      lines.push(`  • ${item.desc}`);
-    }
-    lines.push("");
-  }
-
-  return lines.join("\n").trim();
+  return buildCustomerReport(tiers, language, {
+    projectTitle,
+    paymentTerms,
+    focusTier: recommendedTier,
+  });
 }
 
 export function generateQuoteFromOutline(
@@ -296,12 +338,13 @@ export function generateQuoteFromOutline(
   const modules = parseNumberedModules(outline);
   const sections = modules.length > 0 ? modules : parseOutlineSections(outline);
   const tiers = (["min", "med", "max"] as QuoteTierId[]).map((tier) => buildTier(tier, sections, language));
+  const paymentTerms = extractPaymentTerms(outline);
   return {
     sections,
     tiers,
-    generatedReport: buildReport(sections, tiers, language),
+    generatedReport: buildReport(sections, tiers, language, undefined, paymentTerms, "med"),
     recommendedTier: "med",
-    paymentTerms: extractPaymentTerms(outline),
+    paymentTerms,
   };
 }
 

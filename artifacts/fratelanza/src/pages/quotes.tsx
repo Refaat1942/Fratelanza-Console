@@ -4,7 +4,6 @@ import { useListQuotes, getListQuotesQueryKey, useCreateQuote, useUpdateQuote, u
 import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { SmartQuotePanel, type SmartQuoteApplyPayload } from "@/components/smart-quote-panel";
-import { PaginatedOutlineEditor } from "@/components/paginated-outline-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, X, Download, FileText } from "lucide-react";
 import { exportQuote, type QuoteExportFormat } from "@/lib/quote-pdf";
+import { dedupeReportLines } from "@/lib/outline-pages";
 import { displayProjectName, packProjectName, resolveQuoteLineItems, type QuoteLineItem } from "@/lib/quote-line-items";
 import { useBranding } from "@/lib/branding-context";
 import { useTranslation } from "react-i18next";
@@ -129,7 +129,7 @@ export default function Quotes() {
       milestones: q.milestones ?? "",
       notes: q.notes ?? "",
       technicalOutline: q.technicalOutline ?? "",
-      generatedReport: q.generatedReport ?? "",
+      generatedReport: q.generatedReport ?? q.notes ?? "",
       selectedTier: (q.selectedTier ?? "med") as "min" | "med" | "max",
     });
     setLineItems(resolveQuoteLineItems(q));
@@ -146,7 +146,7 @@ export default function Quotes() {
     setForm((prev) => ({
       ...prev,
       milestones: payload.milestones,
-      notes: payload.notes,
+      notes: "",
       technicalOutline: payload.technicalOutline,
       generatedReport: payload.generatedReport,
       selectedTier: payload.selectedTier,
@@ -167,13 +167,14 @@ export default function Quotes() {
 
     const data = {
       ...form,
-      projectName: lineItems.length > 0 ? packProjectName(lineItems) : (form.notes.split("\n")[0]?.slice(0, 120) || "Quote"),
+      projectName: lineItems.length > 0 ? packProjectName(lineItems) : (form.generatedReport.split("\n")[0]?.slice(0, 120) || "Quote"),
       lineItems,
       price: effectivePrice,
       technicalOutline: form.technicalOutline || null,
       tierPackages: tierPackages ?? null,
       selectedTier: form.selectedTier,
-      generatedReport: form.generatedReport || form.notes || null,
+      notes: "",
+      generatedReport: dedupeReportLines(form.generatedReport) || null,
     };
 
     if (editing) {
@@ -212,14 +213,14 @@ export default function Quotes() {
     exportQuote(
       {
         clientName: form.clientName || "Client",
-        projectName: lineItems.length > 0 ? packProjectName(lineItems) : form.notes.slice(0, 120),
+        projectName: lineItems.length > 0 ? packProjectName(lineItems) : form.generatedReport.slice(0, 120),
         lineItems,
         price: effectivePrice,
         language: form.language,
         date: form.date,
         paymentTerms: form.paymentTerms,
         milestones: form.milestones,
-        notes: form.notes,
+        generatedReport: form.generatedReport,
       },
       exportOpts,
       format,
@@ -342,7 +343,7 @@ export default function Quotes() {
                 generatedReport={form.generatedReport}
                 paymentTerms={form.paymentTerms}
                 onOutlineChange={(v) => setForm((prev) => ({ ...prev, technicalOutline: v }))}
-                onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v, notes: v }))}
+                onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v }))}
                 onTierPackagesChange={setTierPackages}
                 onPaymentTermsChange={(v) => setForm((prev) => ({ ...prev, paymentTerms: v }))}
                 onLanguageDetected={(lang) => setForm((prev) => ({ ...prev, language: lang }))}
@@ -453,14 +454,6 @@ export default function Quotes() {
             </div>
 
             <Separator />
-            <PaginatedOutlineEditor
-              label={t("quotes.notes")}
-              value={form.notes}
-              onChange={(v) => setForm((prev) => ({ ...prev, notes: v }))}
-              rows={6}
-              placeholder={t("quotes.notesPlaceholder")}
-              testId="input-quote-notes"
-            />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t("quotes.paymentTerms")}</Label>

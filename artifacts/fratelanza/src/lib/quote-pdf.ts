@@ -1,5 +1,5 @@
 import { resolveQuoteLineItems, type QuoteLineItem } from "./quote-line-items";
-import { parseOutlinePages } from "./outline-pages";
+import { dedupeReportLines } from "./outline-pages";
 
 export type { QuoteLineItem };
 
@@ -13,6 +13,7 @@ export type QuoteForPdf = {
   paymentTerms?: string | null;
   milestones?: string | null;
   notes?: string | null;
+  generatedReport?: string | null;
 };
 
 export type QuotePdfOptions = {
@@ -62,17 +63,15 @@ function totalFromItems(items: QuoteLineItem[], fallback: number): number {
   return sum > 0 ? sum : fallback;
 }
 
-function renderOutlinePages(notes: string, isArabic: boolean): string {
-  const pages = parseOutlinePages(notes);
-  return pages
-    .map((page, i) => {
-      const pageLabel = isArabic ? `صفحة ${i + 1}` : `Page ${i + 1}`;
-      return `<div class="outline-page" style="page-break-before:${i > 0 ? "always" : "auto"}">
-        <div class="outline-page-label">${esc(pageLabel)}</div>
-        <p>${escMultiline(page)}</p>
-      </div>`;
-    })
-    .join("");
+function reportBody(q: QuoteForPdf): string {
+  const raw = q.generatedReport || q.notes || "";
+  return dedupeReportLines(raw);
+}
+
+function renderReportSection(body: string, isArabic: boolean): string {
+  if (!body.trim()) return "";
+  const label = isArabic ? "تقرير العرض" : "Quotation Report";
+  return `<div class="section outline"><h3>${esc(label)}</h3><p>${escMultiline(body)}</p></div>`;
 }
 
 export function buildQuoteHtml(q: QuoteForPdf, opts: QuotePdfOptions = {}, forPrint = false): string {
@@ -84,6 +83,7 @@ export function buildQuoteHtml(q: QuoteForPdf, opts: QuotePdfOptions = {}, forPr
   const companyDisplay = isArabic ? "فراتيلانزا" : brandName;
   const items = resolveQuoteLineItems(q);
   const total = totalFromItems(items, q.price);
+  const report = reportBody(q);
   const quoteDate = formatQuoteDate(q.date);
 
   const labels = isArabic
@@ -96,7 +96,7 @@ export function buildQuoteHtml(q: QuoteForPdf, opts: QuotePdfOptions = {}, forPr
         total: "الإجمالي النهائي",
         paymentTerms: "آليات وشروط الدفع:",
         milestones: "مراحل التسليم والجدول الزمني:",
-        notes: "مخطط المشروع:",
+        notes: "تقرير العرض:",
         thanks: "شكراً لثقتكم في فراتيلانزا، ونتطلع للتعاون معكم.",
         validity: "عرض السعر ساري لمدة 14 يوم من تاريخ الإصدار.",
         priceSuffix: "ج.م",
@@ -110,7 +110,7 @@ export function buildQuoteHtml(q: QuoteForPdf, opts: QuotePdfOptions = {}, forPr
         total: "Grand Total",
         paymentTerms: "Payment Terms:",
         milestones: "Project Milestones & Delivery:",
-        notes: "Project Outline:",
+        notes: "Quotation Report:",
         thanks: "Thank you for trusting Fratelanza. We look forward to working with you.",
         validity: "This quotation is valid for 14 days from the date of issuance.",
         priceSuffix: "EGP",
@@ -122,7 +122,7 @@ export function buildQuoteHtml(q: QuoteForPdf, opts: QuotePdfOptions = {}, forPr
 
   const itemRows = items.length > 0
     ? items.map((item) => `<tr><td class="desc-col">${esc(item.desc)}</td></tr>`).join("")
-    : `<tr><td class="desc-col">${esc(q.projectName || q.notes?.split("\n")[0] || "Project delivery")}</td></tr>`;
+    : `<tr><td class="desc-col">${esc(q.projectName || report.split("\n")[0] || "Project delivery")}</td></tr>`;
 
   const totalPriceCell = `${formatNum(total)} ${labels.priceSuffix}`;
   const printScript = forPrint
@@ -213,9 +213,9 @@ export function buildQuoteHtml(q: QuoteForPdf, opts: QuotePdfOptions = {}, forPr
     <tbody>${itemRows}</tbody>
   </table>
 
-  ${q.notes ? `<div class="section outline"><h3>${esc(labels.notes)}</h3>${renderOutlinePages(q.notes, isArabic)}</div>` : ""}
-  ${q.paymentTerms ? `<div class="section payment"><h3>${esc(labels.paymentTerms)}</h3><p>${escMultiline(q.paymentTerms)}</p></div>` : ""}
-  ${q.milestones ? `<div class="section milestones"><h3>${esc(labels.milestones)}</h3><p>${escMultiline(q.milestones)}</p></div>` : ""}
+  ${report ? renderReportSection(report, isArabic) : ""}
+  ${!report && q.paymentTerms ? `<div class="section payment"><h3>${esc(labels.paymentTerms)}</h3><p>${escMultiline(q.paymentTerms)}</p></div>` : ""}
+  ${!report && q.milestones ? `<div class="section milestones"><h3>${esc(labels.milestones)}</h3><p>${escMultiline(q.milestones)}</p></div>` : ""}
 
   <div class="grand-total">
     <span class="grand-total-label">${esc(labels.total)}</span>

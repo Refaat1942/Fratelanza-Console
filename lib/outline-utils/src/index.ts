@@ -58,6 +58,24 @@ export function dedupeLines(lines: string[]): string[] {
   return out;
 }
 
+/** Remove duplicate lines from customer-facing report text */
+export function dedupeReportLines(text: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trimEnd();
+    const key = trimmed.replace(/\s+/g, " ").trim().toLowerCase();
+    if (!key) {
+      if (out.length > 0 && out[out.length - 1] !== "") out.push("");
+      continue;
+    }
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(trimmed);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function mergeIntoChunks(text: string, minLen: number, maxLen: number): string[] {
   const words = text.replace(/\n/g, " ").split(/\s+/).filter(Boolean);
   const chunks: string[] = [];

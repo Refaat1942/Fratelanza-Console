@@ -3,16 +3,16 @@ import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PaginatedOutlineEditor } from "@/components/paginated-outline-editor";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { Sparkles, Upload, Check, Clock, Plus, X } from "lucide-react";
+import { Sparkles, Upload, Check, Clock, FileCheck } from "lucide-react";
 import type { QuoteLineItem } from "@/lib/quote-line-items";
 import { extractOutlineFromFile, isPdfOrBinaryJunk, validateOutlineText } from "@/lib/outline-file-parser";
-import { generateQuoteFromOutline, type QuoteTierId } from "@/lib/quote-engine";
+import { buildReportForTier, generateQuoteFromOutline, type QuoteTierId } from "@/lib/quote-engine";
+import { dedupeReportLines } from "@/lib/outline-pages";
 
 export type SmartQuoteApplyPayload = {
   lineItems: QuoteLineItem[];
@@ -48,10 +48,6 @@ const TIER_STYLES: Record<string, string> = {
   max: "border-amber-500/40 bg-amber-500/5",
 };
 
-function sumLineItems(items: QuoteLineItem[]): number {
-  return items.reduce((s, i) => s + Number(i.price || 0), 0);
-}
-
 export function SmartQuotePanel({
   language,
   technicalOutline,
@@ -74,7 +70,9 @@ export function SmartQuotePanel({
   const [localSelected, setLocalSelected] = useState(selectedTier);
   const [localReport, setLocalReport] = useState(generatedReport);
   const [parsing, setParsing] = useState(false);
-  const [localPaymentTerms, setLocalPaymentTerms] = useState(paymentTerms);
+  const [uploadName, setUploadName] = useState<string | null>(null);
+
+  const lang = language === "Arabic" ? "Arabic" : "English";
 
   const syncTiers = (tiers: QuoteTierPackage[]) => {
     setLocalTiers(tiers);
@@ -89,10 +87,10 @@ export function SmartQuotePanel({
   }) => {
     syncTiers(result.tiers);
     setLocalSelected(result.recommendedTier);
-    setLocalReport(result.generatedReport);
-    onReportChange(result.generatedReport);
+    const report = dedupeReportLines(result.generatedReport);
+    setLocalReport(report);
+    onReportChange(report);
     if (result.paymentTerms) {
-      setLocalPaymentTerms(result.paymentTerms);
       onPaymentTermsChange?.(result.paymentTerms);
     }
   };
@@ -100,65 +98,17 @@ export function SmartQuotePanel({
   const updateTierField = (tierId: QuoteTierId, field: keyof QuoteTierPackage, value: string | number) => {
     if (!localTiers) return;
     syncTiers(
-      localTiers.map((t) => (t.tier === tierId ? { ...t, [field]: value } : t)),
+      localTiers.map((tier) => (tier.tier === tierId ? { ...tier, [field]: value } : tier)),
     );
   };
 
-  const updateTierLine = (tierId: QuoteTierId, index: number, field: "desc" | "price", value: string) => {
-    if (!localTiers) return;
-    syncTiers(
-      localTiers.map((tier) => {
-        if (tier.tier !== tierId) return tier;
-        const lineItems = tier.lineItems.map((item, i) =>
-          i === index
-            ? field === "desc"
-              ? { ...item, desc: value }
-              : { ...item, price: value === "" ? 0 : Number(value) }
-            : item,
-        );
-        return { ...tier, lineItems, price: sumLineItems(lineItems) };
-      }),
-    );
-  };
-
-  const addTierLine = (tierId: QuoteTierId) => {
-    if (!localTiers) return;
-    syncTiers(
-      localTiers.map((tier) => {
-        if (tier.tier !== tierId) return tier;
-        const lineItems = [...tier.lineItems, { desc: "", price: 0 }];
-        return { ...tier, lineItems, price: sumLineItems(lineItems) };
-      }),
-    );
-  };
-
-  const removeTierLine = (tierId: QuoteTierId, index: number) => {
-    if (!localTiers) return;
-    syncTiers(
-      localTiers.map((tier) => {
-        if (tier.tier !== tierId) return tier;
-        const lineItems = tier.lineItems.filter((_, i) => i !== index);
-        return { ...tier, lineItems, price: sumLineItems(lineItems) };
-      }),
-    );
-  };
-
-  const recalcTierTotal = (tierId: QuoteTierId) => {
-    if (!localTiers) return;
-    syncTiers(
-      localTiers.map((tier) =>
-        tier.tier === tierId ? { ...tier, price: sumLineItems(tier.lineItems) } : tier,
-      ),
-    );
-  };
-
-  const runGenerate = (outline: string, lang: string) => {
+  const runGenerate = (outline: string, detectedLang: string) => {
     validateOutlineText(outline);
     setGenerating(true);
     try {
       const result = generateQuoteFromOutline(
         outline.trim(),
-        lang === "Arabic" ? "Arabic" : "English",
+        detectedLang === "Arabic" ? "Arabic" : "English",
       );
       applyGenerateResult(result);
       toast({ title: t("quotes.generated") });
@@ -173,22 +123,6 @@ export function SmartQuotePanel({
     }
   };
 
-  const handleGenerate = () => {
-    if (!technicalOutline.trim()) {
-      toast({ title: t("quotes.outlineRequired"), variant: "destructive" });
-      return;
-    }
-    if (isPdfOrBinaryJunk(technicalOutline)) {
-      toast({
-        title: t("quotes.uploadFailed"),
-        description: t("quotes.pdfBinaryError"),
-        variant: "destructive",
-      });
-      return;
-    }
-    runGenerate(technicalOutline.trim(), language);
-  };
-
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -196,11 +130,9 @@ export function SmartQuotePanel({
     try {
       const { text, detectedLanguage } = await extractOutlineFromFile(file);
       onOutlineChange(text);
+      setUploadName(file.name);
       if (onLanguageDetected) onLanguageDetected(detectedLanguage);
-      toast({
-        title: t("quotes.outlineLoaded"),
-        description: `${file.name} — ${text.length.toLocaleString()} chars`,
-      });
+      toast({ title: t("quotes.outlineStored") });
       runGenerate(text, detectedLanguage);
     } catch (err) {
       toast({
@@ -217,18 +149,27 @@ export function SmartQuotePanel({
   const applyTier = (tier: QuoteTierPackage) => {
     if (!localTiers) return;
     setLocalSelected(tier.tier);
+    const report = dedupeReportLines(
+      buildReportForTier(localTiers, lang, tier.tier, paymentTerms),
+    );
+    setLocalReport(report);
+    onReportChange(report);
+
+    const milestones =
+      lang === "Arabic"
+        ? `مراحل التسليم: ${tier.durationLabel}`
+        : `Delivery phases: ${tier.durationLabel}`;
+
     const payload: SmartQuoteApplyPayload = {
       lineItems: tier.lineItems,
       price: tier.price,
-      milestones: tier.durationLabel
-        ? `Delivery timeline: ${tier.durationLabel}`
-        : "",
-      notes: localReport || generatedReport,
+      milestones,
+      notes: "",
       technicalOutline,
       tierPackages: localTiers,
       selectedTier: tier.tier,
-      generatedReport: localReport || generatedReport,
-      paymentTerms: localPaymentTerms || undefined,
+      generatedReport: report,
+      paymentTerms: paymentTerms || undefined,
       language,
     };
     onApply(payload);
@@ -236,6 +177,7 @@ export function SmartQuotePanel({
   };
 
   const tiers = localTiers ?? tierPackages;
+  const outlineStored = Boolean(technicalOutline.trim()) && !isPdfOrBinaryJunk(technicalOutline);
 
   return (
     <div className="space-y-5 rounded-lg border border-primary/20 bg-card/40 p-5">
@@ -244,43 +186,32 @@ export function SmartQuotePanel({
           <Sparkles className="h-5 w-5" />
           {t("quotes.smartEngine")}
         </div>
-        <p className="text-sm text-muted-foreground mt-1">{t("quotes.smartEngineHint")}</p>
-        <p className="text-xs text-muted-foreground mt-1">{t("quotes.allEditableHint")}</p>
+        <p className="text-sm text-muted-foreground mt-1">{t("quotes.smartEngineUploadHint")}</p>
       </div>
 
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <Label className="text-sm">{t("quotes.technicalOutline")}</Label>
-          <div className="flex gap-2">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt,.md,.csv"
-              className="hidden"
-              onChange={handleUpload}
-            />
-            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={parsing}>
-              <Upload className="h-3.5 w-3.5 mr-1" />
-              {parsing ? t("quotes.parsingFile") : t("quotes.uploadOutline")}
-            </Button>
-            <Button type="button" size="sm" onClick={handleGenerate} disabled={generating || parsing}>
-              <Sparkles className="h-3.5 w-3.5 mr-1" />
-              {generating || parsing ? t("quotes.generating") : t("quotes.generateTiers")}
-            </Button>
-          </div>
-        </div>
-        <PaginatedOutlineEditor
-          label={t("quotes.technicalOutline")}
-          value={technicalOutline}
-          onChange={onOutlineChange}
-          rows={8}
-          placeholder={t("quotes.outlinePlaceholder")}
-          testId="input-technical-outline"
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,.md,.csv"
+          className="hidden"
+          onChange={handleUpload}
         />
+        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={parsing || generating}>
+          <Upload className="h-4 w-4 me-2" />
+          {parsing ? t("quotes.parsingFile") : t("quotes.uploadOutline")}
+        </Button>
+        {outlineStored && (
+          <Badge variant="secondary" className="gap-1.5 font-normal">
+            <FileCheck className="h-3.5 w-3.5 text-primary" />
+            {uploadName ?? t("quotes.outlineStored")}
+          </Badge>
+        )}
         {isPdfOrBinaryJunk(technicalOutline) && (
-          <p className="text-xs text-destructive">{t("quotes.pdfBinaryError")}</p>
+          <span className="text-xs text-destructive">{t("quotes.pdfBinaryError")}</span>
         )}
       </div>
+      <p className="text-xs text-muted-foreground">{t("quotes.outlineBackendHint")}</p>
 
       {tiers && tiers.length > 0 && (
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
@@ -310,7 +241,6 @@ export function SmartQuotePanel({
                       type="number"
                       value={tier.price || ""}
                       onChange={(e) => updateTierField(tier.tier, "price", Number(e.target.value) || 0)}
-                      onBlur={() => recalcTierTotal(tier.tier)}
                       className="h-8 font-semibold text-primary"
                       data-testid={`input-tier-price-${tier.tier}`}
                     />
@@ -329,50 +259,12 @@ export function SmartQuotePanel({
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className="px-4 pb-4 flex-1 flex flex-col gap-2">
-                <Label className="text-xs font-semibold">{t("quotes.lineItems")}</Label>
-                <div className="space-y-1.5 flex-1 max-h-[280px] overflow-y-auto pr-1">
-                  {tier.lineItems.map((item, i) => (
-                    <div key={i} className="flex gap-1.5 items-start">
-                      <Input
-                        value={item.desc}
-                        onChange={(e) => updateTierLine(tier.tier, i, "desc", e.target.value)}
-                        placeholder={t("quotes.itemDescription")}
-                        className="flex-1 text-xs min-h-8"
-                        data-testid={`input-tier-${tier.tier}-desc-${i}`}
-                      />
-                      <Input
-                        type="number"
-                        value={item.price === 0 ? "" : item.price}
-                        onChange={(e) => updateTierLine(tier.tier, i, "price", e.target.value)}
-                        placeholder="EGP"
-                        className="w-20 text-xs min-h-8"
-                        data-testid={`input-tier-${tier.tier}-price-${i}`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeTierLine(tier.tier, i)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive shrink-0"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="w-full h-7 text-xs"
-                  onClick={() => addTierLine(tier.tier)}
-                >
-                  <Plus className="h-3.5 w-3.5 mr-1" /> {t("quotes.addItem")}
-                </Button>
+              <CardContent className="px-4 pb-4">
                 <Button
                   type="button"
                   size="sm"
                   variant={localSelected === tier.tier ? "default" : "outline"}
-                  className="w-full mt-1"
+                  className="w-full"
                   onClick={() => applyTier(tier)}
                   data-testid={`button-apply-tier-${tier.tier}`}
                 >
@@ -384,29 +276,18 @@ export function SmartQuotePanel({
         </div>
       )}
 
-      <PaginatedOutlineEditor
-        label={t("quotes.generatedReport")}
-        value={localReport || generatedReport}
-        onChange={(v) => {
-          setLocalReport(v);
-          onReportChange(v);
-        }}
-        rows={10}
-        testId="input-generated-report"
-      />
-
       <div className="space-y-2">
-        <Label>{t("quotes.paymentTerms")}</Label>
+        <Label>{t("quotes.generatedReport")}</Label>
+        <p className="text-xs text-muted-foreground">{t("quotes.customerReportExportHint")}</p>
         <Textarea
-          value={localPaymentTerms || paymentTerms}
+          value={localReport || generatedReport}
           onChange={(e) => {
-            setLocalPaymentTerms(e.target.value);
-            onPaymentTermsChange?.(e.target.value);
+            setLocalReport(e.target.value);
+            onReportChange(e.target.value);
           }}
-          rows={4}
-          className="text-sm min-h-[100px]"
-          placeholder={t("quotes.paymentTermsPlaceholder")}
-          data-testid="input-tier-payment-terms"
+          rows={14}
+          className="min-h-[240px] text-sm font-mono"
+          data-testid="input-generated-report"
         />
       </div>
     </div>
