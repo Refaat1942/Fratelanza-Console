@@ -40,12 +40,54 @@ export function validateOutlineText(text: string): void {
   }
 }
 
+function apiBase(): string {
+  return `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+}
+
+async function parseFileOnServer(file: File): Promise<{
+  text: string;
+  detectedLanguage: "English" | "Arabic";
+}> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(`${apiBase()}/quotes/parse-outline-file`, {
+    method: "POST",
+    credentials: "include",
+    body: fd,
+  });
+
+  let data: { text?: string; detectedLanguage?: string; error?: string };
+  try {
+    data = await r.json();
+  } catch {
+    throw new Error(`Server error (${r.status}). Try again or paste the outline manually.`);
+  }
+
+  if (!r.ok) {
+    throw new Error(data.error ?? `Upload failed (${r.status})`);
+  }
+
+  const text = normalizeOutlineText(data.text ?? "");
+  validateOutlineText(text);
+  return {
+    text,
+    detectedLanguage: data.detectedLanguage === "Arabic" ? "Arabic" : detectOutlineLanguage(text),
+  };
+}
+
+let pdfWorkerReady = false;
+
+async function ensurePdfWorker(pdfjs: typeof import("pdfjs-dist")): Promise<void> {
+  if (pdfWorkerReady) return;
+  // Version-matched CDN worker avoids broken hashed asset paths in production builds
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  pdfWorkerReady = true;
+}
+
 export async function extractPdfTextInBrowser(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url,
-  ).toString();
+  await ensurePdfWorker(pdfjs);
 
   const buffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: buffer, useSystemFonts: true }).promise;
@@ -80,39 +122,21 @@ export async function extractOutlineFromFile(file: File): Promise<{
     return { text, detectedLanguage: detectOutlineLanguage(text) };
   }
 
+  // PDF: server parser first (reliable on VPS), browser fallback if server unavailable
   if (isPdf) {
-    const text = await extractPdfTextInBrowser(file);
-    validateOutlineText(text);
-    return { text, detectedLanguage: detectOutlineLanguage(text) };
+    try {
+      return await parseFileOnServer(file);
+    } catch (serverErr) {
+      try {
+        const text = await extractPdfTextInBrowser(file);
+        validateOutlineText(text);
+        return { text, detectedLanguage: detectOutlineLanguage(text) };
+      } catch {
+        throw serverErr instanceof Error ? serverErr : new Error(String(serverErr));
+      }
+    }
   }
 
   // DOCX and other formats — server only
-  const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
-  const fd = new FormData();
-  fd.append("file", file);
-  const r = await fetch(`${apiBase}/quotes/parse-outline-file`, {
-    method: "POST",
-    credentials: "include",
-    body: fd,
-  });
-
-  let data: { text?: string; detectedLanguage?: string; error?: string };
-  try {
-    data = await r.json();
-  } catch {
-    throw new Error(r.status === 404
-      ? "Server file parser not available. For PDF use Upload — client parsing is used automatically."
-      : `Server error (${r.status}). Try again or paste the outline manually.`);
-  }
-
-  if (!r.ok) {
-    throw new Error(data.error ?? `Upload failed (${r.status})`);
-  }
-
-  const text = normalizeOutlineText(data.text ?? "");
-  validateOutlineText(text);
-  return {
-    text,
-    detectedLanguage: data.detectedLanguage === "Arabic" ? "Arabic" : detectOutlineLanguage(text),
-  };
+  return parseFileOnServer(file);
 }
