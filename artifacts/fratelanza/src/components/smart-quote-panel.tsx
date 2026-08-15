@@ -1,17 +1,18 @@
 import { useRef, useState } from "react";
-import { useGenerateQuoteFromOutline } from "@workspace/api-client-react";
 import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { Sparkles, Upload, Check, Clock, Layers } from "lucide-react";
+import { Sparkles, Upload, Check, Clock, FileCheck } from "lucide-react";
 import type { QuoteLineItem } from "@/lib/quote-line-items";
 import { extractOutlineFromFile, isPdfOrBinaryJunk, validateOutlineText } from "@/lib/outline-file-parser";
+import { buildReportForTier, generateQuoteFromOutline, type QuoteTierId } from "@/lib/quote-engine";
+import { dedupeReportLines } from "@/lib/outline-pages";
 
 export type SmartQuoteApplyPayload = {
   lineItems: QuoteLineItem[];
@@ -32,9 +33,12 @@ type Props = {
   tierPackages: QuoteTierPackage[] | null;
   selectedTier: "min" | "med" | "max";
   generatedReport: string;
+  paymentTerms?: string;
   onApply: (payload: SmartQuoteApplyPayload) => void;
   onOutlineChange: (v: string) => void;
   onReportChange: (v: string) => void;
+  onTierPackagesChange?: (tiers: QuoteTierPackage[]) => void;
+  onPaymentTermsChange?: (v: string) => void;
   onLanguageDetected?: (lang: string) => void;
 };
 
@@ -50,70 +54,73 @@ export function SmartQuotePanel({
   tierPackages,
   selectedTier,
   generatedReport,
+  paymentTerms = "",
   onApply,
   onOutlineChange,
   onReportChange,
+  onTierPackagesChange,
+  onPaymentTermsChange,
   onLanguageDetected,
 }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const generate = useGenerateQuoteFromOutline();
+  const [generating, setGenerating] = useState(false);
   const [localTiers, setLocalTiers] = useState<QuoteTierPackage[] | null>(tierPackages);
   const [localSelected, setLocalSelected] = useState(selectedTier);
   const [localReport, setLocalReport] = useState(generatedReport);
   const [parsing, setParsing] = useState(false);
-  const [localPaymentTerms, setLocalPaymentTerms] = useState<string | undefined>();
+  const [uploadName, setUploadName] = useState<string | null>(null);
+
+  const lang = language === "Arabic" ? "Arabic" : "English";
+
+  const syncTiers = (tiers: QuoteTierPackage[]) => {
+    setLocalTiers(tiers);
+    onTierPackagesChange?.(tiers);
+  };
 
   const applyGenerateResult = (result: {
     tiers: QuoteTierPackage[];
-    recommendedTier: "min" | "med" | "max";
+    recommendedTier: QuoteTierId;
     generatedReport: string;
     paymentTerms?: string;
   }) => {
-    setLocalTiers(result.tiers);
+    syncTiers(result.tiers);
     setLocalSelected(result.recommendedTier);
-    setLocalReport(result.generatedReport);
-    setLocalPaymentTerms(result.paymentTerms);
-    onReportChange(result.generatedReport);
+    const report = dedupeReportLines(result.generatedReport);
+    setLocalReport(report);
+    onReportChange(report);
+    if (result.paymentTerms) {
+      onPaymentTermsChange?.(result.paymentTerms);
+    }
   };
 
-  const runGenerate = (outline: string, lang: string) => {
-    validateOutlineText(outline);
-    generate.mutate(
-      {
-        data: {
-          outline: outline.trim(),
-          language: lang === "Arabic" ? "Arabic" : "English",
-        },
-      },
-      {
-        onSuccess: (result) => {
-          applyGenerateResult(result);
-          toast({ title: t("quotes.generated") });
-        },
-        onError: (err) => {
-          const msg = err instanceof Error ? err.message : t("common.error");
-          toast({ title: t("quotes.generateFailed"), description: msg, variant: "destructive" });
-        },
-      },
+  const updateTierField = (tierId: QuoteTierId, field: keyof QuoteTierPackage, value: string | number) => {
+    if (!localTiers) return;
+    syncTiers(
+      localTiers.map((tier) => (tier.tier === tierId ? { ...tier, [field]: value } : tier)),
     );
   };
 
-  const handleGenerate = () => {
-    if (!technicalOutline.trim()) {
-      toast({ title: t("quotes.outlineRequired"), variant: "destructive" });
-      return;
-    }
-    if (isPdfOrBinaryJunk(technicalOutline)) {
+  const runGenerate = (outline: string, detectedLang: string) => {
+    validateOutlineText(outline);
+    setGenerating(true);
+    try {
+      const result = generateQuoteFromOutline(
+        outline.trim(),
+        detectedLang === "Arabic" ? "Arabic" : "English",
+      );
+      applyGenerateResult(result);
+      toast({ title: t("quotes.generated") });
+    } catch (err) {
       toast({
-        title: t("quotes.uploadFailed"),
-        description: t("quotes.pdfBinaryError"),
+        title: t("quotes.generateFailed"),
+        description: err instanceof Error ? err.message : t("common.error"),
         variant: "destructive",
       });
-      return;
+    } finally {
+      setGenerating(false);
     }
-    runGenerate(technicalOutline.trim(), language);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -123,11 +130,9 @@ export function SmartQuotePanel({
     try {
       const { text, detectedLanguage } = await extractOutlineFromFile(file);
       onOutlineChange(text);
+      setUploadName(file.name);
       if (onLanguageDetected) onLanguageDetected(detectedLanguage);
-      toast({
-        title: t("quotes.outlineLoaded"),
-        description: `${file.name} — ${text.length.toLocaleString()} chars`,
-      });
+      toast({ title: t("quotes.outlineStored") });
       runGenerate(text, detectedLanguage);
     } catch (err) {
       toast({
@@ -144,16 +149,27 @@ export function SmartQuotePanel({
   const applyTier = (tier: QuoteTierPackage) => {
     if (!localTiers) return;
     setLocalSelected(tier.tier);
+    const report = dedupeReportLines(
+      buildReportForTier(localTiers, lang, tier.tier, paymentTerms),
+    );
+    setLocalReport(report);
+    onReportChange(report);
+
+    const milestones =
+      lang === "Arabic"
+        ? `مراحل التسليم: ${tier.durationLabel}`
+        : `Delivery phases: ${tier.durationLabel}`;
+
     const payload: SmartQuoteApplyPayload = {
       lineItems: tier.lineItems,
       price: tier.price,
-      milestones: `Delivery timeline: ${tier.durationLabel}`,
-      notes: localReport || generatedReport,
+      milestones,
+      notes: "",
       technicalOutline,
       tierPackages: localTiers,
       selectedTier: tier.tier,
-      generatedReport: localReport || generatedReport,
-      paymentTerms: localPaymentTerms,
+      generatedReport: report,
+      paymentTerms: paymentTerms || undefined,
       language,
     };
     onApply(payload);
@@ -161,90 +177,94 @@ export function SmartQuotePanel({
   };
 
   const tiers = localTiers ?? tierPackages;
+  const outlineStored = Boolean(technicalOutline.trim()) && !isPdfOrBinaryJunk(technicalOutline);
 
   return (
-    <div className="space-y-4 rounded-lg border border-primary/20 bg-card/40 p-4">
-      <div className="flex items-center gap-2 text-sm font-semibold text-primary">
-        <Sparkles className="h-4 w-4" />
-        {t("quotes.smartEngine")}
-      </div>
-      <p className="text-xs text-muted-foreground">{t("quotes.smartEngineHint")}</p>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between gap-2">
-          <Label>{t("quotes.technicalOutline")}</Label>
-          <div className="flex gap-2">
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.txt,.md,.csv"
-              className="hidden"
-              onChange={handleUpload}
-            />
-            <Button type="button" variant="outline" size="sm" onClick={() => fileRef.current?.click()} disabled={parsing}>
-              <Upload className="h-3.5 w-3.5 mr-1" />
-              {parsing ? t("quotes.parsingFile") : t("quotes.uploadOutline")}
-            </Button>
-            <Button type="button" size="sm" onClick={handleGenerate} disabled={generate.isPending || parsing}>
-              <Sparkles className="h-3.5 w-3.5 mr-1" />
-              {generate.isPending ? t("quotes.generating") : t("quotes.generateTiers")}
-            </Button>
-          </div>
+    <div className="space-y-5 rounded-lg border border-primary/20 bg-card/40 p-5">
+      <div>
+        <div className="flex items-center gap-2 text-base font-semibold text-primary">
+          <Sparkles className="h-5 w-5" />
+          {t("quotes.smartEngine")}
         </div>
-        <Textarea
-          value={technicalOutline}
-          onChange={(e) => onOutlineChange(e.target.value)}
-          rows={5}
-          placeholder={t("quotes.outlinePlaceholder")}
-          data-testid="input-technical-outline"
-          className={isPdfOrBinaryJunk(technicalOutline) ? "border-destructive" : undefined}
+        <p className="text-sm text-muted-foreground mt-1">{t("quotes.smartEngineUploadHint")}</p>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".pdf,.doc,.docx,.txt,.md,.csv"
+          className="hidden"
+          onChange={handleUpload}
         />
+        <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={parsing || generating}>
+          <Upload className="h-4 w-4 me-2" />
+          {parsing ? t("quotes.parsingFile") : t("quotes.uploadOutline")}
+        </Button>
+        {outlineStored && (
+          <Badge variant="secondary" className="gap-1.5 font-normal">
+            <FileCheck className="h-3.5 w-3.5 text-primary" />
+            {uploadName ?? t("quotes.outlineStored")}
+          </Badge>
+        )}
         {isPdfOrBinaryJunk(technicalOutline) && (
-          <p className="text-xs text-destructive">{t("quotes.pdfBinaryError")}</p>
+          <span className="text-xs text-destructive">{t("quotes.pdfBinaryError")}</span>
         )}
       </div>
+      <p className="text-xs text-muted-foreground">{t("quotes.outlineBackendHint")}</p>
 
       {tiers && tiers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
           {tiers.map((tier) => (
             <Card
               key={tier.tier}
-              className={`${TIER_STYLES[tier.tier] ?? ""} ${localSelected === tier.tier ? "ring-2 ring-primary" : ""}`}
+              className={`flex flex-col ${TIER_STYLES[tier.tier] ?? ""} ${localSelected === tier.tier ? "ring-2 ring-primary" : ""}`}
             >
-              <CardHeader className="pb-2 pt-3 px-3">
+              <CardHeader className="pb-2 pt-4 px-4 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-sm">{tier.label}</CardTitle>
+                  <Input
+                    value={tier.label}
+                    onChange={(e) => updateTierField(tier.tier, "label", e.target.value)}
+                    className="font-semibold text-sm h-8"
+                    data-testid={`input-tier-label-${tier.tier}`}
+                  />
                   {tier.tier === "med" && (
-                    <Badge variant="outline" className="text-[10px] text-primary border-primary/40">
+                    <Badge variant="outline" className="text-[10px] text-primary border-primary/40 shrink-0">
                       {t("quotes.recommended")}
                     </Badge>
                   )}
                 </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase text-muted-foreground">{t("quotes.itemPrice")}</Label>
+                    <Input
+                      type="number"
+                      value={tier.price || ""}
+                      onChange={(e) => updateTierField(tier.tier, "price", Number(e.target.value) || 0)}
+                      className="h-8 font-semibold text-primary"
+                      data-testid={`input-tier-price-${tier.tier}`}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[10px] uppercase text-muted-foreground">{t("quotes.duration")}</Label>
+                    <div className="relative">
+                      <Clock className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                      <Input
+                        value={tier.durationLabel}
+                        onChange={(e) => updateTierField(tier.tier, "durationLabel", e.target.value)}
+                        className="h-8 pl-7 text-xs"
+                        data-testid={`input-tier-duration-${tier.tier}`}
+                      />
+                    </div>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent className="px-3 pb-3 space-y-2">
-                <div className="flex items-center gap-2 text-lg font-bold text-primary">
-                  <PrivacyWrapper value={tier.price} />
-                  <span className="text-xs font-normal text-muted-foreground">EGP</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" /> {tier.durationLabel}
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Layers className="h-3.5 w-3.5" /> {tier.lineItems.length} {t("quotes.scopeItems")}
-                </div>
-                <ul className="text-xs text-muted-foreground space-y-0.5 max-h-24 overflow-y-auto">
-                  {tier.lineItems.slice(0, 4).map((item, i) => (
-                    <li key={i} className="truncate">• {item.desc}</li>
-                  ))}
-                  {tier.lineItems.length > 4 && (
-                    <li className="text-primary/70">+{tier.lineItems.length - 4} more</li>
-                  )}
-                </ul>
+              <CardContent className="px-4 pb-4">
                 <Button
                   type="button"
                   size="sm"
                   variant={localSelected === tier.tier ? "default" : "outline"}
-                  className="w-full mt-1"
+                  className="w-full"
                   onClick={() => applyTier(tier)}
                   data-testid={`button-apply-tier-${tier.tier}`}
                 >
@@ -256,22 +276,20 @@ export function SmartQuotePanel({
         </div>
       )}
 
-      {(localReport || generatedReport) && (
-        <div className="space-y-1">
-          <Label>{t("quotes.generatedReport")}</Label>
-          <Textarea
-            value={localReport || generatedReport}
-            onChange={(e) => {
-              setLocalReport(e.target.value);
-              onReportChange(e.target.value);
-            }}
-            rows={6}
-            className="font-mono text-xs"
-            data-testid="input-generated-report"
-          />
-          <p className="text-xs text-muted-foreground">{t("quotes.reportEditableHint")}</p>
-        </div>
-      )}
+      <div className="space-y-2">
+        <Label>{t("quotes.generatedReport")}</Label>
+        <p className="text-xs text-muted-foreground">{t("quotes.customerReportExportHint")}</p>
+        <Textarea
+          value={localReport || generatedReport}
+          onChange={(e) => {
+            setLocalReport(e.target.value);
+            onReportChange(e.target.value);
+          }}
+          rows={14}
+          className="min-h-[240px] text-sm font-mono"
+          data-testid="input-generated-report"
+        />
+      </div>
     </div>
   );
 }

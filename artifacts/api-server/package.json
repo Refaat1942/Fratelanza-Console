@@ -12,6 +12,7 @@
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/outline-utils": "workspace:*",
     "bcryptjs": "^2.4.3",
     "connect-pg-simple": "^9.0.1",
     "cookie-parser": "^1.4.7",

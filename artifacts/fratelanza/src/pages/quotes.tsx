@@ -11,10 +11,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, X, Printer } from "lucide-react";
-import { printQuote } from "@/lib/quote-pdf";
+import { Plus, Pencil, Trash2, Search, X, Download, FileText } from "lucide-react";
+import { exportQuote, type QuoteExportFormat } from "@/lib/quote-pdf";
+import { dedupeReportLines } from "@/lib/outline-pages";
 import { displayProjectName, packProjectName, resolveQuoteLineItems, type QuoteLineItem } from "@/lib/quote-line-items";
 import { useBranding } from "@/lib/branding-context";
 import { useTranslation } from "react-i18next";
@@ -61,6 +63,7 @@ export default function Quotes() {
   const [editing, setEditing] = useState<Quote | null>(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [lineItems, setLineItems] = useState<QuoteLineItem[]>([]);
+  const [quotePrice, setQuotePrice] = useState(0);
   const [tierPackages, setTierPackages] = useState<QuoteTierPackage[] | null>(null);
   const [lineDesc, setLineDesc] = useState("");
   const [linePrice, setLinePrice] = useState("");
@@ -74,6 +77,7 @@ export default function Quotes() {
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListQuotesQueryKey() });
   const totalPrice = lineItems.reduce((s, i) => s + i.price, 0);
+  const effectivePrice = totalPrice > 0 ? totalPrice : quotePrice;
 
   const clearLineFields = () => {
     setLineDesc("");
@@ -81,8 +85,11 @@ export default function Quotes() {
   };
 
   const addLine = () => {
-    if (!lineDesc.trim() || linePrice === "") return;
-    setLineItems((prev) => [...prev, { desc: lineDesc.trim(), price: Number(linePrice) }]);
+    if (!lineDesc.trim()) return;
+    setLineItems((prev) => [
+      ...prev,
+      { desc: lineDesc.trim(), price: linePrice === "" ? 0 : Number(linePrice) },
+    ]);
     clearLineFields();
   };
 
@@ -105,6 +112,7 @@ export default function Quotes() {
   const openCreate = () => {
     setForm({ ...emptyForm });
     setLineItems([]);
+    setQuotePrice(0);
     setTierPackages(null);
     clearLineFields();
     setEditing(null);
@@ -121,10 +129,11 @@ export default function Quotes() {
       milestones: q.milestones ?? "",
       notes: q.notes ?? "",
       technicalOutline: q.technicalOutline ?? "",
-      generatedReport: q.generatedReport ?? "",
+      generatedReport: q.generatedReport ?? q.notes ?? "",
       selectedTier: (q.selectedTier ?? "med") as "min" | "med" | "max",
     });
     setLineItems(resolveQuoteLineItems(q));
+    setQuotePrice(q.price);
     setTierPackages(q.tierPackages ?? null);
     clearLineFields();
     setShowForm(true);
@@ -132,11 +141,12 @@ export default function Quotes() {
 
   const applySmartQuote = (payload: SmartQuoteApplyPayload) => {
     setLineItems(payload.lineItems);
+    setQuotePrice(payload.price);
     setTierPackages(payload.tierPackages);
     setForm((prev) => ({
       ...prev,
       milestones: payload.milestones,
-      notes: payload.notes,
+      notes: "",
       technicalOutline: payload.technicalOutline,
       generatedReport: payload.generatedReport,
       selectedTier: payload.selectedTier,
@@ -150,20 +160,21 @@ export default function Quotes() {
       toast({ title: t("quotes.clientRequired"), variant: "destructive" });
       return;
     }
-    if (lineItems.length === 0) {
-      toast({ title: t("quotes.itemsRequired"), variant: "destructive" });
+    if (effectivePrice <= 0) {
+      toast({ title: t("quotes.priceRequired"), variant: "destructive" });
       return;
     }
 
     const data = {
       ...form,
-      projectName: packProjectName(lineItems),
+      projectName: lineItems.length > 0 ? packProjectName(lineItems) : (form.generatedReport.split("\n")[0]?.slice(0, 120) || "Quote"),
       lineItems,
-      price: totalPrice,
+      price: effectivePrice,
       technicalOutline: form.technicalOutline || null,
       tierPackages: tierPackages ?? null,
       selectedTier: form.selectedTier,
-      generatedReport: form.generatedReport || form.notes || null,
+      notes: "",
+      generatedReport: dedupeReportLines(form.generatedReport) || null,
     };
 
     if (editing) {
@@ -187,9 +198,33 @@ export default function Quotes() {
     });
   };
 
-  const handlePrint = (q: Quote) => {
+  const exportOpts = {
+    logoDataUrl: branding.logoDataUrl,
+    brandName: branding.brandName,
+    taxId: branding.taxId,
+  };
+
+  const handleExport = (q: Quote, format: QuoteExportFormat) => {
     const items = resolveQuoteLineItems(q);
-    printQuote({ ...q, lineItems: items }, { logoDataUrl: branding.logoDataUrl, brandName: branding.brandName });
+    exportQuote({ ...q, lineItems: items }, exportOpts, format);
+  };
+
+  const handleExportDraft = (format: QuoteExportFormat) => {
+    exportQuote(
+      {
+        clientName: form.clientName || "Client",
+        projectName: lineItems.length > 0 ? packProjectName(lineItems) : form.generatedReport.slice(0, 120),
+        lineItems,
+        price: effectivePrice,
+        language: form.language,
+        date: form.date,
+        paymentTerms: form.paymentTerms,
+        milestones: form.milestones,
+        generatedReport: form.generatedReport,
+      },
+      exportOpts,
+      format,
+    );
   };
 
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -258,9 +293,21 @@ export default function Quotes() {
                   <td className="px-4 py-3 text-muted-foreground">{q.date ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title={t("quotes.printPdf")} data-testid={`button-print-quote-${q.id}`} onClick={() => handlePrint(q)}>
-                        <Printer className="h-4 w-4 text-primary" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button size="icon" variant="ghost" title={t("quotes.exportQuote")} data-testid={`button-export-quote-${q.id}`}>
+                            <Download className="h-4 w-4 text-primary" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleExport(q, "pdf")}>
+                            <FileText className="h-4 w-4 mr-2" /> {t("quotes.exportPdf")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport(q, "word")}>
+                            <FileText className="h-4 w-4 mr-2" /> {t("quotes.exportWord")}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       {canWrite && (
                         <>
                           <Button size="icon" variant="ghost" title={t("quotes.edit")} data-testid={`button-edit-quote-${q.id}`} onClick={() => openEdit(q)}>
@@ -281,11 +328,11 @@ export default function Quotes() {
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editing ? t("quotes.edit") : t("quotes.new")}</DialogTitle>
+        <DialogContent className="max-w-[min(1400px,98vw)] w-[98vw] h-[96vh] max-h-[96vh] overflow-hidden flex flex-col gap-0 p-0 sm:max-w-[98vw]">
+          <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
+            <DialogTitle className="text-xl">{editing ? t("quotes.edit") : t("quotes.new")}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
             {canWrite && (
               <SmartQuotePanel
                 key={editing?.id ?? "new"}
@@ -294,8 +341,11 @@ export default function Quotes() {
                 tierPackages={tierPackages}
                 selectedTier={form.selectedTier}
                 generatedReport={form.generatedReport}
+                paymentTerms={form.paymentTerms}
                 onOutlineChange={(v) => setForm((prev) => ({ ...prev, technicalOutline: v }))}
-                onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v, notes: v }))}
+                onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v }))}
+                onTierPackagesChange={setTierPackages}
+                onPaymentTermsChange={(v) => setForm((prev) => ({ ...prev, paymentTerms: v }))}
                 onLanguageDetected={(lang) => setForm((prev) => ({ ...prev, language: lang }))}
                 onApply={applySmartQuote}
               />
@@ -338,9 +388,9 @@ export default function Quotes() {
             <div className="space-y-2">
               <Label className="text-sm font-semibold">{t("quotes.lineItems")}</Label>
               <p className="text-xs text-muted-foreground">{t("quotes.lineItemsHint")}</p>
-              {lineItems.length > 0 && (
+              {(lineItems.length > 0 || quotePrice > 0) && (
                 <div className="rounded border border-border">
-                  {lineItems.map((item, i) => (
+                  {lineItems.length > 0 && lineItems.map((item, i) => (
                     <div key={i} className="flex items-center gap-2 px-3 py-2 border-b border-border last:border-0">
                       <Input
                         value={item.desc}
@@ -369,8 +419,14 @@ export default function Quotes() {
                   ))}
                   <div className="flex justify-between px-3 py-2 bg-card font-semibold text-sm">
                     <span>{t("quotes.total")}</span>
-                    <span className="text-primary"><PrivacyWrapper value={totalPrice} /></span>
+                    <span className="text-primary"><PrivacyWrapper value={effectivePrice} /></span>
                   </div>
+                </div>
+              )}
+              {lineItems.length === 0 && quotePrice > 0 && (
+                <div className="flex justify-between px-3 py-2 rounded border border-border bg-card font-semibold text-sm">
+                  <span>{t("quotes.total")}</span>
+                  <span className="text-primary"><PrivacyWrapper value={quotePrice} /></span>
                 </div>
               )}
               <div className="flex gap-2">
@@ -398,22 +454,31 @@ export default function Quotes() {
             </div>
 
             <Separator />
-            <div className="space-y-1">
-              <Label>{t("quotes.notes")}</Label>
-              <Textarea value={form.notes} onChange={f("notes")} rows={3} placeholder={t("quotes.notesPlaceholder")} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t("quotes.paymentTerms")}</Label>
-                <Textarea value={form.paymentTerms} onChange={f("paymentTerms")} rows={3} placeholder={t("quotes.paymentTermsPlaceholder")} />
+                <Textarea value={form.paymentTerms} onChange={f("paymentTerms")} rows={5} className="min-h-[120px]" placeholder={t("quotes.paymentTermsPlaceholder")} />
               </div>
               <div className="space-y-1">
                 <Label>{t("quotes.milestones")}</Label>
-                <Textarea value={form.milestones} onChange={f("milestones")} rows={3} placeholder={t("quotes.milestonesPlaceholder")} />
+                <Textarea value={form.milestones} onChange={f("milestones")} rows={5} className="min-h-[120px]" placeholder={t("quotes.milestonesPlaceholder")} />
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="px-6 py-4 border-t border-border shrink-0 bg-background gap-2 sm:gap-2">
+            <div className="flex-1 flex gap-2">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button type="button" variant="outline" disabled={!form.clientName.trim()}>
+                    <Download className="h-4 w-4 me-2" /> {t("quotes.exportQuote")}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => handleExportDraft("pdf")}>{t("quotes.exportPdf")}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExportDraft("word")}>{t("quotes.exportWord")}</DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
             <Button variant="outline" onClick={() => { setShowForm(false); clearLineFields(); }}>{t("common.cancel")}</Button>
             <Button data-testid="button-save-quote" onClick={handleSave} disabled={create.isPending || update.isPending}>
               {create.isPending || update.isPending ? t("common.saving") : (editing ? t("quotes.saveChanges") : t("common.save"))}

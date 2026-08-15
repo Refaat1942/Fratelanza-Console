@@ -1,3 +1,5 @@
+import { cleanOutlineText, joinOutlinePages, normalizeOutlineText } from "@/lib/outline-pages";
+
 /** Returns true when text looks like raw PDF/binary instead of readable outline */
 export function isPdfOrBinaryJunk(text: string): boolean {
   const sample = text.slice(0, 4000);
@@ -19,15 +21,6 @@ export function detectOutlineLanguage(text: string): "English" | "Arabic" {
   return arabic > latin * 0.4 ? "Arabic" : "English";
 }
 
-export function normalizeOutlineText(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
-    .replace(/^--\s*\d+\s+of\s+\d+\s*--\s*$/gim, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 export function validateOutlineText(text: string): void {
   const normalized = normalizeOutlineText(text);
   if (normalized.length < 10) {
@@ -40,30 +33,104 @@ export function validateOutlineText(text: string): void {
   }
 }
 
+function apiBase(): string {
+  return `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+}
+
+async function parseFileOnServer(file: File): Promise<{
+  text: string;
+  detectedLanguage: "English" | "Arabic";
+}> {
+  const fd = new FormData();
+  fd.append("file", file);
+  const r = await fetch(`${apiBase()}/quotes/parse-outline-file`, {
+    method: "POST",
+    credentials: "include",
+    body: fd,
+  });
+
+  let data: { text?: string; detectedLanguage?: string; error?: string };
+  try {
+    data = await r.json();
+  } catch {
+    throw new Error(`Server error (${r.status}). Try again or paste the outline manually.`);
+  }
+
+  if (!r.ok) {
+    throw new Error(data.error ?? `Upload failed (${r.status})`);
+  }
+
+  const text = normalizeOutlineText(data.text ?? "");
+  validateOutlineText(text);
+  return {
+    text,
+    detectedLanguage: data.detectedLanguage === "Arabic" ? "Arabic" : detectOutlineLanguage(text),
+  };
+}
+
+let pdfWorkerReady = false;
+
+async function ensurePdfWorker(pdfjs: typeof import("pdfjs-dist")): Promise<void> {
+  if (pdfWorkerReady) return;
+  pdfjs.GlobalWorkerOptions.workerSrc =
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+  pdfWorkerReady = true;
+}
+
+type PdfTextItem = { str?: string; transform?: number[] };
+
+/** Group PDF text fragments by vertical position into readable lines */
+function groupPdfItemsIntoLines(items: PdfTextItem[]): string[] {
+  type Positioned = { str: string; x: number; y: number };
+  const positioned: Positioned[] = [];
+
+  for (const item of items) {
+    if (!item.str?.trim()) continue;
+    const t = item.transform ?? [];
+    positioned.push({ str: item.str, x: t[4] ?? 0, y: t[5] ?? 0 });
+  }
+
+  positioned.sort((a, b) => b.y - a.y || a.x - b.x);
+
+  const rows: { y: number; parts: Positioned[] }[] = [];
+  const yTolerance = 4;
+
+  for (const p of positioned) {
+    const row = rows.find((r) => Math.abs(r.y - p.y) <= yTolerance);
+    if (row) {
+      row.parts.push(p);
+      row.y = (row.y + p.y) / 2;
+    } else {
+      rows.push({ y: p.y, parts: [p] });
+    }
+  }
+
+  return rows
+    .sort((a, b) => b.y - a.y)
+    .map((row) => {
+      row.parts.sort((a, b) => a.x - b.x);
+      return cleanOutlineText(row.parts.map((p) => p.str).join(" "));
+    })
+    .filter((line) => line.length > 0);
+}
+
 export async function extractPdfTextInBrowser(file: File): Promise<string> {
   const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
-    import.meta.url,
-  ).toString();
+  await ensurePdfWorker(pdfjs);
 
   const buffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: buffer, useSystemFonts: true }).promise;
-  const parts: string[] = [];
+  const pages: string[] = [];
 
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
     const content = await page.getTextContent();
-    const line = content.items
-      .map((item) => ("str" in item ? item.str : ""))
-      .join(" ")
-      .replace(/\s+/g, " ")
-      .trim();
-    if (line) parts.push(line);
+    const pageLines = groupPdfItemsIntoLines(content.items as PdfTextItem[]);
+    if (pageLines.length > 0) pages.push(pageLines.join("\n"));
     page.cleanup();
   }
 
-  return normalizeOutlineText(parts.join("\n\n"));
+  return pages.length > 0 ? joinOutlinePages(pages) : "";
 }
 
 export async function extractOutlineFromFile(file: File): Promise<{
@@ -80,39 +147,21 @@ export async function extractOutlineFromFile(file: File): Promise<{
     return { text, detectedLanguage: detectOutlineLanguage(text) };
   }
 
+  // PDF: server parser first (reliable on VPS), browser fallback if server unavailable
   if (isPdf) {
-    const text = await extractPdfTextInBrowser(file);
-    validateOutlineText(text);
-    return { text, detectedLanguage: detectOutlineLanguage(text) };
+    try {
+      return await parseFileOnServer(file);
+    } catch (serverErr) {
+      try {
+        const text = await extractPdfTextInBrowser(file);
+        validateOutlineText(text);
+        return { text, detectedLanguage: detectOutlineLanguage(text) };
+      } catch {
+        throw serverErr instanceof Error ? serverErr : new Error(String(serverErr));
+      }
+    }
   }
 
   // DOCX and other formats — server only
-  const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
-  const fd = new FormData();
-  fd.append("file", file);
-  const r = await fetch(`${apiBase}/quotes/parse-outline-file`, {
-    method: "POST",
-    credentials: "include",
-    body: fd,
-  });
-
-  let data: { text?: string; detectedLanguage?: string; error?: string };
-  try {
-    data = await r.json();
-  } catch {
-    throw new Error(r.status === 404
-      ? "Server file parser not available. For PDF use Upload — client parsing is used automatically."
-      : `Server error (${r.status}). Try again or paste the outline manually.`);
-  }
-
-  if (!r.ok) {
-    throw new Error(data.error ?? `Upload failed (${r.status})`);
-  }
-
-  const text = normalizeOutlineText(data.text ?? "");
-  validateOutlineText(text);
-  return {
-    text,
-    detectedLanguage: data.detectedLanguage === "Arabic" ? "Arabic" : detectOutlineLanguage(text),
-  };
+  return parseFileOnServer(file);
 }

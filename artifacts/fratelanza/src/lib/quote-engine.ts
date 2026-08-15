@@ -313,6 +313,16 @@ function buildCustomerReport(
   return dedupeReportLines(lines.join("\n"));
 }
 
+export function buildReportForTier(
+  tiers: QuoteTierPackage[],
+  language: "English" | "Arabic",
+  tierId: QuoteTierId,
+  paymentTerms?: string,
+  projectTitle?: string,
+): string {
+  return buildCustomerReport(tiers, language, { focusTier: tierId, paymentTerms, projectTitle });
+}
+
 function buildReport(
   _sections: string[],
   tiers: QuoteTierPackage[],
