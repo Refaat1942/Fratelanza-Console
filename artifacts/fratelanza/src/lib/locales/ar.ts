@@ -153,6 +153,7 @@ export const ar: Translations = {
     uploadFailed: "تعذر قراءة الملف",
     pdfBinaryError: "يبدو أن هذا محتوى PDF خام — استخدم رفع ملف للـ PDF",
     parseOkGenerateFailed: "تم استخراج النص لكن فشل إنشاء الباقات — اضغط إنشاء الباقات",
+    generateFailed: "تعذر إنشاء الباقات",
   },
   expenses: {
     title: "المصروفات", new: "مصروف جديد", edit: "تعديل المصروف",

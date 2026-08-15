@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Sparkles, Upload, Check, Clock, Layers } from "lucide-react";
 import type { QuoteLineItem } from "@/lib/quote-line-items";
+import { extractOutlineFromFile, isPdfOrBinaryJunk, validateOutlineText } from "@/lib/outline-file-parser";
 
 export type SmartQuoteApplyPayload = {
   lineItems: QuoteLineItem[];
@@ -77,16 +78,13 @@ export function SmartQuotePanel({
     onReportChange(result.generatedReport);
   };
 
-  const handleGenerate = () => {
-    if (!technicalOutline.trim()) {
-      toast({ title: t("quotes.outlineRequired"), variant: "destructive" });
-      return;
-    }
+  const runGenerate = (outline: string, lang: string) => {
+    validateOutlineText(outline);
     generate.mutate(
       {
         data: {
-          outline: technicalOutline.trim(),
-          language: language === "Arabic" ? "Arabic" : "English",
+          outline: outline.trim(),
+          language: lang === "Arabic" ? "Arabic" : "English",
         },
       },
       {
@@ -94,62 +92,49 @@ export function SmartQuotePanel({
           applyGenerateResult(result);
           toast({ title: t("quotes.generated") });
         },
-        onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+        onError: (err) => {
+          const msg = err instanceof Error ? err.message : t("common.error");
+          toast({ title: t("quotes.generateFailed"), description: msg, variant: "destructive" });
+        },
       },
     );
+  };
+
+  const handleGenerate = () => {
+    if (!technicalOutline.trim()) {
+      toast({ title: t("quotes.outlineRequired"), variant: "destructive" });
+      return;
+    }
+    if (isPdfOrBinaryJunk(technicalOutline)) {
+      toast({
+        title: t("quotes.uploadFailed"),
+        description: t("quotes.pdfBinaryError"),
+        variant: "destructive",
+      });
+      return;
+    }
+    runGenerate(technicalOutline.trim(), language);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setParsing(true);
-    const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
-    const fd = new FormData();
-    fd.append("file", file);
     try {
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-      const textTypes = new Set(["txt", "md", "csv"]);
-      if (textTypes.has(ext)) {
-        const text = await file.text();
-        if (text.startsWith("%PDF")) {
-          throw new Error(t("quotes.pdfBinaryError"));
-        }
-        onOutlineChange(text);
-        toast({ title: t("quotes.outlineLoaded"), description: file.name });
-      } else {
-        const r = await fetch(`${apiBase}/quotes/parse-outline-file`, {
-          method: "POST",
-          credentials: "include",
-          body: fd,
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error ?? t("common.error"));
-        onOutlineChange(data.text);
-        if (data.detectedLanguage && onLanguageDetected) {
-          onLanguageDetected(data.detectedLanguage);
-        }
-        toast({
-          title: t("quotes.outlineLoaded"),
-          description: `${file.name} — ${data.text.length.toLocaleString()} chars extracted`,
-        });
-        generate.mutate(
-          {
-            data: {
-              outline: data.text,
-              language: data.detectedLanguage === "Arabic" ? "Arabic" : "English",
-            },
-          },
-          {
-            onSuccess: (result) => {
-              applyGenerateResult(result);
-              toast({ title: t("quotes.generatedFromFile") });
-            },
-            onError: () => toast({ title: t("quotes.parseOkGenerateFailed"), variant: "destructive" }),
-          },
-        );
-      }
+      const { text, detectedLanguage } = await extractOutlineFromFile(file);
+      onOutlineChange(text);
+      if (onLanguageDetected) onLanguageDetected(detectedLanguage);
+      toast({
+        title: t("quotes.outlineLoaded"),
+        description: `${file.name} — ${text.length.toLocaleString()} chars`,
+      });
+      runGenerate(text, detectedLanguage);
     } catch (err) {
-      toast({ title: t("quotes.uploadFailed"), description: (err as Error).message, variant: "destructive" });
+      toast({
+        title: t("quotes.uploadFailed"),
+        description: (err as Error).message,
+        variant: "destructive",
+      });
     } finally {
       setParsing(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -212,7 +197,11 @@ export function SmartQuotePanel({
           rows={5}
           placeholder={t("quotes.outlinePlaceholder")}
           data-testid="input-technical-outline"
+          className={isPdfOrBinaryJunk(technicalOutline) ? "border-destructive" : undefined}
         />
+        {isPdfOrBinaryJunk(technicalOutline) && (
+          <p className="text-xs text-destructive">{t("quotes.pdfBinaryError")}</p>
+        )}
       </div>
 
       {tiers && tiers.length > 0 && (

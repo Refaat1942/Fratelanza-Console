@@ -86,6 +86,10 @@ router.post("/quotes/generate-from-outline", async (req, res): Promise<void> => 
     return;
   }
   const language = body.language === "Arabic" ? "Arabic" : "English";
+  if (/<<\s*\/Type\s*\//.test(outline) || (/\bendobj\b/.test(outline) && /\bobj\b/.test(outline))) {
+    res.status(400).json({ error: "Outline contains PDF binary data. Upload the PDF file instead of pasting raw content." });
+    return;
+  }
   res.json(generateQuoteFromOutline(outline, language));
 });
 

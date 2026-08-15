@@ -149,6 +149,7 @@ export const en = {
     uploadFailed: "Could not read file",
     pdfBinaryError: "This looks like raw PDF data — use Upload file for PDFs, not paste",
     parseOkGenerateFailed: "Text extracted but package generation failed — click Generate packages",
+    generateFailed: "Could not generate packages",
   },
   expenses: {
     title: "Expenses", new: "New Expense", edit: "Edit Expense",
