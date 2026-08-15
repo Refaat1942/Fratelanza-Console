@@ -5,6 +5,7 @@ export type Branding = {
   tagline: string;
   logoDataUrl: string | null;
   accentHsl: string; // e.g. "195 100% 50%"
+  taxId: string;
 };
 
 const DEFAULT: Branding = {
@@ -12,6 +13,7 @@ const DEFAULT: Branding = {
   tagline: "Management Console",
   logoDataUrl: null,
   accentHsl: "195 100% 50%",
+  taxId: "779-103-211",
 };
 
 const STORAGE_KEY = "fratelanza.branding";

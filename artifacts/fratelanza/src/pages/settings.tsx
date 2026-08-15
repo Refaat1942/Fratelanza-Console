@@ -15,11 +15,12 @@ import { Upload, Trash2, RotateCcw, Check, Sun, Moon, Languages } from "lucide-r
 export default function Settings() {
   const { t, i18n } = useTranslation();
   const { toast } = useToast();
-  const { brandName, tagline, logoDataUrl, accentHsl, setBranding, resetBranding } = useBranding();
+  const { brandName, tagline, logoDataUrl, accentHsl, taxId, setBranding, resetBranding } = useBranding();
   const { theme, toggleTheme } = useTheme();
   const fileRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState(brandName);
   const [tag, setTag] = useState(tagline);
+  const [tax, setTax] = useState(taxId);
 
   const onLogo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -37,7 +38,11 @@ export default function Settings() {
   };
 
   const saveText = () => {
-    setBranding({ brandName: name.trim() || "FRATELANZA", tagline: tag });
+    setBranding({
+      brandName: name.trim() || "FRATELANZA",
+      tagline: tag,
+      taxId: tax.trim() || "779-103-211",
+    });
     toast({ title: t("branding.saved") });
   };
 
@@ -88,6 +93,11 @@ export default function Settings() {
               <div className="space-y-1">
                 <Label>{t("branding.tagline")}</Label>
                 <Input value={tag} onChange={(e) => setTag(e.target.value)} data-testid="input-tagline" />
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label>{t("branding.taxId")}</Label>
+                <Input value={tax} onChange={(e) => setTax(e.target.value)} placeholder="779-103-211" data-testid="input-tax-id" />
+                <p className="text-xs text-muted-foreground">{t("branding.taxIdHint")}</p>
               </div>
             </div>
             <div>

@@ -1,3 +1,5 @@
+import { cleanOutlineText, joinOutlinePages, splitOutlineIntoPages } from "@/lib/outline-pages";
+
 /** Returns true when text looks like raw PDF/binary instead of readable outline */
 export function isPdfOrBinaryJunk(text: string): boolean {
   const sample = text.slice(0, 4000);
@@ -20,12 +22,12 @@ export function detectOutlineLanguage(text: string): "English" | "Arabic" {
 }
 
 export function normalizeOutlineText(text: string): string {
-  return text
-    .replace(/\r\n/g, "\n")
-    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "")
-    .replace(/^--\s*\d+\s+of\s+\d+\s*--\s*$/gim, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  if (!text.trim()) return "";
+  if (text.includes("---PAGE---")) {
+    const pages = text.split(/\n*---PAGE---\n*/).map(cleanOutlineText).filter(Boolean);
+    return pages.length > 0 ? joinOutlinePages(pages) : "";
+  }
+  return joinOutlinePages(splitOutlineIntoPages(text));
 }
 
 export function validateOutlineText(text: string): void {
@@ -91,7 +93,7 @@ export async function extractPdfTextInBrowser(file: File): Promise<string> {
 
   const buffer = await file.arrayBuffer();
   const doc = await pdfjs.getDocument({ data: buffer, useSystemFonts: true }).promise;
-  const parts: string[] = [];
+  const pages: string[] = [];
 
   for (let pageNum = 1; pageNum <= doc.numPages; pageNum++) {
     const page = await doc.getPage(pageNum);
@@ -101,11 +103,12 @@ export async function extractPdfTextInBrowser(file: File): Promise<string> {
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
-    if (line) parts.push(line);
+    const cleaned = cleanOutlineText(line);
+    if (cleaned) pages.push(cleaned);
     page.cleanup();
   }
 
-  return normalizeOutlineText(parts.join("\n\n"));
+  return pages.length > 0 ? joinOutlinePages(pages) : "";
 }
 
 export async function extractOutlineFromFile(file: File): Promise<{

@@ -3,6 +3,7 @@ import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PaginatedOutlineEditor } from "@/components/paginated-outline-editor";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -268,13 +269,13 @@ export function SmartQuotePanel({
             </Button>
           </div>
         </div>
-        <Textarea
+        <PaginatedOutlineEditor
+          label={t("quotes.technicalOutline")}
           value={technicalOutline}
-          onChange={(e) => onOutlineChange(e.target.value)}
+          onChange={onOutlineChange}
           rows={8}
           placeholder={t("quotes.outlinePlaceholder")}
-          data-testid="input-technical-outline"
-          className={`min-h-[160px] text-sm ${isPdfOrBinaryJunk(technicalOutline) ? "border-destructive" : ""}`}
+          testId="input-technical-outline"
         />
         {isPdfOrBinaryJunk(technicalOutline) && (
           <p className="text-xs text-destructive">{t("quotes.pdfBinaryError")}</p>
@@ -383,19 +384,16 @@ export function SmartQuotePanel({
         </div>
       )}
 
-      <div className="space-y-2">
-        <Label>{t("quotes.generatedReport")}</Label>
-        <Textarea
-          value={localReport || generatedReport}
-          onChange={(e) => {
-            setLocalReport(e.target.value);
-            onReportChange(e.target.value);
-          }}
-          rows={10}
-          className="min-h-[200px] text-sm"
-          data-testid="input-generated-report"
-        />
-      </div>
+      <PaginatedOutlineEditor
+        label={t("quotes.generatedReport")}
+        value={localReport || generatedReport}
+        onChange={(v) => {
+          setLocalReport(v);
+          onReportChange(v);
+        }}
+        rows={10}
+        testId="input-generated-report"
+      />
 
       <div className="space-y-2">
         <Label>{t("quotes.paymentTerms")}</Label>
