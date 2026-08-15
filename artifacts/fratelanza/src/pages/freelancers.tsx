@@ -1,23 +1,32 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListFreelancers, getListFreelancersQueryKey, useCreateFreelancer, useUpdateFreelancer, useDeleteFreelancer, useGetFreelancerHistory, useGetFreelancerEvaluation } from "@workspace/api-client-react";
+import { useListFreelancers, getListFreelancersQueryKey, useCreateFreelancer, useUpdateFreelancer, useDeleteFreelancer, useGetFreelancerHistory, useGetFreelancerEvaluation, useUploadFreelancerCv } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase, BarChart3, Target, TrendingUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase, BarChart3, Target, TrendingUp, ExternalLink, FileText, Download } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-type Freelancer = { code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null; earned: number; balance: number; rating: number; };
+type Freelancer = {
+  code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null;
+  earned: number; balance: number; rating: number;
+  bio?: string | null; portfolioUrl?: string | null; cvFileName?: string | null;
+  hasCv?: boolean; skills?: string[] | null;
+};
 
-const emptyForm = { name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5 };
+const emptyForm = {
+  name: "", phone: "", spec: "", position: "", earned: 0, balance: 0, rating: 5,
+  bio: "", portfolioUrl: "", skillsText: "",
+};
 
 function CardContentLite({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
@@ -92,6 +101,9 @@ export default function Freelancers() {
   const create = useCreateFreelancer();
   const update = useUpdateFreelancer();
   const del = useDeleteFreelancer();
+  const uploadCv = useUploadFreelancerCv();
+  const cvFileRef = useRef<HTMLInputElement>(null);
+  const [pendingCvCode, setPendingCvCode] = useState<string | null>(null);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListFreelancersQueryKey() });
 
@@ -100,10 +112,28 @@ export default function Freelancers() {
   );
 
   const openCreate = () => { setForm({ ...emptyForm }); setEditing(null); setShowForm(true); };
-  const openEdit = (fr: Freelancer) => { setEditing(fr); setForm({ name: fr.name, phone: fr.phone ?? "", spec: fr.spec ?? "", position: fr.position ?? "", earned: fr.earned, balance: fr.balance, rating: fr.rating }); setShowForm(true); };
+  const openEdit = (fr: Freelancer) => {
+    setEditing(fr);
+    setForm({
+      name: fr.name, phone: fr.phone ?? "", spec: fr.spec ?? "", position: fr.position ?? "",
+      earned: fr.earned, balance: fr.balance, rating: fr.rating,
+      bio: fr.bio ?? "", portfolioUrl: fr.portfolioUrl ?? "",
+      skillsText: (fr.skills ?? []).join(", "),
+    });
+    setShowForm(true);
+  };
+
+  const parseSkills = (text: string) =>
+    text.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
 
   const handleSave = () => {
-    const data = { ...form, earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating) };
+    const skills = parseSkills(form.skillsText);
+    const data = {
+      name: form.name, phone: form.phone, spec: form.spec, position: form.position,
+      earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating),
+      bio: form.bio || null, portfolioUrl: form.portfolioUrl || null,
+      skills: skills.length ? skills : null,
+    };
     if (editing) {
       update.mutate({ code: editing.code, data } as Parameters<typeof update.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Updated" }); },
@@ -125,7 +155,52 @@ export default function Freelancers() {
     });
   };
 
-  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
+  const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
+
+  const handleCvPick = (code: string) => {
+    setPendingCvCode(code);
+    cvFileRef.current?.click();
+  };
+
+  const handleCvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const code = pendingCvCode ?? editing?.code;
+    if (!file || !code) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "CV too large (max 2MB)", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const base64 = dataUrl.includes(",") ? dataUrl.split(",")[1]! : dataUrl;
+      uploadCv.mutate(
+        { code, data: { fileName: file.name, dataBase64: base64 } },
+        {
+          onSuccess: () => { invalidate(); toast({ title: t("freelancers.cvUploaded") }); },
+          onError: () => toast({ title: t("common.error"), variant: "destructive" }),
+        },
+      );
+    };
+    reader.readAsDataURL(file);
+    setPendingCvCode(null);
+    if (cvFileRef.current) cvFileRef.current.value = "";
+  };
+
+  const downloadCv = async (code: string) => {
+    const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+    try {
+      const r = await fetch(`${apiBase}/freelancers/${code}/cv`, { credentials: "include" });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Download failed");
+      const link = document.createElement("a");
+      link.href = `data:application/octet-stream;base64,${data.dataBase64}`;
+      link.download = data.fileName ?? "cv.pdf";
+      link.click();
+    } catch (err) {
+      toast({ title: "Download failed", description: (err as Error).message, variant: "destructive" });
+    }
+  };
 
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
@@ -165,6 +240,7 @@ export default function Freelancers() {
         <h1 className="text-2xl font-bold tracking-tight">{t('freelancers.title')}</h1>
         <div className="flex gap-2">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onImport} data-testid="input-import-file" />
+          <input ref={cvFileRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleCvUpload} />
           <Button variant="outline" onClick={onPickImport} data-testid="button-import-freelancers" disabled={importing}>
             <Upload className="h-4 w-4 mr-2" /> {importing ? "Importing..." : "Import Excel"}
           </Button>
@@ -186,7 +262,7 @@ export default function Freelancers() {
           <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Code", "Name", "Phone", "Specialization", "Position", "Earned", "Balance", "Rating", "Score", "Actions"].map((h) => (
+                {["Code", "Name", "Phone", "Specialization", "Position", "Earned", "Balance", "Rating", "Profile", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -205,12 +281,29 @@ export default function Freelancers() {
                   <td className="px-4 py-3 text-yellow-400"><PrivacyWrapper value={fr.balance} /></td>
                   <td className="px-4 py-3"><Stars rating={fr.rating} /></td>
                   <td className="px-4 py-3">
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
-                      <BarChart3 className="h-3.5 w-3.5" /> {Number(fr.rating).toFixed(1)}/5
-                    </span>
+                    <div className="flex flex-wrap gap-1 items-center">
+                      {fr.portfolioUrl && (
+                        <a href={fr.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      )}
+                      {fr.hasCv && <span title="CV on file"><FileText className="h-3.5 w-3.5 text-green-400" /></span>}
+                      {(fr.skills ?? []).slice(0, 2).map((s) => (
+                        <Badge key={s} variant="outline" className="text-[9px]">{s}</Badge>
+                      ))}
+                      {!fr.portfolioUrl && !fr.hasCv && !(fr.skills?.length) && <span className="text-muted-foreground text-xs">—</span>}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1 items-center">
+                      {fr.hasCv && (
+                        <Button size="icon" variant="ghost" title={t("freelancers.cvDownload")} onClick={() => downloadCv(fr.code)}>
+                          <Download className="h-4 w-4 text-primary" />
+                        </Button>
+                      )}
+                      <Button size="icon" variant="ghost" title={t("freelancers.cvUpload")} onClick={() => handleCvPick(fr.code)}>
+                        <Upload className="h-4 w-4" />
+                      </Button>
                       <Button size="sm" variant="outline" data-testid={`button-evaluate-${fr.code}`} onClick={() => setEvalCode(fr.code)} className="border-green-500/40 text-green-400 hover:bg-green-500/10 h-8 px-2">
                         <BarChart3 className="h-3.5 w-3.5 mr-1" /> Evaluate
                       </Button>
@@ -229,7 +322,7 @@ export default function Freelancers() {
       )}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? t('freelancers.edit') : t('freelancers.new')}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-4">
             <div className="col-span-2 space-y-1"><Label>Full Name</Label><Input data-testid="input-freelancer-name" value={form.name} onChange={f("name")} /></div>
@@ -249,6 +342,37 @@ export default function Freelancers() {
             <div className="space-y-1"><Label>Rating (1-5)</Label><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={f("rating")} /></div>
             <div className="space-y-1"><Label>Total Earned (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>
             <div className="space-y-1"><Label>Balance (EGP)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
+
+            <div className="col-span-2 pt-2 border-t border-border">
+              <div className="text-sm font-semibold mb-3">{t("freelancers.profileSection")}</div>
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>{t("freelancers.bio")}</Label>
+              <Textarea value={form.bio} onChange={f("bio")} rows={3} placeholder="Short professional summary..." />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>{t("freelancers.portfolioUrl")}</Label>
+              <Input value={form.portfolioUrl} onChange={f("portfolioUrl")} placeholder="https://..." />
+            </div>
+            <div className="col-span-2 space-y-1">
+              <Label>{t("freelancers.skills")}</Label>
+              <Input value={form.skillsText} onChange={f("skillsText")} placeholder="React, Node.js, PostgreSQL" />
+            </div>
+            {editing && (
+              <div className="col-span-2 flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => handleCvPick(editing.code)}>
+                  <Upload className="h-3.5 w-3.5 mr-1" /> {t("freelancers.cvUpload")}
+                </Button>
+                {editing.hasCv && (
+                  <Button type="button" variant="outline" size="sm" onClick={() => downloadCv(editing.code)}>
+                    <Download className="h-3.5 w-3.5 mr-1" /> {t("freelancers.cvDownload")}
+                  </Button>
+                )}
+                {editing.cvFileName && (
+                  <span className="text-xs text-muted-foreground self-center">{editing.cvFileName}</span>
+                )}
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>

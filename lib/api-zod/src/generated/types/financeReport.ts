@@ -9,12 +9,17 @@ import type { Project } from './project';
 import type { RemainingItem } from './remainingItem';
 
 export interface FinanceReport {
-  /** Gross revenue = total paid amounts only */
+  /** Cash collected (paid amounts) */
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
+  /** Direct project delivery costs */
   totalCost: number;
-  /** Net profit = gross revenue - total expenses */
+  /** Total contract value (client prices) */
+  totalContractValue: number;
+  /** Sum of project net profit minus operating expenses */
+  grossMargin: number;
+  /** Cash net = paid - direct costs - operating expenses */
   totalNetProfit: number;
   totalExpenses: number;
   netBalance: number;

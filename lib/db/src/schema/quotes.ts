@@ -13,6 +13,10 @@ export const quotesTable = pgTable("sales_quotes", {
   paymentTerms: text("payment_terms"),
   milestones: text("milestones"),
   notes: text("notes"),
+  technicalOutline: text("technical_outline"),
+  tierPackages: text("tier_packages"),
+  selectedTier: text("selected_tier").default("med"),
+  generatedReport: text("generated_report"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

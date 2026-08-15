@@ -14,4 +14,7 @@ export interface FreelancerUpdate {
   earned?: number;
   balance?: number;
   rating?: number;
+  bio?: string;
+  portfolioUrl?: string;
+  skills?: string[];
 }

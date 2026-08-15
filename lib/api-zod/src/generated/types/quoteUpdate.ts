@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { QuoteLineItem } from './quoteLineItem';
+import type { QuoteTierPackage } from './quoteTierPackage';
+import type { QuoteUpdateSelectedTier } from './quoteUpdateSelectedTier';
 
 export interface QuoteUpdate {
   clientName?: string;
@@ -17,4 +19,8 @@ export interface QuoteUpdate {
   paymentTerms?: string;
   milestones?: string;
   notes?: string;
+  technicalOutline?: string;
+  tierPackages?: QuoteTierPackage[];
+  selectedTier?: QuoteUpdateSelectedTier;
+  generatedReport?: string;
 }

@@ -18,4 +18,13 @@ export interface Freelancer {
   earned: number;
   balance: number;
   rating: number;
+  /** @nullable */
+  bio?: string | null;
+  /** @nullable */
+  portfolioUrl?: string | null;
+  /** @nullable */
+  cvFileName?: string | null;
+  hasCv?: boolean;
+  /** @nullable */
+  skills?: string[] | null;
 }

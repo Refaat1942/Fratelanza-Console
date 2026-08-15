@@ -3,9 +3,10 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   useListProjects, getListProjectsQueryKey,
   useCreateProject, useUpdateProject, useDeleteProject, useLogPayment,
-  useListFreelancers, useListClients,
+  useListClients,
 } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
+import { FreelancerPicker } from "@/components/freelancer-picker";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -28,7 +29,6 @@ type Project = {
 };
 
 type TeamMember = { freelancerName: string; commission: number };
-type Freelancer = { code: string; name: string; spec?: string | null };
 
 const STATUS_COLORS: Record<string, string> = {
   Ongoing: "bg-blue-500/20 text-blue-400 border-blue-500/30",
@@ -60,7 +60,6 @@ export default function Projects() {
   const [paymentDate, setPaymentDate] = useState("");
 
   const { data: projects = [], isLoading } = useListProjects();
-  const { data: freelancers = [] } = useListFreelancers();
   const { data: clients = [] } = useListClients();
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
@@ -286,14 +285,14 @@ export default function Projects() {
                   {team.map((m, idx) => (
                     <div key={idx} className="flex gap-2 items-center" data-testid={`row-freelancer-${idx}`}>
                       <div className="text-xs font-medium text-muted-foreground w-20 shrink-0">Freelancer {idx + 1}</div>
-                      <Select value={m.freelancerName || undefined} onValueChange={(v) => updateFreelancerRow(idx, { freelancerName: v })}>
-                        <SelectTrigger className="flex-1" data-testid={`select-freelancer-${idx}`}><SelectValue placeholder="Select freelancer" /></SelectTrigger>
-                        <SelectContent className="max-h-72">
-                          {(freelancers as Freelancer[]).map((fr) => (
-                            <SelectItem key={fr.code} value={fr.name}>{fr.name}{fr.spec ? ` — ${fr.spec}` : ""}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <FreelancerPicker
+                        value={m.freelancerName}
+                        onChange={(v) => updateFreelancerRow(idx, { freelancerName: v })}
+                        exclude={team.filter((_, i) => i !== idx).map((t) => t.freelancerName).filter(Boolean)}
+                        preferredSpec={form.type === "Software" ? "Developer" : form.type === "Training" ? "Trainer" : undefined}
+                        className="flex-1"
+                        testId={`select-freelancer-${idx}`}
+                      />
                       <Input
                         type="number"
                         placeholder="Commission EGP"

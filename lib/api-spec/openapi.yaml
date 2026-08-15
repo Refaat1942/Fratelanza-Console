@@ -446,6 +446,33 @@ paths:
         "404":
           description: Not found
 
+  /freelancers/{code}/cv:
+    post:
+      operationId: uploadFreelancerCv
+      tags: [freelancers]
+      summary: Upload freelancer CV attachment
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FreelancerCvUpload"
+      responses:
+        "200":
+          description: CV uploaded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Freelancer"
+        "404":
+          description: Not found
+
   /freelancers/{code}:
     patch:
       operationId: updateFreelancer
@@ -754,6 +781,25 @@ paths:
           description: Deleted
         "404":
           description: Not found
+
+  /quotes/generate-from-outline:
+    post:
+      operationId: generateQuoteFromOutline
+      tags: [quotes]
+      summary: Generate min/med/max quote tiers from a technical outline
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateQuoteFromOutlineInput"
+      responses:
+        "200":
+          description: Generated tier packages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateQuoteFromOutlineResult"
 
   # ── General Expenses ──────────────────────────────────────────────────
   /expenses:
@@ -1396,6 +1442,18 @@ components:
           type: number
         rating:
           type: number
+        bio:
+          type: ["string", "null"]
+        portfolioUrl:
+          type: ["string", "null"]
+        cvFileName:
+          type: ["string", "null"]
+        hasCv:
+          type: boolean
+        skills:
+          type: ["array", "null"]
+          items:
+            type: string
 
     FreelancerInput:
       type: object
@@ -1431,6 +1489,23 @@ components:
           type: number
         rating:
           type: number
+        bio:
+          type: string
+        portfolioUrl:
+          type: string
+        skills:
+          type: array
+          items:
+            type: string
+
+    FreelancerCvUpload:
+      type: object
+      required: [fileName, dataBase64]
+      properties:
+        fileName:
+          type: string
+        dataBase64:
+          type: string
 
     FreelancerEvaluation:
       type: object
@@ -1623,6 +1698,65 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        technicalOutline:
+          type: ["string", "null"]
+        tierPackages:
+          type: ["array", "null"]
+          items:
+            $ref: "#/components/schemas/QuoteTierPackage"
+        selectedTier:
+          type: ["string", "null"]
+          enum: [min, med, max]
+        generatedReport:
+          type: ["string", "null"]
+
+    QuoteTierPackage:
+      type: object
+      required: [tier, label, durationWeeks, durationLabel, price, lineItems]
+      properties:
+        tier:
+          type: string
+          enum: [min, med, max]
+        label:
+          type: string
+        durationWeeks:
+          type: number
+        durationLabel:
+          type: string
+        price:
+          type: number
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteLineItem"
+
+    GenerateQuoteFromOutlineInput:
+      type: object
+      required: [outline]
+      properties:
+        outline:
+          type: string
+        language:
+          type: string
+          enum: [English, Arabic]
+
+    GenerateQuoteFromOutlineResult:
+      type: object
+      required: [sections, tiers, generatedReport, recommendedTier]
+      properties:
+        sections:
+          type: array
+          items:
+            type: string
+        tiers:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteTierPackage"
+        generatedReport:
+          type: string
+        recommendedTier:
+          type: string
+          enum: [min, med, max]
 
     QuoteInput:
       type: object
@@ -1648,6 +1782,17 @@ components:
           type: string
         notes:
           type: string
+        technicalOutline:
+          type: string
+        tierPackages:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteTierPackage"
+        selectedTier:
+          type: string
+          enum: [min, med, max]
+        generatedReport:
+          type: string
 
     QuoteUpdate:
       type: object
@@ -1671,6 +1816,17 @@ components:
         milestones:
           type: string
         notes:
+          type: string
+        technicalOutline:
+          type: string
+        tierPackages:
+          type: array
+          items:
+            $ref: "#/components/schemas/QuoteTierPackage"
+        selectedTier:
+          type: string
+          enum: [min, med, max]
+        generatedReport:
           type: string
 
     # ── Expense ────────────────────────────────────────────────────────
@@ -1773,20 +1929,27 @@ components:
     # ── Finance Report ─────────────────────────────────────────────────
     FinanceReport:
       type: object
-      required: [totalRevenue, totalPaid, totalRemaining, totalCost, totalNetProfit, totalExpenses, netBalance, projects, remainingBreakdown]
+      required: [totalRevenue, totalPaid, totalRemaining, totalCost, totalNetProfit, totalExpenses, netBalance, totalContractValue, grossMargin, projects, remainingBreakdown]
       properties:
         totalRevenue:
           type: number
-          description: Gross revenue = total paid amounts only
+          description: Cash collected (paid amounts)
         totalPaid:
           type: number
         totalRemaining:
           type: number
         totalCost:
           type: number
+          description: Direct project delivery costs
+        totalContractValue:
+          type: number
+          description: Total contract value (client prices)
+        grossMargin:
+          type: number
+          description: Sum of project net profit minus operating expenses
         totalNetProfit:
           type: number
-          description: Net profit = gross revenue - total expenses
+          description: Cash net = paid - direct costs - operating expenses
         totalExpenses:
           type: number
         netBalance:

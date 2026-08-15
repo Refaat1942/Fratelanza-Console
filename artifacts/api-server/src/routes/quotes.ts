@@ -2,6 +2,8 @@ import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { quotesTable } from "@workspace/db";
 import { eq, ilike, and, sql } from "drizzle-orm";
+import { generateQuoteFromOutline } from "../lib/quote-engine.js";
+import type { QuoteTierPackage } from "../lib/quote-engine.js";
 
 const router: IRouter = Router();
 
@@ -25,6 +27,21 @@ function serializeLineItems(items: QuoteLineItem[] | null | undefined): string |
   return JSON.stringify(items);
 }
 
+function parseTierPackages(raw: string | null | undefined): QuoteTierPackage[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as QuoteTierPackage[];
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function serializeTierPackages(items: QuoteTierPackage[] | null | undefined): string | null {
+  if (!items?.length) return null;
+  return JSON.stringify(items);
+}
+
 function toShape(r: typeof quotesTable.$inferSelect) {
   return {
     id: r.id,
@@ -37,8 +54,23 @@ function toShape(r: typeof quotesTable.$inferSelect) {
     paymentTerms: r.paymentTerms,
     milestones: r.milestones,
     notes: r.notes,
+    technicalOutline: r.technicalOutline,
+    tierPackages: parseTierPackages(r.tierPackages),
+    selectedTier: r.selectedTier,
+    generatedReport: r.generatedReport,
   };
 }
+
+router.post("/quotes/generate-from-outline", async (req, res): Promise<void> => {
+  const body = req.body ?? {};
+  const outline = String(body.outline ?? "").trim();
+  if (!outline) {
+    res.status(400).json({ error: "Outline is required" });
+    return;
+  }
+  const language = body.language === "Arabic" ? "Arabic" : "English";
+  res.json(generateQuoteFromOutline(outline, language));
+});
 
 router.get("/quotes", async (req, res): Promise<void> => {
   const { client, search } = req.query as Record<string, string>;
@@ -66,6 +98,10 @@ router.post("/quotes", async (req, res): Promise<void> => {
     paymentTerms: body.paymentTerms ?? null,
     milestones: body.milestones ?? null,
     notes: body.notes ?? null,
+    technicalOutline: body.technicalOutline ?? null,
+    tierPackages: serializeTierPackages(body.tierPackages),
+    selectedTier: body.selectedTier ?? "med",
+    generatedReport: body.generatedReport ?? null,
   }).returning();
   res.status(201).json(toShape(row));
 });
@@ -83,6 +119,10 @@ router.patch("/quotes/:id", async (req, res): Promise<void> => {
   if (body.paymentTerms !== undefined) updates.paymentTerms = body.paymentTerms;
   if (body.milestones !== undefined) updates.milestones = body.milestones;
   if (body.notes !== undefined) updates.notes = body.notes;
+  if (body.technicalOutline !== undefined) updates.technicalOutline = body.technicalOutline;
+  if (body.tierPackages !== undefined) updates.tierPackages = serializeTierPackages(body.tierPackages);
+  if (body.selectedTier !== undefined) updates.selectedTier = body.selectedTier;
+  if (body.generatedReport !== undefined) updates.generatedReport = body.generatedReport;
 
   const [row] = await db.update(quotesTable).set(updates).where(eq(quotesTable.id, id)).returning();
   if (!row) {

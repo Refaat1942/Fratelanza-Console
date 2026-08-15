@@ -379,7 +379,12 @@ export const ListFreelancersResponseItem = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number(),
+  "bio": zod.string().nullish(),
+  "portfolioUrl": zod.string().nullish(),
+  "cvFileName": zod.string().nullish(),
+  "hasCv": zod.boolean().optional(),
+  "skills": zod.array(zod.string()).nullish()
 })
 export const ListFreelancersResponse = zod.array(ListFreelancersResponseItem)
 
@@ -441,7 +446,12 @@ export const GetFreelancerHistoryResponse = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number(),
+  "bio": zod.string().nullish(),
+  "portfolioUrl": zod.string().nullish(),
+  "cvFileName": zod.string().nullish(),
+  "hasCv": zod.boolean().optional(),
+  "skills": zod.array(zod.string()).nullish()
 }),
   "tasks": zod.array(zod.object({
   "id": zod.number(),
@@ -475,6 +485,35 @@ export const GetFreelancerHistoryResponse = zod.object({
 
 
 /**
+ * @summary Upload freelancer CV attachment
+ */
+export const UploadFreelancerCvParams = zod.object({
+  "code": zod.coerce.string()
+})
+
+export const UploadFreelancerCvBody = zod.object({
+  "fileName": zod.string(),
+  "dataBase64": zod.string()
+})
+
+export const UploadFreelancerCvResponse = zod.object({
+  "code": zod.string(),
+  "name": zod.string(),
+  "phone": zod.string().nullish(),
+  "spec": zod.string().nullish(),
+  "position": zod.string().nullish(),
+  "earned": zod.number(),
+  "balance": zod.number(),
+  "rating": zod.number(),
+  "bio": zod.string().nullish(),
+  "portfolioUrl": zod.string().nullish(),
+  "cvFileName": zod.string().nullish(),
+  "hasCv": zod.boolean().optional(),
+  "skills": zod.array(zod.string()).nullish()
+})
+
+
+/**
  * @summary Update a freelancer
  */
 export const UpdateFreelancerParams = zod.object({
@@ -488,7 +527,10 @@ export const UpdateFreelancerBody = zod.object({
   "position": zod.string().optional(),
   "earned": zod.number().optional(),
   "balance": zod.number().optional(),
-  "rating": zod.number().optional()
+  "rating": zod.number().optional(),
+  "bio": zod.string().optional(),
+  "portfolioUrl": zod.string().optional(),
+  "skills": zod.array(zod.string()).optional()
 })
 
 export const UpdateFreelancerResponse = zod.object({
@@ -499,7 +541,12 @@ export const UpdateFreelancerResponse = zod.object({
   "position": zod.string().nullish(),
   "earned": zod.number(),
   "balance": zod.number(),
-  "rating": zod.number()
+  "rating": zod.number(),
+  "bio": zod.string().nullish(),
+  "portfolioUrl": zod.string().nullish(),
+  "cvFileName": zod.string().nullish(),
+  "hasCv": zod.boolean().optional(),
+  "skills": zod.array(zod.string()).nullish()
 })
 
 
@@ -713,7 +760,21 @@ export const ListQuotesResponseItem = zod.object({
   "date": zod.string(),
   "paymentTerms": zod.string().nullish(),
   "milestones": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "tierPackages": zod.array(zod.object({
+  "tier": zod.enum(['min', 'med', 'max']),
+  "label": zod.string(),
+  "durationWeeks": zod.number(),
+  "durationLabel": zod.string(),
+  "price": zod.number(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+}))
+})).nullish(),
+  "selectedTier": zod.enum(['min', 'med', 'max']).nullish(),
+  "generatedReport": zod.string().nullish()
 })
 export const ListQuotesResponse = zod.array(ListQuotesResponseItem)
 
@@ -733,7 +794,21 @@ export const CreateQuoteBody = zod.object({
   "date": zod.string().optional(),
   "paymentTerms": zod.string().optional(),
   "milestones": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "technicalOutline": zod.string().optional(),
+  "tierPackages": zod.array(zod.object({
+  "tier": zod.enum(['min', 'med', 'max']),
+  "label": zod.string(),
+  "durationWeeks": zod.number(),
+  "durationLabel": zod.string(),
+  "price": zod.number(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+}))
+})).optional(),
+  "selectedTier": zod.enum(['min', 'med', 'max']).optional(),
+  "generatedReport": zod.string().optional()
 })
 
 
@@ -756,7 +831,21 @@ export const UpdateQuoteBody = zod.object({
   "date": zod.string().optional(),
   "paymentTerms": zod.string().optional(),
   "milestones": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "technicalOutline": zod.string().optional(),
+  "tierPackages": zod.array(zod.object({
+  "tier": zod.enum(['min', 'med', 'max']),
+  "label": zod.string(),
+  "durationWeeks": zod.number(),
+  "durationLabel": zod.string(),
+  "price": zod.number(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+}))
+})).optional(),
+  "selectedTier": zod.enum(['min', 'med', 'max']).optional(),
+  "generatedReport": zod.string().optional()
 })
 
 export const UpdateQuoteResponse = zod.object({
@@ -772,7 +861,21 @@ export const UpdateQuoteResponse = zod.object({
   "date": zod.string(),
   "paymentTerms": zod.string().nullish(),
   "milestones": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "tierPackages": zod.array(zod.object({
+  "tier": zod.enum(['min', 'med', 'max']),
+  "label": zod.string(),
+  "durationWeeks": zod.number(),
+  "durationLabel": zod.string(),
+  "price": zod.number(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+}))
+})).nullish(),
+  "selectedTier": zod.enum(['min', 'med', 'max']).nullish(),
+  "generatedReport": zod.string().nullish()
 })
 
 
@@ -781,6 +884,32 @@ export const UpdateQuoteResponse = zod.object({
  */
 export const DeleteQuoteParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Generate min/med/max quote tiers from a technical outline
+ */
+export const GenerateQuoteFromOutlineBody = zod.object({
+  "outline": zod.string(),
+  "language": zod.enum(['English', 'Arabic']).optional()
+})
+
+export const GenerateQuoteFromOutlineResponse = zod.object({
+  "sections": zod.array(zod.string()),
+  "tiers": zod.array(zod.object({
+  "tier": zod.enum(['min', 'med', 'max']),
+  "label": zod.string(),
+  "durationWeeks": zod.number(),
+  "durationLabel": zod.string(),
+  "price": zod.number(),
+  "lineItems": zod.array(zod.object({
+  "desc": zod.string(),
+  "price": zod.number()
+}))
+})),
+  "generatedReport": zod.string(),
+  "recommendedTier": zod.enum(['min', 'med', 'max'])
 })
 
 
@@ -973,11 +1102,13 @@ export const GetFinanceReportQueryParams = zod.object({
 })
 
 export const GetFinanceReportResponse = zod.object({
-  "totalRevenue": zod.number().describe('Gross revenue = total paid amounts only'),
+  "totalRevenue": zod.number().describe('Cash collected (paid amounts)'),
   "totalPaid": zod.number(),
   "totalRemaining": zod.number(),
-  "totalCost": zod.number(),
-  "totalNetProfit": zod.number().describe('Net profit = gross revenue - total expenses'),
+  "totalCost": zod.number().describe('Direct project delivery costs'),
+  "totalContractValue": zod.number().describe('Total contract value (client prices)'),
+  "grossMargin": zod.number().describe('Sum of project net profit minus operating expenses'),
+  "totalNetProfit": zod.number().describe('Cash net = paid - direct costs - operating expenses'),
   "totalExpenses": zod.number(),
   "netBalance": zod.number(),
   "projects": zod.array(zod.object({
