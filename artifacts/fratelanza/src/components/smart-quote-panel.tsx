@@ -1,5 +1,4 @@
 import { useRef, useState } from "react";
-import { useGenerateQuoteFromOutline } from "@workspace/api-client-react";
 import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { Sparkles, Upload, Check, Clock, Layers } from "lucide-react";
 import type { QuoteLineItem } from "@/lib/quote-line-items";
 import { extractOutlineFromFile, isPdfOrBinaryJunk, validateOutlineText } from "@/lib/outline-file-parser";
+import { generateQuoteFromOutline } from "@/lib/quote-engine";
 
 export type SmartQuoteApplyPayload = {
   lineItems: QuoteLineItem[];
@@ -58,7 +58,7 @@ export function SmartQuotePanel({
   const { t } = useTranslation();
   const { toast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  const generate = useGenerateQuoteFromOutline();
+  const [generating, setGenerating] = useState(false);
   const [localTiers, setLocalTiers] = useState<QuoteTierPackage[] | null>(tierPackages);
   const [localSelected, setLocalSelected] = useState(selectedTier);
   const [localReport, setLocalReport] = useState(generatedReport);
@@ -80,24 +80,23 @@ export function SmartQuotePanel({
 
   const runGenerate = (outline: string, lang: string) => {
     validateOutlineText(outline);
-    generate.mutate(
-      {
-        data: {
-          outline: outline.trim(),
-          language: lang === "Arabic" ? "Arabic" : "English",
-        },
-      },
-      {
-        onSuccess: (result) => {
-          applyGenerateResult(result);
-          toast({ title: t("quotes.generated") });
-        },
-        onError: (err) => {
-          const msg = err instanceof Error ? err.message : t("common.error");
-          toast({ title: t("quotes.generateFailed"), description: msg, variant: "destructive" });
-        },
-      },
-    );
+    setGenerating(true);
+    try {
+      const result = generateQuoteFromOutline(
+        outline.trim(),
+        lang === "Arabic" ? "Arabic" : "English",
+      );
+      applyGenerateResult(result);
+      toast({ title: t("quotes.generated") });
+    } catch (err) {
+      toast({
+        title: t("quotes.generateFailed"),
+        description: err instanceof Error ? err.message : t("common.error"),
+        variant: "destructive",
+      });
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleGenerate = () => {
@@ -185,9 +184,9 @@ export function SmartQuotePanel({
               <Upload className="h-3.5 w-3.5 mr-1" />
               {parsing ? t("quotes.parsingFile") : t("quotes.uploadOutline")}
             </Button>
-            <Button type="button" size="sm" onClick={handleGenerate} disabled={generate.isPending || parsing}>
+            <Button type="button" size="sm" onClick={handleGenerate} disabled={generating || parsing}>
               <Sparkles className="h-3.5 w-3.5 mr-1" />
-              {generate.isPending ? t("quotes.generating") : t("quotes.generateTiers")}
+              {generating || parsing ? t("quotes.generating") : t("quotes.generateTiers")}
             </Button>
           </div>
         </div>
