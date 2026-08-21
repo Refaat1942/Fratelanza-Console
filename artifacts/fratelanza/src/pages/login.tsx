@@ -25,7 +25,7 @@ export default function Login() {
     setBusy(true);
     const r = await login(username.trim(), password);
     setBusy(false);
-    if (!r.ok) setError(r.error ?? t("login.error"));
+    if (!r.ok) setError(r.error === "SERVER_UNAVAILABLE" ? t("login.serverUnavailable") : (r.error ?? t("login.error")));
   };
 
   return (

@@ -64,6 +64,7 @@ sync_host_nginx_static
 restart_console_containers
 
 verify_local_web || true
+verify_api_health || true
 verify_public_site || true
 
 echo "==> Done. Hard-refresh the browser (Ctrl+Shift+R)."

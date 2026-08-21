@@ -104,6 +104,17 @@ bundle_from_html() {
   grep -oE 'assets/index-[^"'\'' ]+\.js' | head -1
 }
 
+verify_api_health() {
+  echo "==> Checking http://127.0.0.1:3101/api/healthz ..."
+  if curl -sf --max-time 10 http://127.0.0.1:3101/api/healthz | grep -q '"status"'; then
+    echo "    API healthz OK"
+    return 0
+  fi
+  echo "ERROR: API not responding (login will fail with 502)"
+  echo "       Run: bash $APP_DIR/source/scripts/vps-fix-api.sh"
+  return 1
+}
+
 verify_local_web() {
   echo "==> Checking http://127.0.0.1:3100/ ..."
   local html bundle

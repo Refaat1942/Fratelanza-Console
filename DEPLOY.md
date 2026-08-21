@@ -147,6 +147,24 @@ Expected after a successful deploy:
 - Sidebar shows **v2026.08.21-b**
 - `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.08.21-b"`
 
+### Login fails / "Invalid credentials"
+
+If the API container is down, login shows an error (502). On the VPS:
+
+```bash
+bash /opt/fratelanza-console/source/scripts/vps-fix-api.sh
+```
+
+Ensure `/opt/fratelanza-console/.env` has `SESSION_SECRET`, `POSTGRES_PASSWORD`, and `ADMIN_PASSWORD`.
+
+Reset admin password to match `.env`:
+
+```bash
+bash /opt/fratelanza-console/source/scripts/vps-reset-admin-password.sh
+```
+
+Then sign in with `ADMIN_USERNAME` (default `admin`) and `ADMIN_PASSWORD` from `.env`.
+
 ### Manual build (without Docker)
 
 If you build on the VPS directly, set env vars and use the correct output path:
