@@ -160,6 +160,7 @@ export interface Project {
   /** @nullable */
   freelancerName?: string | null;
   freelancerCommission?: number;
+  teamFreelancers?: string[];
   /** @nullable */
   startDate?: string | null;
   /** @nullable */
@@ -226,9 +227,34 @@ export interface ProjectUpdate {
   team?: TeamMemberInput[];
 }
 
+export type PaymentInputPaymentMethod = typeof PaymentInputPaymentMethod[keyof typeof PaymentInputPaymentMethod];
+
+
+export const PaymentInputPaymentMethod = {
+  bank_transfer: 'bank_transfer',
+  vodafone_cash: 'vodafone_cash',
+  instapay: 'instapay',
+  check: 'check',
+} as const;
+
 export interface PaymentInput {
   amount: number;
   nextPaymentDate?: string;
+  paymentMethod?: PaymentInputPaymentMethod;
+  paidAt?: string;
+  notes?: string;
+}
+
+export interface ProjectPayment {
+  id: number;
+  projectId: number;
+  amount: number;
+  paymentMethod: string;
+  /** @nullable */
+  paidAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
 }
 
 export interface FreelancerInput {

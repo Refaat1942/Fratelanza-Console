@@ -1,11 +1,32 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, projectTeamTable } from "@workspace/db";
-import { eq, sql, and, ilike, isNull, not } from "drizzle-orm";
+import { projectsTable, projectTeamTable, projectPaymentsTable } from "@workspace/db";
+import { eq, sql, and, ilike, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-function toProjectShape(r: typeof projectsTable.$inferSelect) {
+const PAYMENT_METHODS = new Set(["bank_transfer", "vodafone_cash", "instapay", "check"]);
+
+function toPaymentShape(r: typeof projectPaymentsTable.$inferSelect) {
+  return {
+    id: r.id,
+    projectId: r.projectId,
+    amount: Number(r.amount),
+    paymentMethod: r.paymentMethod,
+    paidAt: r.paidAt,
+    notes: r.notes,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+function toProjectShape(
+  r: typeof projectsTable.$inferSelect,
+  teamFreelancers: string[] = [],
+) {
+  const freelancers = [...new Set([
+    ...(r.freelancerName ? [r.freelancerName] : []),
+    ...teamFreelancers,
+  ])];
   return {
     id: r.id,
     type: r.type,
@@ -16,6 +37,7 @@ function toProjectShape(r: typeof projectsTable.$inferSelect) {
     netProfit: Number(r.netProfit),
     freelancerName: r.freelancerName,
     freelancerCommission: Number(r.freelancerCommission),
+    teamFreelancers: freelancers,
     startDate: r.startDate,
     deadline: r.deadline,
     status: r.status,
@@ -36,6 +58,21 @@ function toTeamShape(t: typeof projectTeamTable.$inferSelect) {
   };
 }
 
+async function teamMapForProjects(projectIds: number[]): Promise<Map<number, string[]>> {
+  const map = new Map<number, string[]>();
+  if (projectIds.length === 0) return map;
+  const teamRows = await db
+    .select()
+    .from(projectTeamTable)
+    .where(inArray(projectTeamTable.projectId, projectIds));
+  for (const row of teamRows) {
+    const list = map.get(row.projectId) ?? [];
+    list.push(row.freelancerName);
+    map.set(row.projectId, list);
+  }
+  return map;
+}
+
 router.get("/projects", async (req, res): Promise<void> => {
   const { type, status, search } = req.query as Record<string, string>;
   const conditions = [];
@@ -47,7 +84,8 @@ router.get("/projects", async (req, res): Promise<void> => {
     ? await db.select().from(projectsTable).where(and(...conditions)).orderBy(sql`created_at desc`)
     : await db.select().from(projectsTable).orderBy(sql`created_at desc`);
 
-  res.json(rows.map(toProjectShape));
+  const teamMap = await teamMapForProjects(rows.map((r) => r.id));
+  res.json(rows.map((r) => toProjectShape(r, teamMap.get(r.id) ?? [])));
 });
 
 router.get("/projects/receivables", async (req, res): Promise<void> => {
@@ -56,7 +94,8 @@ router.get("/projects/receivables", async (req, res): Promise<void> => {
     .from(projectsTable)
     .where(sql`remaining_amount::numeric > 0`)
     .orderBy(projectsTable.nextPaymentDate);
-  res.json(rows.map(toProjectShape));
+  const teamMap = await teamMapForProjects(rows.map((r) => r.id));
+  res.json(rows.map((r) => toProjectShape(r, teamMap.get(r.id) ?? [])));
 });
 
 router.post("/projects", async (req, res): Promise<void> => {
@@ -83,11 +122,12 @@ router.post("/projects", async (req, res): Promise<void> => {
         projectId: project.id,
         freelancerName: m.freelancerName,
         commission: String(m.commission),
-      }))
+      })),
     );
   }
 
-  res.status(201).json(toProjectShape(project));
+  const teamMap = await teamMapForProjects([project.id]);
+  res.status(201).json(toProjectShape(project, teamMap.get(project.id) ?? []));
 });
 
 router.get("/projects/:id", async (req, res): Promise<void> => {
@@ -98,7 +138,17 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
   const team = await db.select().from(projectTeamTable).where(eq(projectTeamTable.projectId, id));
-  res.json({ ...toProjectShape(project), team: team.map(toTeamShape) });
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(sql`created_at desc`);
+  const teamMap = await teamMapForProjects([id]);
+  res.json({
+    ...toProjectShape(project, teamMap.get(id) ?? []),
+    team: team.map(toTeamShape),
+    payments: payments.map(toPaymentShape),
+  });
 });
 
 router.patch("/projects/:id", async (req, res): Promise<void> => {
@@ -119,8 +169,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.netProfit = String(price - cost);
   }
   if (body.paidAmount !== undefined) {
-    const paid = Number(body.paidAmount);
-    updates.paidAmount = String(paid);
+    updates.paidAmount = String(Number(body.paidAmount));
   }
   if (body.remainingAmount !== undefined) {
     updates.remainingAmount = String(Number(body.remainingAmount));
@@ -153,16 +202,18 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
           projectId: id,
           freelancerName: m.freelancerName,
           commission: String(m.commission),
-        }))
+        })),
       );
     }
   }
 
-  res.json(toProjectShape(project));
+  const teamMap = await teamMapForProjects([id]);
+  res.json(toProjectShape(project, teamMap.get(id) ?? []));
 });
 
 router.delete("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  await db.delete(projectPaymentsTable).where(eq(projectPaymentsTable.projectId, id));
   await db.delete(projectTeamTable).where(eq(projectTeamTable.projectId, id));
   const [deleted] = await db.delete(projectsTable).where(eq(projectsTable.id, id)).returning();
   if (!deleted) {
@@ -172,9 +223,19 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
   res.sendStatus(204);
 });
 
+router.get("/projects/:id/payments", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(sql`created_at desc`);
+  res.json(payments.map(toPaymentShape));
+});
+
 router.post("/projects/:id/payment", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const { amount, nextPaymentDate } = req.body ?? {};
+  const { amount, nextPaymentDate, paymentMethod, paidAt, notes } = req.body ?? {};
 
   const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
   if (!existing) {
@@ -182,16 +243,40 @@ router.post("/projects/:id/payment", async (req, res): Promise<void> => {
     return;
   }
 
-  const newPaid = Number(existing.paidAmount) + Number(amount);
-  const newRemaining = Number(existing.clientPrice) - newPaid;
+  const method = PAYMENT_METHODS.has(paymentMethod) ? paymentMethod : "bank_transfer";
+  const payAmount = Number(amount);
+  if (!payAmount || payAmount <= 0) {
+    res.status(400).json({ error: "Payment amount must be greater than zero" });
+    return;
+  }
+
+  await db.insert(projectPaymentsTable).values({
+    projectId: id,
+    amount: String(payAmount),
+    paymentMethod: method,
+    paidAt: paidAt ?? new Date().toISOString().slice(0, 10),
+    notes: notes ?? null,
+  });
+
+  const newPaid = Number(existing.paidAmount) + payAmount;
+  const newRemaining = Math.max(0, Number(existing.clientPrice) - newPaid);
   const updates: Record<string, string> = {
     paidAmount: String(newPaid),
-    remainingAmount: String(newRemaining < 0 ? 0 : newRemaining),
+    remainingAmount: String(newRemaining),
   };
   if (nextPaymentDate) updates.nextPaymentDate = nextPaymentDate;
 
   const [updated] = await db.update(projectsTable).set(updates).where(eq(projectsTable.id, id)).returning();
-  res.json(toProjectShape(updated));
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(sql`created_at desc`);
+  const teamMap = await teamMapForProjects([id]);
+  res.json({
+    project: toProjectShape(updated, teamMap.get(id) ?? []),
+    payments: payments.map(toPaymentShape),
+  });
 });
 
 router.get("/projects/:id/team", async (req, res): Promise<void> => {

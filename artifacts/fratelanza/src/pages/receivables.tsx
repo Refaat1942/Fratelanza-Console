@@ -1,11 +1,9 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useListReceivables, getListReceivablesQueryKey, getListProjectsQueryKey, useLogPayment } from "@workspace/api-client-react";
+import { useListReceivables, getListReceivablesQueryKey, getListProjectsQueryKey } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
+import { ProjectPaymentDialog } from "@/components/project-payment-dialog";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { DollarSign } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -17,42 +15,34 @@ export default function Receivables() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const { data: receivables = [], isLoading } = useListReceivables();
-  const logPayment = useLogPayment();
   const [payProj, setPayProj] = useState<Project | null>(null);
-  const [amount, setAmount] = useState("");
-  const [nextDate, setNextDate] = useState("");
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: getListReceivablesQueryKey() });
     qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
   };
 
-  const handlePay = () => {
-    if (!payProj) return;
-    logPayment.mutate({ id: payProj.id, data: { amount: Number(amount), nextPaymentDate: nextDate || undefined } } as Parameters<typeof logPayment.mutate>[0], {
-      onSuccess: () => { invalidate(); setPayProj(null); setAmount(""); toast({ title: "Payment logged" }); },
-      onError: () => toast({ title: "Error", variant: "destructive" }),
-    });
-  };
-
   const now = new Date().toISOString().slice(0, 10);
+  const totalOutstanding = (receivables as Project[]).reduce((s, p) => s + Number(p.remainingAmount), 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">{t('receivables.title')}</h1>
-        <div className="text-sm text-muted-foreground">{t('receivables.totalOutstanding')}</div>
+        <div className="text-sm text-muted-foreground">
+          {t('receivables.totalOutstanding')}: <span className="text-red-400 font-semibold"><PrivacyWrapper value={totalOutstanding} /></span>
+        </div>
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : (
         <div className="rounded-lg border border-border overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Client", "Project", "Total Price", "Paid", "Remaining", "Next Payment Date", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+                {[t('receivables.client'), t('receivables.project'), t('receivables.totalPrice'), t('receivables.paid'), t('receivables.remaining'), t('receivables.nextDue'), ""].map((h) => (
+                  <th key={h || "actions"} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -71,12 +61,12 @@ export default function Receivables() {
                     <td className="px-4 py-3">
                       {p.nextPaymentDate ? (
                         <span className={overdue ? "text-red-400 font-semibold" : "text-muted-foreground"}>
-                          {p.nextPaymentDate}{overdue ? " (Overdue)" : ""}
+                          {p.nextPaymentDate}{overdue ? ` (${t('receivables.overdue')})` : ""}
                         </span>
                       ) : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <Button size="sm" variant="outline" data-testid={`button-log-payment-${p.id}`} className="border-green-500/30 text-green-400 hover:bg-green-500/10" onClick={() => { setPayProj(p); setAmount(""); setNextDate(""); }}>
+                      <Button size="sm" variant="outline" data-testid={`button-log-payment-${p.id}`} className="border-green-500/30 text-green-400 hover:bg-green-500/10" onClick={() => setPayProj(p)}>
                         <DollarSign className="h-3 w-3 me-1" /> {t('receivables.logPayment')}
                       </Button>
                     </td>
@@ -88,28 +78,12 @@ export default function Receivables() {
         </div>
       )}
 
-      <Dialog open={!!payProj} onOpenChange={(v) => !v && setPayProj(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{t('receivables.logPayment')} — {payProj?.projectName}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="text-sm text-muted-foreground">Remaining: <span className="text-red-400 font-semibold ml-1"><PrivacyWrapper value={payProj?.remainingAmount ?? 0} /></span></div>
-            <div className="space-y-1">
-              <Label>Payment Amount (EGP)</Label>
-              <Input data-testid="input-payment-amount" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount received" />
-            </div>
-            <div className="space-y-1">
-              <Label>Next Payment Date (optional)</Label>
-              <Input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPayProj(null)}>{t('common.cancel')}</Button>
-            <Button data-testid="button-confirm-payment" disabled={!amount || logPayment.isPending} onClick={handlePay}>
-              {logPayment.isPending ? t('common.saving') : t('projects.confirmPayment')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ProjectPaymentDialog
+        project={payProj}
+        open={!!payProj}
+        onOpenChange={(v) => !v && setPayProj(null)}
+        onSuccess={() => { invalidate(); toast({ title: t('projects.paymentLogged') }); }}
+      />
     </div>
   );
 }

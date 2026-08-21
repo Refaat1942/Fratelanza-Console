@@ -18,6 +18,7 @@ export interface Project {
   /** @nullable */
   freelancerName?: string | null;
   freelancerCommission?: number;
+  teamFreelancers?: string[];
   /** @nullable */
   startDate?: string | null;
   /** @nullable */

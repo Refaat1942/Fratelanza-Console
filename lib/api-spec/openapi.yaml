@@ -256,6 +256,27 @@ paths:
         "404":
           description: Not found
 
+  /projects/{id}/payments:
+    get:
+      operationId: listProjectPayments
+      tags: [projects]
+      summary: List all payments logged for a project
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Payment history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectPayment"
+
   /projects/{id}/payment:
     post:
       operationId: logPayment
@@ -1290,6 +1311,10 @@ components:
           type: ["string", "null"]
         freelancerCommission:
           type: number
+        teamFreelancers:
+          type: array
+          items:
+            type: string
         startDate:
           type: ["string", "null"]
         deadline:
@@ -1397,6 +1422,32 @@ components:
         amount:
           type: number
         nextPaymentDate:
+          type: string
+        paymentMethod:
+          type: string
+          enum: [bank_transfer, vodafone_cash, instapay, check]
+        paidAt:
+          type: string
+        notes:
+          type: string
+
+    ProjectPayment:
+      type: object
+      required: [id, projectId, amount, paymentMethod, createdAt]
+      properties:
+        id:
+          type: integer
+        projectId:
+          type: integer
+        amount:
+          type: number
+        paymentMethod:
+          type: string
+        paidAt:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
           type: string
 
     TeamMember:
