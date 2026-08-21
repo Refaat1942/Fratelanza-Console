@@ -5,6 +5,7 @@ set -euo pipefail
 APP_DIR="/opt/fratelanza-console"
 REPO_DIR="$APP_DIR/source"
 REPO_URL="https://github.com/Refaat1942/Fratelanza-Console.git"
+EXPECTED_VERSION="2026.08.21-b"
 
 echo "=========================================="
 echo " Fratelanza Console — deploy + migrate"
@@ -29,6 +30,9 @@ git -C "$REPO_DIR" reset --hard origin/main
 
 COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD)
 echo "==> Source commit: $COMMIT"
+
+# shellcheck source=vps-deploy-lib.sh
+source "$REPO_DIR/scripts/vps-deploy-lib.sh"
 
 echo "==> DB migrate (new tables/columns)..."
 if docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-db'; then
@@ -55,27 +59,31 @@ rm -rf "${APP_DIR:?}/web-static"/*
 docker cp fc-web-extract:/usr/share/nginx/html/. "$APP_DIR/web-static/"
 docker rm fc-web-extract
 
-if ! grep -rq "2026.08.21-a" "$APP_DIR/web-static/assets/" 2>/dev/null; then
-  echo "ERROR: Built web files do NOT contain v2026.08.21-a — aborting."
-  ls -la "$APP_DIR/web-static/assets/" | head -5
-  exit 1
-fi
-echo "==> Web static verified (v2026.08.21-a found)"
+verify_web_static
 
 echo "==> Building API..."
-docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
+docker build --no-cache -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 
-echo "==> Restarting containers..."
-docker restart fratelanza-console-api 2>/dev/null || docker compose -f "$APP_DIR/docker-compose.yml" up -d api
-docker restart fratelanza-console-web 2>/dev/null || docker compose -f "$APP_DIR/docker-compose.yml" up -d web
+sync_host_nginx_static
+restart_console_containers
 
 echo ""
-echo "=========================================="
-echo " DONE — commit $COMMIT"
-echo "=========================================="
+if verify_local_web && verify_public_site; then
+  echo ""
+  echo "=========================================="
+  echo " DONE — commit $COMMIT (v$EXPECTED_VERSION live)"
+  echo "=========================================="
+else
+  echo ""
+  echo "=========================================="
+  echo " DONE with WARNINGS — commit $COMMIT"
+  echo " Run: bash $REPO_DIR/scripts/vps-diagnose.sh"
+  echo "=========================================="
+fi
+
 echo ""
 echo "Verify in browser (Ctrl+Shift+R or incognito):"
-echo "  • Sidebar bottom shows: v2026.08.21-a"
+echo "  • Sidebar bottom shows: v$EXPECTED_VERSION"
 echo "  • Projects: Freelancers column + client dropdown"
 echo "  • Clients: Active switch + Export Excel"
 echo "  • Freelancers: Download / Sync Excel"
