@@ -32,6 +32,13 @@ echo "==> Resetting password for user: ${ADMIN_USER,,}"
 docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console \
   < "$APP_DIR/source/scripts/vps-migrate.sql" >/dev/null
 
+hash_password() {
+  docker run --rm fratelanza-console-api:local node --input-type=module -e "
+    import bcrypt from 'bcryptjs';
+    console.log(await bcrypt.hash(process.argv[1], 10));
+  " "$ADMIN_PASS"
+}
+
 HASH=""
 if docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-api'; then
   HASH=$(docker exec fratelanza-console-api node --input-type=module -e "
@@ -40,12 +47,27 @@ if docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-api'; then
   " "$ADMIN_PASS" 2>/dev/null || true)
 fi
 
+if [[ -z "$HASH" ]] && docker image inspect fratelanza-console-api:local >/dev/null 2>&1; then
+  echo "==> Using API image to hash password..."
+  HASH=$(hash_password)
+fi
+
 if [[ -z "$HASH" ]]; then
-  echo "==> API container unavailable — using temporary node container for bcrypt..."
-  HASH=$(docker run --rm node:24-alpine sh -c '
-    npm install bcryptjs@2.4.3 --silent 2>/dev/null
-    node -e "require(\"bcryptjs\").hash(process.argv[1], 10).then((h) => console.log(h))"
-  ' _ "$ADMIN_PASS")
+  echo "==> Using temporary node container for bcrypt..."
+  HASH=$(docker run --rm node:24-alpine sh -s "$ADMIN_PASS" <<'EOF'
+set -e
+PASS="$1"
+mkdir -p /tmp/bcrypt-work && cd /tmp/bcrypt-work
+npm init -y >/dev/null 2>&1
+npm install bcryptjs@2.4.3 --silent
+node -e 'require("bcryptjs").hash(process.argv[1], 10).then((h) => console.log(h))' "$PASS"
+EOF
+)
+fi
+
+if [[ -z "$HASH" ]]; then
+  echo "ERROR: Could not generate password hash"
+  exit 1
 fi
 
 docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console <<SQL
