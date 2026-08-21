@@ -40,8 +40,18 @@ else
 fi
 
 echo ""
-echo "==> Last API logs:"
-docker logs fratelanza-console-api --tail 40 2>&1 || echo "(container not found)"
+echo "==> Pulling latest source..."
+git -C "$APP_DIR/source" fetch origin main
+git -C "$APP_DIR/source" checkout main
+git -C "$APP_DIR/source" pull --ff-only origin main
+
+echo ""
+echo "==> Last API logs (before rebuild):"
+docker logs fratelanza-console-api --tail 20 2>&1 || echo "(container not found)"
+
+echo ""
+echo "==> Rebuilding API image..."
+docker build --no-cache -f "$APP_DIR/source/Dockerfile.api" -t fratelanza-console-api:local "$APP_DIR/source"
 
 echo ""
 echo "==> Recreating API container..."
