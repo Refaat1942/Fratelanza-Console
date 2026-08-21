@@ -23,5 +23,8 @@ export interface ProjectInput {
   remainingAmount?: number;
   nextPaymentDate?: string;
   notes?: string;
+  technicalOutline?: string;
+  generatedReport?: string;
+  quoteId?: number;
   team?: TeamMemberInput[];
 }

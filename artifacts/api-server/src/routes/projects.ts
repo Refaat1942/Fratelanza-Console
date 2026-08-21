@@ -1,9 +1,12 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
 import { db } from "@workspace/db";
-import { projectsTable, projectTeamTable, projectPaymentsTable } from "@workspace/db";
-import { eq, sql, and, ilike, inArray } from "drizzle-orm";
+import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable } from "@workspace/db";
+import { eq, sql, and, ilike, inArray, desc } from "drizzle-orm";
+import { extractTextFromUpload } from "../lib/document-parser.js";
 
 const router: IRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
 const PAYMENT_METHODS = new Set(["bank_transfer", "vodafone_cash", "instapay", "check"]);
 
@@ -45,8 +48,36 @@ function toProjectShape(
     remainingAmount: Number(r.remainingAmount),
     nextPaymentDate: r.nextPaymentDate,
     notes: r.notes,
+    technicalOutline: r.technicalOutline,
+    outlineFileName: r.outlineFileName,
+    hasOutlineFile: Boolean(r.outlineFileData),
+    quoteId: r.quoteId,
+    generatedReport: r.generatedReport,
     date: r.date.toISOString(),
   };
+}
+
+function toQuoteSummary(r: typeof quotesTable.$inferSelect) {
+  return {
+    id: r.id,
+    clientName: r.clientName,
+    projectName: r.projectName,
+    price: Number(r.price),
+    date: r.date,
+    language: r.language,
+    hasOutline: Boolean(r.technicalOutline),
+    hasReport: Boolean(r.generatedReport),
+  };
+}
+
+async function quotesForClient(clientName: string | null | undefined) {
+  const name = (clientName ?? "").trim();
+  if (!name) return [];
+  return db
+    .select()
+    .from(quotesTable)
+    .where(sql`lower(trim(${quotesTable.clientName})) = lower(trim(${name}))`)
+    .orderBy(desc(quotesTable.createdAt));
 }
 
 function toTeamShape(t: typeof projectTeamTable.$inferSelect) {
@@ -88,6 +119,12 @@ router.get("/projects", async (req, res): Promise<void> => {
   res.json(rows.map((r) => toProjectShape(r, teamMap.get(r.id) ?? [])));
 });
 
+router.get("/projects/quotes-by-client", async (req, res): Promise<void> => {
+  const clientName = String(req.query.clientName ?? "").trim();
+  const rows = await quotesForClient(clientName);
+  res.json(rows.map(toQuoteSummary));
+});
+
 router.get("/projects/receivables", async (req, res): Promise<void> => {
   const rows = await db
     .select()
@@ -112,6 +149,7 @@ router.post("/projects", async (req, res): Promise<void> => {
     paidAmount: String(paid),
     remainingAmount: String(price - paid),
     freelancerCommission: String(Number(body.freelancerCommission ?? 0)),
+    quoteId: body.quoteId != null ? Number(body.quoteId) : undefined,
   };
 
   const [project] = await db.insert(projectsTable).values(values).returning();
@@ -144,10 +182,18 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
     .where(eq(projectPaymentsTable.projectId, id))
     .orderBy(sql`created_at desc`);
   const teamMap = await teamMapForProjects([id]);
+  const linkedQuotes = await quotesForClient(project.clientName);
+  let linkedQuote = null;
+  if (project.quoteId) {
+    const [q] = await db.select().from(quotesTable).where(eq(quotesTable.id, project.quoteId));
+    if (q) linkedQuote = toQuoteSummary(q);
+  }
   res.json({
     ...toProjectShape(project, teamMap.get(id) ?? []),
     team: team.map(toTeamShape),
     payments: payments.map(toPaymentShape),
+    linkedQuotes: linkedQuotes.map(toQuoteSummary),
+    linkedQuote,
   });
 });
 
@@ -155,7 +201,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { team, ...body } = req.body ?? {};
 
-  const updates: Record<string, string | undefined> = {};
+  const updates: Record<string, string | number | null | undefined> = {};
   if (body.clientPrice !== undefined) {
     const price = Number(body.clientPrice);
     const cost = Number(body.totalCost ?? 0);
@@ -178,9 +224,16 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     updates.freelancerCommission = String(Number(body.freelancerCommission));
   }
 
-  const textFields = ["projectName", "clientName", "freelancerName", "startDate", "deadline", "status", "nextPaymentDate", "notes"];
+  const textFields = [
+    "projectName", "clientName", "freelancerName", "startDate", "deadline",
+    "status", "nextPaymentDate", "notes", "technicalOutline", "generatedReport",
+    "outlineFileName",
+  ];
   for (const f of textFields) {
     if (body[f] !== undefined) updates[f] = body[f];
+  }
+  if (body.quoteId !== undefined) {
+    updates.quoteId = body.quoteId === null ? null : Number(body.quoteId);
   }
 
   const [project] = await db
@@ -276,6 +329,106 @@ router.post("/projects/:id/payment", async (req, res): Promise<void> => {
   res.json({
     project: toProjectShape(updated, teamMap.get(id) ?? []),
     payments: payments.map(toPaymentShape),
+  });
+});
+
+router.get("/projects/:id/quotes", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  const rows = await quotesForClient(project.clientName);
+  res.json(rows.map(toQuoteSummary));
+});
+
+router.post("/projects/:id/outline", upload.single("file"), async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const file = (req as unknown as { file?: Express.Multer.File }).file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
+    return;
+  }
+  const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  try {
+    const parsed = await extractTextFromUpload(file.buffer, file.originalname);
+    const dataBase64 = file.buffer.toString("base64");
+    if (dataBase64.length > 14_000_000) {
+      res.status(400).json({ error: "File too large to store (max ~10MB)" });
+      return;
+    }
+    const [updated] = await db.update(projectsTable).set({
+      technicalOutline: parsed.text,
+      outlineFileName: file.originalname,
+      outlineFileData: dataBase64,
+    }).where(eq(projectsTable.id, id)).returning();
+    const teamMap = await teamMapForProjects([id]);
+    res.json({
+      project: toProjectShape(updated!, teamMap.get(id) ?? []),
+      parsed: { detectedLanguage: parsed.detectedLanguage, fileName: parsed.fileName },
+    });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
+
+router.get("/projects/:id/outline-file", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!project?.outlineFileData) {
+    res.status(404).json({ error: "Outline file not found" });
+    return;
+  }
+  res.json({
+    fileName: project.outlineFileName ?? "outline",
+    dataBase64: project.outlineFileData,
+  });
+});
+
+router.post("/projects/:id/link-quote", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const quoteId = Number(req.body?.quoteId);
+  const importPrice = req.body?.importPrice !== false;
+
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!project) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  const [quote] = await db.select().from(quotesTable).where(eq(quotesTable.id, quoteId));
+  if (!quote) {
+    res.status(404).json({ error: "Quote not found" });
+    return;
+  }
+  const projectClient = (project.clientName ?? "").trim().toLowerCase();
+  const quoteClient = quote.clientName.trim().toLowerCase();
+  if (projectClient && quoteClient && projectClient !== quoteClient) {
+    res.status(400).json({ error: "Quote belongs to a different client" });
+    return;
+  }
+
+  const price = Number(quote.price);
+  const patch: Record<string, string | number | null> = {
+    quoteId,
+    technicalOutline: quote.technicalOutline ?? project.technicalOutline,
+    generatedReport: quote.generatedReport ?? project.generatedReport,
+  };
+  if (importPrice && price > 0) {
+    patch.clientPrice = String(price);
+    patch.remainingAmount = String(Math.max(0, price - Number(project.paidAmount)));
+    patch.netProfit = String(price - Number(project.totalCost));
+  }
+
+  const [updated] = await db.update(projectsTable).set(patch).where(eq(projectsTable.id, id)).returning();
+  const teamMap = await teamMapForProjects([id]);
+  res.json({
+    project: toProjectShape(updated!, teamMap.get(id) ?? []),
+    quote: toQuoteSummary(quote),
   });
 });
 

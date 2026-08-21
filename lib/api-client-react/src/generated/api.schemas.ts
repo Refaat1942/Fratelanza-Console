@@ -172,6 +172,15 @@ export interface Project {
   nextPaymentDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  technicalOutline?: string | null;
+  /** @nullable */
+  outlineFileName?: string | null;
+  hasOutlineFile?: boolean;
+  /** @nullable */
+  quoteId?: number | null;
+  /** @nullable */
+  generatedReport?: string | null;
   date: string;
 }
 
@@ -207,6 +216,9 @@ export interface ProjectInput {
   remainingAmount?: number;
   nextPaymentDate?: string;
   notes?: string;
+  technicalOutline?: string;
+  generatedReport?: string;
+  quoteId?: number;
   team?: TeamMemberInput[];
 }
 
@@ -224,6 +236,9 @@ export interface ProjectUpdate {
   remainingAmount?: number;
   nextPaymentDate?: string;
   notes?: string;
+  technicalOutline?: string;
+  generatedReport?: string;
+  quoteId?: number;
   team?: TeamMemberInput[];
 }
 
@@ -367,6 +382,20 @@ export interface TemplateUpdate {
   multiplier?: number;
   broker?: number;
   students?: number;
+}
+
+export interface QuoteSummary {
+  id: number;
+  clientName: string;
+  /** @nullable */
+  projectName?: string | null;
+  price: number;
+  /** @nullable */
+  date?: string | null;
+  /** @nullable */
+  language?: string | null;
+  hasOutline?: boolean;
+  hasReport?: boolean;
 }
 
 export interface QuoteLineItem {
@@ -571,6 +600,10 @@ export type ListProjectsParams = {
 type?: string;
 status?: string;
 search?: string;
+};
+
+export type ListProjectQuotesByClientParams = {
+clientName?: string;
 };
 
 export type ListFreelancersParams = {

@@ -180,6 +180,26 @@ paths:
               schema:
                 $ref: "#/components/schemas/Project"
 
+  /projects/quotes-by-client:
+    get:
+      operationId: listProjectQuotesByClient
+      tags: [projects]
+      summary: List sales quotes for a client (project linking)
+      parameters:
+        - in: query
+          name: clientName
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Quote summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/QuoteSummary"
+
   /projects/receivables:
     get:
       operationId: listReceivables
@@ -1329,6 +1349,16 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        technicalOutline:
+          type: ["string", "null"]
+        outlineFileName:
+          type: ["string", "null"]
+        hasOutlineFile:
+          type: boolean
+        quoteId:
+          type: ["integer", "null"]
+        generatedReport:
+          type: ["string", "null"]
         date:
           type: string
 
@@ -1376,6 +1406,12 @@ components:
           type: string
         notes:
           type: string
+        technicalOutline:
+          type: string
+        generatedReport:
+          type: string
+        quoteId:
+          type: integer
         team:
           type: array
           items:
@@ -1410,6 +1446,12 @@ components:
           type: string
         notes:
           type: string
+        technicalOutline:
+          type: string
+        generatedReport:
+          type: string
+        quoteId:
+          type: integer
         team:
           type: array
           items:
@@ -1714,6 +1756,27 @@ components:
           type: integer
 
     # ── Quote ──────────────────────────────────────────────────────────
+    QuoteSummary:
+      type: object
+      required: [id, clientName, price]
+      properties:
+        id:
+          type: integer
+        clientName:
+          type: string
+        projectName:
+          type: ["string", "null"]
+        price:
+          type: number
+        date:
+          type: ["string", "null"]
+        language:
+          type: ["string", "null"]
+        hasOutline:
+          type: boolean
+        hasReport:
+          type: boolean
+
     QuoteLineItem:
       type: object
       required: [desc, price]

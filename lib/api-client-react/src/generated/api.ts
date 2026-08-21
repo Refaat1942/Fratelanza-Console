@@ -44,6 +44,7 @@ import type {
   ListClientsParams,
   ListExpensesParams,
   ListFreelancersParams,
+  ListProjectQuotesByClientParams,
   ListProjectsParams,
   ListQuotesParams,
   ListTasksParams,
@@ -59,6 +60,7 @@ import type {
   ProjectUpdate,
   Quote,
   QuoteInput,
+  QuoteSummary,
   QuoteUpdate,
   Task,
   TaskInput,
@@ -766,6 +768,90 @@ export const useCreateProject = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateProjectMutationOptions(options));
     }
+
+export const getListProjectQuotesByClientUrl = (params?: ListProjectQuotesByClientParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/projects/quotes-by-client?${stringifiedParams}` : `/api/projects/quotes-by-client`
+}
+
+/**
+ * @summary List sales quotes for a client (project linking)
+ */
+export const listProjectQuotesByClient = async (params?: ListProjectQuotesByClientParams, options?: RequestInit): Promise<QuoteSummary[]> => {
+
+  return customFetch<QuoteSummary[]>(getListProjectQuotesByClientUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProjectQuotesByClientQueryKey = (params?: ListProjectQuotesByClientParams,) => {
+    return [
+    `/api/projects/quotes-by-client`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProjectQuotesByClientQueryOptions = <TData = Awaited<ReturnType<typeof listProjectQuotesByClient>>, TError = ErrorType<unknown>>(params?: ListProjectQuotesByClientParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProjectQuotesByClient>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProjectQuotesByClientQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProjectQuotesByClient>>> = ({ signal }) => listProjectQuotesByClient(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProjectQuotesByClient>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProjectQuotesByClientQueryResult = NonNullable<Awaited<ReturnType<typeof listProjectQuotesByClient>>>
+export type ListProjectQuotesByClientQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List sales quotes for a client (project linking)
+ */
+
+export function useListProjectQuotesByClient<TData = Awaited<ReturnType<typeof listProjectQuotesByClient>>, TError = ErrorType<unknown>>(
+ params?: ListProjectQuotesByClientParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProjectQuotesByClient>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProjectQuotesByClientQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListReceivablesUrl = () => {
 
