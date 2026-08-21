@@ -60,6 +60,19 @@ else
 fi
 
 echo ""
+echo "==> localhost:3101 (docker api):"
+if curl -sf --max-time 5 http://127.0.0.1:3101/api/healthz 2>/dev/null; then
+  echo "    healthz: OK"
+else
+  echo "    healthz: FAILED — login will not work (502)"
+  docker logs fratelanza-console-api --tail 15 2>&1 || true
+fi
+
+echo ""
+echo "==> Public API ($PUBLIC_URL/api/healthz):"
+curl -sf --max-time 10 "$PUBLIC_URL/api/healthz" 2>/dev/null && echo "" || echo "    FAILED (502 or unreachable)"
+
+echo ""
 echo "==> Host nginx configs mentioning console.fratelanza.com:"
 grep -R --line-number -E 'server_name|root |proxy_pass|console\.fratelanza' /etc/nginx/sites-enabled/ 2>/dev/null || echo "(none or no access)"
 

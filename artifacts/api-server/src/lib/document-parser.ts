@@ -1,6 +1,5 @@
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
-import { PDFParse } from "pdf-parse";
 import { normalizeOutlineText } from "@workspace/outline-utils";
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -52,13 +51,11 @@ function detectLanguage(text: string): "English" | "Arabic" {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
-  const parser = new PDFParse({ data: buffer });
-  try {
-    const result = await parser.getText();
-    return result.text ?? "";
-  } finally {
-    await parser.destroy();
-  }
+  // Lazy load — pdf-parse must not run at startup (v2 pulled pdf.js canvas and crashed Node).
+  const mod = await import("pdf-parse");
+  const pdfParse = (mod as { default?: (buf: Buffer) => Promise<{ text?: string }> }).default ?? mod;
+  const result = await (pdfParse as (buf: Buffer) => Promise<{ text?: string }>)(buffer);
+  return result.text ?? "";
 }
 
 async function extractDocxText(buffer: Buffer): Promise<string> {
