@@ -13,6 +13,8 @@ COPY artifacts/fratelanza/package.json ./artifacts/fratelanza/
 RUN pnpm install --no-frozen-lockfile
 
 FROM deps AS builder
+ARG CACHEBUST=1
+RUN echo "build cache bust: ${CACHEBUST}"
 COPY lib/ ./lib/
 COPY artifacts/fratelanza/ ./artifacts/fratelanza/
 COPY tsconfig.json tsconfig.base.json ./

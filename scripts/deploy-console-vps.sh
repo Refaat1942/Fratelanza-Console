@@ -47,13 +47,18 @@ fi
 echo "==> Building API image (fratelanza-console-api:local)"
 docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 
-echo "==> Building web assets"
-docker build -f "$REPO_DIR/Dockerfile.web" -t fratelanza-console-web:build "$REPO_DIR"
+echo "==> Building web assets (no stale cache)"
+docker build --no-cache --build-arg CACHEBUST="$COMMIT" -f "$REPO_DIR/Dockerfile.web" -t fratelanza-console-web:build "$REPO_DIR"
 docker rm -f fc-web-extract 2>/dev/null || true
 docker create --name fc-web-extract fratelanza-console-web:build
 rm -rf "${APP_DIR:?}/web-static"/*
 docker cp fc-web-extract:/usr/share/nginx/html/. "$APP_DIR/web-static/"
 docker rm fc-web-extract
+if ! grep -rq "2026.08.21-a" "$APP_DIR/web-static/assets/" 2>/dev/null; then
+  echo "ERROR: web-static missing v2026.08.21-a after build"
+  exit 1
+fi
+echo "==> Web static verified"
 
 echo "==> Restarting ONLY console containers"
 docker restart fratelanza-console-api

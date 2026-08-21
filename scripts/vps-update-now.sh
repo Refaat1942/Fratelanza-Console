@@ -41,8 +41,12 @@ else
   exit 1
 fi
 
-echo "==> Building WEB..."
-docker build -f "$REPO_DIR/Dockerfile.web" -t fratelanza-console-web:build "$REPO_DIR"
+echo "==> Building WEB (no stale cache)..."
+docker build --no-cache \
+  --build-arg CACHEBUST="$COMMIT" \
+  -f "$REPO_DIR/Dockerfile.web" \
+  -t fratelanza-console-web:build \
+  "$REPO_DIR"
 
 echo "==> Copying web to web-static..."
 docker rm -f fc-web-extract 2>/dev/null || true
@@ -50,6 +54,13 @@ docker create --name fc-web-extract fratelanza-console-web:build
 rm -rf "${APP_DIR:?}/web-static"/*
 docker cp fc-web-extract:/usr/share/nginx/html/. "$APP_DIR/web-static/"
 docker rm fc-web-extract
+
+if ! grep -rq "2026.08.21-a" "$APP_DIR/web-static/assets/" 2>/dev/null; then
+  echo "ERROR: Built web files do NOT contain v2026.08.21-a — aborting."
+  ls -la "$APP_DIR/web-static/assets/" | head -5
+  exit 1
+fi
+echo "==> Web static verified (v2026.08.21-a found)"
 
 echo "==> Building API..."
 docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
