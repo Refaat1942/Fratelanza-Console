@@ -115,6 +115,11 @@ export const GetRecentProjectsResponseItem = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })
 export const GetRecentProjectsResponse = zod.array(GetRecentProjectsResponseItem)
@@ -147,6 +152,11 @@ export const ListProjectsResponseItem = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })
 export const ListProjectsResponse = zod.array(ListProjectsResponseItem)
@@ -171,11 +181,34 @@ export const CreateProjectBody = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().optional(),
   "notes": zod.string().optional(),
+  "technicalOutline": zod.string().optional(),
+  "generatedReport": zod.string().optional(),
+  "quoteId": zod.number().optional(),
   "team": zod.array(zod.object({
   "freelancerName": zod.string(),
   "commission": zod.number()
 })).optional()
 })
+
+
+/**
+ * @summary List sales quotes for a client (project linking)
+ */
+export const ListProjectQuotesByClientQueryParams = zod.object({
+  "clientName": zod.coerce.string().optional()
+})
+
+export const ListProjectQuotesByClientResponseItem = zod.object({
+  "id": zod.number(),
+  "clientName": zod.string(),
+  "projectName": zod.string().nullish(),
+  "price": zod.number(),
+  "date": zod.string().nullish(),
+  "language": zod.string().nullish(),
+  "hasOutline": zod.boolean().optional(),
+  "hasReport": zod.boolean().optional()
+})
+export const ListProjectQuotesByClientResponse = zod.array(ListProjectQuotesByClientResponseItem)
 
 
 /**
@@ -199,6 +232,11 @@ export const ListReceivablesResponseItem = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })
 export const ListReceivablesResponse = zod.array(ListReceivablesResponseItem)
@@ -229,6 +267,11 @@ export const GetProjectResponse = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 }).and(zod.object({
   "team": zod.array(zod.object({
@@ -261,6 +304,9 @@ export const UpdateProjectBody = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().optional(),
   "notes": zod.string().optional(),
+  "technicalOutline": zod.string().optional(),
+  "generatedReport": zod.string().optional(),
+  "quoteId": zod.number().optional(),
   "team": zod.array(zod.object({
   "freelancerName": zod.string(),
   "commission": zod.number()
@@ -285,6 +331,11 @@ export const UpdateProjectResponse = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })
 
@@ -349,6 +400,11 @@ export const LogPaymentResponse = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })
 
@@ -653,6 +709,11 @@ export const GetClientResponse = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })).optional(),
   "totalProjects": zod.number().optional(),
@@ -1158,6 +1219,11 @@ export const GetFinanceReportResponse = zod.object({
   "remainingAmount": zod.number().optional(),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "technicalOutline": zod.string().nullish(),
+  "outlineFileName": zod.string().nullish(),
+  "hasOutlineFile": zod.boolean().optional(),
+  "quoteId": zod.number().nullish(),
+  "generatedReport": zod.string().nullish(),
   "date": zod.string()
 })),
   "remainingBreakdown": zod.array(zod.object({

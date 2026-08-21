@@ -8,6 +8,7 @@ import {
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { FreelancerPicker } from "@/components/freelancer-picker";
 import { ProjectPaymentDialog } from "@/components/project-payment-dialog";
+import { ProjectDocumentsPanel, type ClientQuoteSummary } from "@/components/project-documents-panel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, DollarSign, Search, X, Users, UserPlus } from "lucide-react";
+import { Plus, Pencil, Trash2, DollarSign, Search, X, Users, UserPlus, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
 type Project = {
@@ -28,6 +29,8 @@ type Project = {
   startDate?: string | null; deadline?: string | null;
   status: string; paidAmount: number; remainingAmount: number;
   nextPaymentDate?: string | null; notes?: string | null; date: string;
+  technicalOutline?: string | null; generatedReport?: string | null;
+  quoteId?: number | null; outlineFileName?: string | null; hasOutlineFile?: boolean;
 };
 
 type TeamMember = { freelancerName: string; commission: number };
@@ -43,6 +46,8 @@ const empty = {
   totalCost: 0, netProfit: 0, freelancerName: "", freelancerCommission: 0,
   startDate: "", deadline: "", status: "Ongoing", paidAmount: 0,
   remainingAmount: 0, nextPaymentDate: "", notes: "",
+  technicalOutline: "", generatedReport: "", quoteId: null as number | null,
+  hasOutlineFile: false, outlineFileName: "",
 };
 
 export default function Projects() {
@@ -75,32 +80,45 @@ export default function Projects() {
   });
 
   const openCreate = () => { setForm({ ...empty }); setTeam([]); setEditing(null); setShowForm(true); };
+
+  const applyProjectToForm = (p: Project, teamLoaded: TeamMember[]) => {
+    setTeam(teamLoaded);
+    const teamCommissionSum = teamLoaded.reduce((s, m) => s + m.commission, 0);
+    const legacyLeadCommission = p.freelancerName ? 0 : Number(p.freelancerCommission ?? 0);
+    const otherCosts = Math.max(0, Number(p.totalCost) - teamCommissionSum - legacyLeadCommission);
+    setForm({
+      type: p.type, projectName: p.projectName, clientName: p.clientName ?? "",
+      clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit,
+      freelancerName: "", freelancerCommission: 0,
+      startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status,
+      paidAmount: p.paidAmount, remainingAmount: p.remainingAmount,
+      nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "",
+      technicalOutline: p.technicalOutline ?? "", generatedReport: p.generatedReport ?? "",
+      quoteId: p.quoteId ?? null, hasOutlineFile: Boolean(p.hasOutlineFile),
+      outlineFileName: p.outlineFileName ?? "",
+    });
+  };
+
   const openEdit = (p: Project) => {
     setEditing(p);
     setTeam([]);
     const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
-    fetch(`${apiBase}/projects/${p.id}/team`, { credentials: "include" })
-      .then((r) => r.ok ? r.json() : [])
-      .then((t: Array<{ freelancerName: string; commission: number }>) => {
-        const teamLoaded: TeamMember[] = t.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission) }));
-        // Migrate legacy lead freelancer into the unified list if not already there
-        if (p.freelancerName && !teamLoaded.some((m) => m.freelancerName === p.freelancerName)) {
-          teamLoaded.unshift({ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) });
-        }
-        setTeam(teamLoaded);
-        const teamCommissionSum = teamLoaded.reduce((s, m) => s + m.commission, 0);
-        const legacyLeadCommission = p.freelancerName ? 0 : Number(p.freelancerCommission ?? 0);
-        const otherCosts = Math.max(0, Number(p.totalCost) - teamCommissionSum - legacyLeadCommission);
-        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: "", freelancerCommission: 0, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
-      })
-      .catch(() => {
-        const teamLoaded: TeamMember[] = p.freelancerName
-          ? [{ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) }]
-          : [];
-        setTeam(teamLoaded);
-        const otherCosts = Math.max(0, Number(p.totalCost) - teamLoaded.reduce((s, m) => s + m.commission, 0));
-        setForm({ type: p.type, projectName: p.projectName, clientName: p.clientName ?? "", clientPrice: p.clientPrice, totalCost: otherCosts, netProfit: p.netProfit, freelancerName: "", freelancerCommission: 0, startDate: p.startDate ?? "", deadline: p.deadline ?? "", status: p.status, paidAmount: p.paidAmount, remainingAmount: p.remainingAmount, nextPaymentDate: p.nextPaymentDate ?? "", notes: p.notes ?? "" });
-      });
+    Promise.all([
+      fetch(`${apiBase}/projects/${p.id}`, { credentials: "include" }).then((r) => r.ok ? r.json() : p),
+      fetch(`${apiBase}/projects/${p.id}/team`, { credentials: "include" }).then((r) => r.ok ? r.json() : []),
+    ]).then(([detail, teamRows]: [Project, Array<{ freelancerName: string; commission: number }>]) => {
+      const teamLoaded: TeamMember[] = teamRows.map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission) }));
+      const lead = detail.freelancerName ?? p.freelancerName;
+      if (lead && !teamLoaded.some((m) => m.freelancerName === lead)) {
+        teamLoaded.unshift({ freelancerName: lead, commission: Number(detail.freelancerCommission ?? p.freelancerCommission ?? 0) });
+      }
+      applyProjectToForm(detail, teamLoaded);
+    }).catch(() => {
+      const teamLoaded: TeamMember[] = p.freelancerName
+        ? [{ freelancerName: p.freelancerName, commission: Number(p.freelancerCommission ?? 0) }]
+        : [];
+      applyProjectToForm(p, teamLoaded);
+    });
     setShowForm(true);
   };
 
@@ -127,8 +145,9 @@ export default function Projects() {
     const totalCommission = cleanTeam.reduce((s, m) => s + Number(m.commission || 0), 0);
     const leadName = cleanTeam[0]?.freelancerName ?? "";
     const leadCommission = Number(cleanTeam[0]?.commission ?? 0);
+    const { hasOutlineFile, outlineFileName, freelancerName, freelancerCommission, ...formData } = form;
     const data = {
-      ...form,
+      ...formData,
       clientPrice: Number(form.clientPrice),
       totalCost: Number(form.totalCost) + totalCommission,
       netProfit: Number(form.clientPrice) - (Number(form.totalCost) + totalCommission),
@@ -137,6 +156,9 @@ export default function Projects() {
       freelancerName: leadName,
       freelancerCommission: leadCommission,
       team: cleanTeam.slice(1).map((m) => ({ freelancerName: m.freelancerName, commission: Number(m.commission || 0) })),
+      technicalOutline: form.technicalOutline || null,
+      generatedReport: form.generatedReport || null,
+      quoteId: form.quoteId,
     };
     if (editing) {
       updateProject.mutate({ id: editing.id, data } as Parameters<typeof updateProject.mutate>[0], {
@@ -161,6 +183,20 @@ export default function Projects() {
 
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
   const fs = (k: string) => (v: string) => setForm((prev) => ({ ...prev, [k]: v }));
+
+  const handleQuoteLink = (quote: ClientQuoteSummary, importPrice: boolean) => {
+    setForm((prev) => ({
+      ...prev,
+      quoteId: quote.id,
+      ...(importPrice && quote.price > 0
+        ? {
+            clientPrice: quote.price,
+            remainingAmount: quote.price - Number(prev.paidAmount),
+            netProfit: quote.price - Number(prev.totalCost),
+          }
+        : {}),
+    }));
+  };
 
   const downPaymentPct = form.clientPrice > 0 ? Math.round((Number(form.paidAmount) / Number(form.clientPrice)) * 100) : 0;
   const remainingPreview = Number(form.clientPrice) - Number(form.paidAmount);
@@ -220,7 +256,14 @@ export default function Projects() {
                 return (
                 <tr key={p.id} data-testid={`row-project-${p.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3"><Badge variant="outline" className={p.type === "Software" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}>{p.type}</Badge></td>
-                  <td className="px-4 py-3 font-medium">{p.projectName}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      {p.projectName}
+                      {(p.hasOutlineFile || p.technicalOutline || p.quoteId) && (
+                        <span title={t("projects.hasDocuments")}><FileText className="h-3.5 w-3.5 text-primary shrink-0" /></span>
+                      )}
+                    </div>
+                  </td>
                   <td className="px-4 py-3 text-muted-foreground">{p.clientName ?? "—"}</td>
                   <td className="px-4 py-3">
                     {freelancerNames.length === 0 ? (
@@ -255,7 +298,7 @@ export default function Projects() {
 
       {/* Create / Edit Modal */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? t('projects.edit') : t('projects.new')}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
             <div className="md:col-span-2 space-y-1">
@@ -362,10 +405,25 @@ export default function Projects() {
               <Label>Deadline</Label>
               <Input type="date" value={form.deadline} onChange={f("deadline")} />
             </div>
-            <div className="space-y-1">
+            <div className="md:col-span-2 space-y-1">
               <Label>Next Payment Date</Label>
               <Input type="date" value={form.nextPaymentDate} onChange={f("nextPaymentDate")} />
             </div>
+
+            <ProjectDocumentsPanel
+              projectId={editing?.id}
+              clientName={form.clientName}
+              technicalOutline={form.technicalOutline}
+              generatedReport={form.generatedReport}
+              quoteId={form.quoteId}
+              outlineFileName={form.outlineFileName}
+              hasOutlineFile={form.hasOutlineFile}
+              onOutlineChange={(v) => setForm((prev) => ({ ...prev, technicalOutline: v }))}
+              onReportChange={(v) => setForm((prev) => ({ ...prev, generatedReport: v }))}
+              onQuoteLink={handleQuoteLink}
+              onFileUploaded={(name) => setForm((prev) => ({ ...prev, outlineFileName: name, hasOutlineFile: true }))}
+            />
+
             <div className="md:col-span-2 space-y-1">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={f("notes")} rows={3} />

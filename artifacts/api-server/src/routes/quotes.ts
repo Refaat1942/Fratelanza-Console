@@ -106,6 +106,16 @@ router.get("/quotes", async (req, res): Promise<void> => {
   res.json(rows.map(toShape));
 });
 
+router.get("/quotes/:id", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const [row] = await db.select().from(quotesTable).where(eq(quotesTable.id, id));
+  if (!row) {
+    res.status(404).json({ error: "Quote not found" });
+    return;
+  }
+  res.json(toShape(row));
+});
+
 router.post("/quotes", async (req, res): Promise<void> => {
   const body = req.body ?? {};
   const today = new Date().toISOString().slice(0, 10);

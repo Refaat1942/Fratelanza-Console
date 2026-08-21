@@ -1,4 +1,5 @@
 import mammoth from "mammoth";
+import * as XLSX from "xlsx";
 import { PDFParse } from "pdf-parse";
 import { normalizeOutlineText } from "@workspace/outline-utils";
 
@@ -65,6 +66,22 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
   return result.value ?? "";
 }
 
+function extractExcelText(buffer: Buffer): string {
+  const wb = XLSX.read(buffer, { type: "buffer" });
+  const parts: string[] = [];
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName]!;
+    const rows = XLSX.utils.sheet_to_json<(string | number | null)[]>(sheet, { header: 1, defval: "" });
+    const lines = rows
+      .map((row) => (Array.isArray(row) ? row.map((c) => String(c ?? "").trim()).filter(Boolean).join(" | ") : ""))
+      .filter(Boolean);
+    if (lines.length > 0) {
+      parts.push(`[${sheetName}]\n${lines.join("\n")}`);
+    }
+  }
+  return parts.join("\n\n");
+}
+
 export async function extractTextFromUpload(
   buffer: Buffer,
   fileName: string,
@@ -89,8 +106,12 @@ export async function extractTextFromUpload(
     case "csv":
       raw = buffer.toString("utf8");
       break;
+    case "xlsx":
+    case "xls":
+      raw = extractExcelText(buffer);
+      break;
     default:
-      throw new Error(`Unsupported file type ".${ext}". Use PDF, DOCX, TXT, or MD.`);
+      throw new Error(`Unsupported file type ".${ext}". Use PDF, DOCX, XLSX, TXT, or MD.`);
   }
 
   const text = normalizeExtractedText(raw);

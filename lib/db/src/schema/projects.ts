@@ -19,6 +19,14 @@ export const projectsTable = pgTable("pricing_records", {
   remainingAmount: numeric("remaining_amount", { precision: 12, scale: 2 }).notNull().default("0"),
   nextPaymentDate: text("next_payment_date"),
   notes: text("notes"),
+  /** Extracted technical outline text (pages joined with ---PAGE---) */
+  technicalOutline: text("technical_outline"),
+  outlineFileName: text("outline_file_name"),
+  outlineFileData: text("outline_file_data"),
+  /** Linked sales quote for this project (same client) */
+  quoteId: integer("quote_id"),
+  /** Customer-facing report copied from linked quote or edited locally */
+  generatedReport: text("generated_report"),
   date: timestamp("date", { withTimezone: true }).notNull().defaultNow(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

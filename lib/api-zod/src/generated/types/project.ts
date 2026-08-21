@@ -30,5 +30,14 @@ export interface Project {
   nextPaymentDate?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  technicalOutline?: string | null;
+  /** @nullable */
+  outlineFileName?: string | null;
+  hasOutlineFile?: boolean;
+  /** @nullable */
+  quoteId?: number | null;
+  /** @nullable */
+  generatedReport?: string | null;
   date: string;
 }

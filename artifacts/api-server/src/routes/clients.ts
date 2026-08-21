@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { clientsTable, projectsTable } from "@workspace/db";
-import { eq, sql, ilike, and } from "drizzle-orm";
+import { clientsTable, projectsTable, quotesTable } from "@workspace/db";
+import { eq, sql, ilike, and, desc } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -78,6 +78,12 @@ router.get("/clients/:id", async (req, res): Promise<void> => {
     .from(projectsTable)
     .where(ilike(projectsTable.clientName, `%${client.name}%`));
 
+  const quotes = await db
+    .select()
+    .from(quotesTable)
+    .where(sql`lower(trim(${quotesTable.clientName})) = lower(trim(${client.name}))`)
+    .orderBy(desc(quotesTable.createdAt));
+
   const totalValue = projects.reduce((s, p) => s + Number(p.clientPrice), 0);
   const totalPaid = projects.reduce((s, p) => s + Number(p.paidAmount), 0);
   const totalRemaining = projects.reduce((s, p) => s + Number(p.remainingAmount), 0);
@@ -85,7 +91,16 @@ router.get("/clients/:id", async (req, res): Promise<void> => {
   res.json({
     ...toShape(client),
     projects: projects.map(toProjectShape),
+    quotes: quotes.map((q) => ({
+      id: q.id,
+      clientName: q.clientName,
+      projectName: q.projectName,
+      price: Number(q.price),
+      date: q.date,
+      language: q.language,
+    })),
     totalProjects: projects.length,
+    totalQuotes: quotes.length,
     totalValue,
     totalPaid,
     totalRemaining,
