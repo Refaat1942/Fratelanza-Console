@@ -5,8 +5,12 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { PaymentInputPaymentMethod } from './paymentInputPaymentMethod';
 
 export interface PaymentInput {
   amount: number;
   nextPaymentDate?: string;
+  paymentMethod?: PaymentInputPaymentMethod;
+  paidAt?: string;
+  notes?: string;
 }

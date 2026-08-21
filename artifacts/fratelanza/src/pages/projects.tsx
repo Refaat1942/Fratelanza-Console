@@ -2,11 +2,12 @@ import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useListProjects, getListProjectsQueryKey,
-  useCreateProject, useUpdateProject, useDeleteProject, useLogPayment,
+  useCreateProject, useUpdateProject, useDeleteProject,
   useListClients,
 } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { FreelancerPicker } from "@/components/freelancer-picker";
+import { ProjectPaymentDialog } from "@/components/project-payment-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,7 @@ type Project = {
   id: number; type: string; projectName: string; clientName?: string | null;
   clientPrice: number; totalCost: number; netProfit: number;
   freelancerName?: string | null; freelancerCommission: number;
+  teamFreelancers?: string[];
   startDate?: string | null; deadline?: string | null;
   status: string; paidAmount: number; remainingAmount: number;
   nextPaymentDate?: string | null; notes?: string | null; date: string;
@@ -56,15 +58,12 @@ export default function Projects() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [paymentProject, setPaymentProject] = useState<Project | null>(null);
-  const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentDate, setPaymentDate] = useState("");
 
   const { data: projects = [], isLoading } = useListProjects();
   const { data: clients = [] } = useListClients();
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
-  const logPayment = useLogPayment();
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListProjectsQueryKey() });
 
@@ -160,14 +159,6 @@ export default function Projects() {
     });
   };
 
-  const handleLogPayment = () => {
-    if (!paymentProject) return;
-    logPayment.mutate({ id: paymentProject.id, data: { amount: Number(paymentAmount), nextPaymentDate: paymentDate || undefined } } as Parameters<typeof logPayment.mutate>[0], {
-      onSuccess: () => { invalidate(); setPaymentProject(null); setPaymentAmount(""); setPaymentDate(""); toast({ title: "Payment logged" }); },
-      onError: () => toast({ title: "Error logging payment", variant: "destructive" }),
-    });
-  };
-
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm((prev) => ({ ...prev, [k]: e.target.value }));
   const fs = (k: string) => (v: string) => setForm((prev) => ({ ...prev, [k]: v }));
 
@@ -214,19 +205,34 @@ export default function Projects() {
           <table className="w-full text-sm min-w-[800px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {[t('common.type'), t('projects.projectName'), t('projects.clientName'), t('projects.price'), t('dashboard.netProfit'), t('projects.paid'), t('projects.remaining'), t('common.status'), t('projects.actions')].map((h) => (
+                {[t('common.type'), t('projects.projectName'), t('projects.clientName'), t('projects.freelancers'), t('projects.price'), t('dashboard.netProfit'), t('projects.paid'), t('projects.remaining'), t('common.status'), t('projects.actions')].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('projects.noProjects')}</td></tr>
-              ) : filtered.map((p) => (
+                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">{t('projects.noProjects')}</td></tr>
+              ) : filtered.map((p) => {
+                const freelancerNames = (p.teamFreelancers && p.teamFreelancers.length > 0)
+                  ? p.teamFreelancers
+                  : (p.freelancerName ? [p.freelancerName] : []);
+                return (
                 <tr key={p.id} data-testid={`row-project-${p.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3"><Badge variant="outline" className={p.type === "Software" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}>{p.type}</Badge></td>
                   <td className="px-4 py-3 font-medium">{p.projectName}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.clientName ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    {freelancerNames.length === 0 ? (
+                      <span className="text-muted-foreground">—</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1 max-w-[180px]">
+                        {freelancerNames.map((name) => (
+                          <Badge key={name} variant="outline" className="text-[10px] text-primary border-primary/30">{name}</Badge>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3"><PrivacyWrapper value={p.clientPrice} /></td>
                   <td className="px-4 py-3 text-green-400"><PrivacyWrapper value={p.netProfit} /></td>
                   <td className="px-4 py-3 text-blue-400"><PrivacyWrapper value={p.paidAmount} /></td>
@@ -234,13 +240,14 @@ export default function Projects() {
                   <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[p.status] ?? "bg-gray-500/20 text-gray-400"}`}>{p.status}</span></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      {p.remainingAmount > 0 && <Button size="icon" variant="ghost" title="Log Payment" data-testid={`button-pay-${p.id}`} onClick={() => { setPaymentProject(p); setPaymentAmount(""); setPaymentDate(""); }}><DollarSign className="h-4 w-4 text-green-400" /></Button>}
+                      <Button size="icon" variant="ghost" title={t('projects.logPayment')} data-testid={`button-pay-${p.id}`} onClick={() => setPaymentProject(p)}><DollarSign className="h-4 w-4 text-green-400" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-edit-${p.id}`} onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" data-testid={`button-delete-${p.id}`} onClick={() => setDeleteId(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -264,8 +271,18 @@ export default function Projects() {
               <Select value={form.status} onValueChange={fs("status")}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Ongoing">Ongoing</SelectItem><SelectItem value="Completed">Completed</SelectItem><SelectItem value="Cancelled">Cancelled</SelectItem></SelectContent></Select>
             </div>
             <div className="md:col-span-2 space-y-1">
-              <Label>Client</Label>
-              <Input data-testid="input-client-name" value={form.clientName} onChange={f("clientName")} />
+              <Label>{t('projects.clientName')}</Label>
+              <Select value={form.clientName} onValueChange={fs("clientName")}>
+                <SelectTrigger data-testid="input-client-name"><SelectValue placeholder={t('projects.selectClient')} /></SelectTrigger>
+                <SelectContent>
+                  {form.clientName && !clients.some((c) => c.name === form.clientName) && (
+                    <SelectItem value={form.clientName}>{form.clientName}</SelectItem>
+                  )}
+                  {clients.map((c) => (
+                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Freelancers list */}
@@ -363,33 +380,12 @@ export default function Projects() {
         </DialogContent>
       </Dialog>
 
-      {/* Log Payment Dialog */}
-      <Dialog open={!!paymentProject} onOpenChange={(v) => !v && setPaymentProject(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>{t('projects.logPayment')} — {paymentProject?.projectName}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div className="rounded border border-border p-3"><div className="text-muted-foreground text-xs">Price</div><div className="font-semibold"><PrivacyWrapper value={paymentProject?.clientPrice ?? 0} /></div></div>
-              <div className="rounded border border-border p-3"><div className="text-muted-foreground text-xs">Already Paid</div><div className="font-semibold text-blue-400"><PrivacyWrapper value={paymentProject?.paidAmount ?? 0} /></div></div>
-              <div className="col-span-2 rounded border border-destructive/30 bg-destructive/5 p-3"><div className="text-muted-foreground text-xs">Remaining</div><div className="font-semibold text-destructive"><PrivacyWrapper value={paymentProject?.remainingAmount ?? 0} /></div></div>
-            </div>
-            <div className="space-y-1">
-              <Label>Amount Received (EGP)</Label>
-              <Input data-testid="input-payment-amount" type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} />
-            </div>
-            <div className="space-y-1">
-              <Label>Next Payment Date (optional)</Label>
-              <Input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentProject(null)}>Cancel</Button>
-            <Button data-testid="button-confirm-payment" onClick={handleLogPayment} disabled={logPayment.isPending || !paymentAmount}>
-              {logPayment.isPending ? "Saving..." : "Confirm Payment"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ProjectPaymentDialog
+        project={paymentProject}
+        open={!!paymentProject}
+        onOpenChange={(v) => !v && setPaymentProject(null)}
+        onSuccess={() => { invalidate(); toast({ title: t('projects.paymentLogged') }); }}
+      />
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>
         <AlertDialogContent>

@@ -46,6 +46,105 @@ router.get("/freelancers", async (req, res): Promise<void> => {
   res.json(rows.map(toShape));
 });
 
+function parseFreelancerRows(buffer: Buffer): Record<string, unknown>[] {
+  const wb = XLSX.read(buffer, { type: "buffer" });
+  const sheet = wb.Sheets[wb.SheetNames[0]!]!;
+  return XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
+}
+
+function rowToFreelancerValues(r: Record<string, unknown>, i: number) {
+  const norm = (k: string) =>
+    r[k] ?? r[k.toLowerCase()] ?? r[k.charAt(0).toUpperCase() + k.slice(1)] ?? null;
+  const name = norm("name");
+  if (!name || String(name).trim() === "") return null;
+  const codeRaw = norm("code");
+  const code = codeRaw ? String(codeRaw).trim() : `FL-${Date.now()}-${i}`;
+  return {
+    code,
+    name: String(name).trim(),
+    phone: norm("phone") != null ? String(norm("phone")) : null,
+    spec: norm("spec") != null ? String(norm("spec")) : null,
+    position: norm("position") != null ? String(norm("position")) : null,
+    earned: String(Number(norm("earned") ?? 0) || 0),
+    balance: String(Number(norm("balance") ?? 0) || 0),
+    rating: String(Math.max(1, Math.min(5, Number(norm("rating") ?? 5) || 5))),
+  };
+}
+
+router.get("/freelancers/export", async (_req, res): Promise<void> => {
+  const rows = await db.select().from(freelancersTable).orderBy(freelancersTable.name);
+  const data = rows.map((r) => ({
+    code: r.code,
+    name: r.name,
+    phone: r.phone ?? "",
+    spec: r.spec ?? "",
+    position: r.position ?? "",
+    earned: Number(r.earned),
+    balance: Number(r.balance),
+    rating: Number(r.rating),
+  }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Freelancers");
+  const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", 'attachment; filename="freelancers.xlsx"');
+  res.send(buf);
+});
+
+router.post("/freelancers/sync", upload.single("file"), async (req, res): Promise<void> => {
+  const file = (req as unknown as { file?: Express.Multer.File }).file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
+    return;
+  }
+  let rows: Record<string, unknown>[];
+  try {
+    rows = parseFreelancerRows(file.buffer);
+  } catch {
+    res.status(400).json({ error: "Could not parse file. Use .xlsx, .xls or .csv" });
+    return;
+  }
+
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  let deleted = 0;
+  const errors: { row: number; error: string }[] = [];
+  const codesInSheet = new Set<string>();
+
+  for (let i = 0; i < rows.length; i++) {
+    const values = rowToFreelancerValues(rows[i]!, i);
+    if (!values) {
+      skipped++;
+      continue;
+    }
+    codesInSheet.add(values.code);
+    try {
+      const [existing] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, values.code));
+      if (existing) {
+        await db.update(freelancersTable).set(values).where(eq(freelancersTable.code, values.code));
+        updated++;
+      } else {
+        await db.insert(freelancersTable).values(values);
+        created++;
+      }
+    } catch (err) {
+      errors.push({ row: i + 2, error: (err as Error).message });
+    }
+  }
+
+  const all = await db.select({ code: freelancersTable.code }).from(freelancersTable);
+  for (const fr of all) {
+    if (!codesInSheet.has(fr.code)) {
+      await db.delete(freelancersTable).where(eq(freelancersTable.code, fr.code));
+      deleted++;
+    }
+  }
+
+  res.json({ totalRows: rows.length, created, updated, skipped, deleted, errors });
+});
+
 router.get("/freelancers/:code/history", async (req, res): Promise<void> => {
   const rawCode = Array.isArray(req.params.code) ? req.params.code[0] : req.params.code;
   const [fr] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, rawCode)).limit(1);
@@ -268,10 +367,8 @@ router.post("/freelancers/import", upload.single("file"), async (req, res): Prom
   }
   let rows: Record<string, unknown>[];
   try {
-    const wb = XLSX.read(file.buffer, { type: "buffer" });
-    const sheet = wb.Sheets[wb.SheetNames[0]!]!;
-    rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
-  } catch (err) {
+    rows = parseFreelancerRows(file.buffer);
+  } catch {
     res.status(400).json({ error: "Could not parse file. Use .xlsx, .xls or .csv" });
     return;
   }
@@ -282,32 +379,16 @@ router.post("/freelancers/import", upload.single("file"), async (req, res): Prom
   const errors: { row: number; error: string }[] = [];
 
   for (let i = 0; i < rows.length; i++) {
-    const r = rows[i]!;
-    const norm = (k: string) =>
-      r[k] ?? r[k.toLowerCase()] ?? r[k.charAt(0).toUpperCase() + k.slice(1)] ?? null;
-
-    const name = norm("name");
-    if (!name || String(name).trim() === "") {
+    const values = rowToFreelancerValues(rows[i]!, i);
+    if (!values) {
       skipped++;
       continue;
     }
-    const codeRaw = norm("code");
-    const code = codeRaw ? String(codeRaw).trim() : `FL-${Date.now()}-${i}`;
-    const values = {
-      code,
-      name: String(name).trim(),
-      phone: norm("phone") != null ? String(norm("phone")) : null,
-      spec: norm("spec") != null ? String(norm("spec")) : null,
-      position: norm("position") != null ? String(norm("position")) : null,
-      earned: String(Number(norm("earned") ?? 0) || 0),
-      balance: String(Number(norm("balance") ?? 0) || 0),
-      rating: String(Math.max(1, Math.min(5, Number(norm("rating") ?? 5) || 5))),
-    };
 
     try {
-      const [existing] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, code));
+      const [existing] = await db.select().from(freelancersTable).where(eq(freelancersTable.code, values.code));
       if (existing) {
-        await db.update(freelancersTable).set(values).where(eq(freelancersTable.code, code));
+        await db.update(freelancersTable).set(values).where(eq(freelancersTable.code, values.code));
         updated++;
       } else {
         await db.insert(freelancersTable).values(values);

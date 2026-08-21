@@ -203,17 +203,74 @@ export default function Freelancers() {
   };
 
   const fileRef = useRef<HTMLInputElement>(null);
+  const syncRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [showSyncConfirm, setShowSyncConfirm] = useState(false);
+  const [pendingSyncFile, setPendingSyncFile] = useState<File | null>(null);
+
+  const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
+
   const onPickImport = () => fileRef.current?.click();
+  const onPickSync = () => syncRef.current?.click();
+
+  const onExport = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(`${apiBase()}/freelancers/export`, { credentials: "include" });
+      if (!r.ok) throw new Error("Export failed");
+      const blob = await r.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "freelancers.xlsx";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      toast({ title: t("freelancers.exportDone") });
+    } catch (err) {
+      toast({ title: t("freelancers.exportFailed"), description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const runSync = async (file: File) => {
+    setSyncing(true);
+    const fd = new FormData();
+    fd.append("file", file);
+    try {
+      const r = await fetch(`${apiBase()}/freelancers/sync`, { method: "POST", credentials: "include", body: fd });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error ?? "Sync failed");
+      invalidate();
+      toast({
+        title: t("freelancers.syncDone"),
+        description: `${data.created} ${t("freelancers.syncAdded")}, ${data.updated} ${t("freelancers.syncUpdated")}, ${data.deleted} ${t("freelancers.syncRemoved")}`,
+      });
+    } catch (err) {
+      toast({ title: t("freelancers.syncFailed"), description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSyncing(false);
+      setPendingSyncFile(null);
+      if (syncRef.current) syncRef.current.value = "";
+    }
+  };
+
+  const onSyncPick = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingSyncFile(file);
+    setShowSyncConfirm(true);
+  };
+
   const onImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setImporting(true);
     const fd = new FormData();
     fd.append("file", file);
-    const apiBase = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
     try {
-      const r = await fetch(`${apiBase}/freelancers/import`, { method: "POST", credentials: "include", body: fd });
+      const r = await fetch(`${apiBase()}/freelancers/import`, { method: "POST", credentials: "include", body: fd });
       const data = await r.json();
       if (!r.ok) throw new Error(data.error ?? "Import failed");
       invalidate();
@@ -238,11 +295,18 @@ export default function Freelancers() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold tracking-tight">{t('freelancers.title')}</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onImport} data-testid="input-import-file" />
+          <input ref={syncRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onSyncPick} data-testid="input-sync-file" />
           <input ref={cvFileRef} type="file" accept=".pdf,.doc,.docx" className="hidden" onChange={handleCvUpload} />
+          <Button variant="outline" onClick={onExport} data-testid="button-export-freelancers" disabled={exporting}>
+            <Download className="h-4 w-4 mr-2" /> {exporting ? t("freelancers.exporting") : t("freelancers.exportExcel")}
+          </Button>
+          <Button variant="outline" onClick={onPickSync} data-testid="button-sync-freelancers" disabled={syncing}>
+            <Upload className="h-4 w-4 mr-2" /> {syncing ? t("freelancers.syncing") : t("freelancers.syncExcel")}
+          </Button>
           <Button variant="outline" onClick={onPickImport} data-testid="button-import-freelancers" disabled={importing}>
-            <Upload className="h-4 w-4 mr-2" /> {importing ? "Importing..." : "Import Excel"}
+            <Upload className="h-4 w-4 mr-2" /> {importing ? t("freelancers.importing") : t("freelancers.importExcel")}
           </Button>
           <Button onClick={openCreate} data-testid="button-add-freelancer" className="bg-primary text-black hover:bg-primary/90">
             <Plus className="h-4 w-4 me-2" /> {t('freelancers.new')}
@@ -560,6 +624,24 @@ export default function Freelancers() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={showSyncConfirm} onOpenChange={(v) => { if (!v) { setShowSyncConfirm(false); setPendingSyncFile(null); if (syncRef.current) syncRef.current.value = ""; } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("freelancers.syncConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>{t("freelancers.syncConfirmDesc")}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              onClick={() => { setShowSyncConfirm(false); if (pendingSyncFile) void runSync(pendingSyncFile); }}
+            >
+              {t("freelancers.syncConfirmAction")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={deleteCode !== null} onOpenChange={(v) => !v && setDeleteCode(null)}>
         <AlertDialogContent>

@@ -6,5 +6,6 @@ export * from "./quotes";
 export * from "./expenses";
 export * from "./tasks";
 export * from "./team";
+export * from "./payments";
 export * from "./users";
 export * from "./session";

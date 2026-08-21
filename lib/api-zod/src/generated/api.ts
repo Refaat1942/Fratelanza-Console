@@ -107,6 +107,7 @@ export const GetRecentProjectsResponseItem = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -138,6 +139,7 @@ export const ListProjectsResponseItem = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -189,6 +191,7 @@ export const ListReceivablesResponseItem = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -218,6 +221,7 @@ export const GetProjectResponse = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -273,6 +277,7 @@ export const UpdateProjectResponse = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -293,6 +298,25 @@ export const DeleteProjectParams = zod.object({
 
 
 /**
+ * @summary List all payments logged for a project
+ */
+export const ListProjectPaymentsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListProjectPaymentsResponseItem = zod.object({
+  "id": zod.number(),
+  "projectId": zod.number(),
+  "amount": zod.number(),
+  "paymentMethod": zod.string(),
+  "paidAt": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "createdAt": zod.string()
+})
+export const ListProjectPaymentsResponse = zod.array(ListProjectPaymentsResponseItem)
+
+
+/**
  * @summary Log a payment received for a project
  */
 export const LogPaymentParams = zod.object({
@@ -301,7 +325,10 @@ export const LogPaymentParams = zod.object({
 
 export const LogPaymentBody = zod.object({
   "amount": zod.number(),
-  "nextPaymentDate": zod.string().optional()
+  "nextPaymentDate": zod.string().optional(),
+  "paymentMethod": zod.enum(['bank_transfer', 'vodafone_cash', 'instapay', 'check']).optional(),
+  "paidAt": zod.string().optional(),
+  "notes": zod.string().optional()
 })
 
 export const LogPaymentResponse = zod.object({
@@ -314,6 +341,7 @@ export const LogPaymentResponse = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -617,6 +645,7 @@ export const GetClientResponse = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
@@ -1121,6 +1150,7 @@ export const GetFinanceReportResponse = zod.object({
   "netProfit": zod.number(),
   "freelancerName": zod.string().nullish(),
   "freelancerCommission": zod.number().optional(),
+  "teamFreelancers": zod.array(zod.string()).optional(),
   "startDate": zod.string().nullish(),
   "deadline": zod.string().nullish(),
   "status": zod.string(),
