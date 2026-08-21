@@ -12,9 +12,13 @@ export async function ensureSessionTable(): Promise<void> {
         "id" serial PRIMARY KEY,
         "username" text NOT NULL UNIQUE,
         "password_hash" text NOT NULL,
+        "role" text NOT NULL DEFAULT 'admin',
+        "page_permissions" text[] NOT NULL DEFAULT '{}',
         "created_at" timestamptz NOT NULL DEFAULT now()
       );
     `);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" text NOT NULL DEFAULT 'admin';`);
+    await db.execute(sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "page_permissions" text[] NOT NULL DEFAULT '{}';`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" varchar NOT NULL COLLATE "default",

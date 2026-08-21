@@ -18,3 +18,7 @@ ALTER TABLE pricing_records ADD COLUMN IF NOT EXISTS quote_id integer;
 ALTER TABLE pricing_records ADD COLUMN IF NOT EXISTS generated_report text;
 
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS active boolean NOT NULL DEFAULT true;
+
+-- Users table (auth) — safe upgrades for older DBs
+ALTER TABLE users ADD COLUMN IF NOT EXISTS role text NOT NULL DEFAULT 'admin';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS page_permissions text[] NOT NULL DEFAULT '{}';

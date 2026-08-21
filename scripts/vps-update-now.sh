@@ -68,7 +68,7 @@ sync_host_nginx_static
 restart_console_containers
 
 echo ""
-if verify_local_web && verify_public_site; then
+if verify_api_health && verify_local_web && verify_public_site; then
   echo ""
   echo "=========================================="
   echo " DONE — commit $COMMIT (v$EXPECTED_VERSION live)"

@@ -18,6 +18,7 @@ export const en = {
     title: "Sign in", subtitle: "Management Console",
     username: "Username", password: "Password", signIn: "Sign in", signingIn: "Signing in...",
     error: "Login failed",
+    serverUnavailable: "Server unavailable — API is down. Contact admin or retry after running vps-fix-api.sh on the VPS.",
   },
   privacy: {
     on: "Privacy: ON", off: "Privacy: OFF",

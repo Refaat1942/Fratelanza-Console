@@ -41,12 +41,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string) => {
-    const res = await fetch(`${API_BASE}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ username, password }),
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ username, password }),
+      });
+    } catch {
+      return { ok: false, error: "SERVER_UNAVAILABLE" };
+    }
     if (res.ok) {
       const data = await res.json();
       setState({
@@ -58,6 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { ok: true };
     }
     let err = "Invalid credentials";
+    if (res.status >= 502) {
+      return { ok: false, error: "SERVER_UNAVAILABLE" };
+    }
     try {
       const data = await res.json();
       err = data.error ?? err;

@@ -21,6 +21,7 @@ export const ar: Translations = {
     title: "تسجيل الدخول", subtitle: "نظام الإدارة",
     username: "اسم المستخدم", password: "كلمة المرور",
     signIn: "دخول", signingIn: "جارٍ الدخول...", error: "فشل تسجيل الدخول",
+    serverUnavailable: "الخادم غير متاح — واجهة الـ API متوقفة. أعد تشغيل vps-fix-api.sh على السيرفر.",
   },
   privacy: {
     on: "الخصوصية: مفعلة", off: "الخصوصية: متوقفة",
