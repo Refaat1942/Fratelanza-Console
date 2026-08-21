@@ -325,6 +325,11 @@ export interface Client {
   project?: string | null;
   /** @nullable */
   notes?: string | null;
+  active?: boolean;
+  projectCount?: number;
+  totalValue?: number;
+  totalPaid?: number;
+  totalRemaining?: number;
 }
 
 export interface ClientInput {
@@ -334,6 +339,7 @@ export interface ClientInput {
   activity?: string;
   project?: string;
   notes?: string;
+  active?: boolean;
 }
 
 export interface ClientUpdate {
@@ -343,6 +349,7 @@ export interface ClientUpdate {
   activity?: string;
   project?: string;
   notes?: string;
+  active?: boolean;
 }
 
 export type ClientProfile = Client & {
@@ -614,6 +621,37 @@ spec?: string;
 export type ListClientsParams = {
 search?: string;
 project?: string;
+activity?: string;
+active?: ListClientsActive;
+payment?: ListClientsPayment;
+};
+
+export type ListClientsActive = typeof ListClientsActive[keyof typeof ListClientsActive];
+
+
+export const ListClientsActive = {
+  all: 'all',
+  active: 'active',
+  inactive: 'inactive',
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListClientsPayment = typeof ListClientsPayment[keyof typeof ListClientsPayment];
+
+
+export const ListClientsPayment = {
+  all: 'all',
+  outstanding: 'outstanding',
+  paid: 'paid',
+  no_projects: 'no_projects',
+} as const;
+
+export type ExportClientsParams = {
+search?: string;
+activity?: string;
+active?: string;
+payment?: string;
 };
 
 export type ListTemplatesParams = {

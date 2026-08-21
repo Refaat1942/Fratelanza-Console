@@ -13,4 +13,5 @@ export interface ClientInput {
   activity?: string;
   project?: string;
   notes?: string;
+  active?: boolean;
 }

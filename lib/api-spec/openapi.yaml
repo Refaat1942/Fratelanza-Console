@@ -571,6 +571,20 @@ paths:
           name: project
           schema:
             type: string
+        - in: query
+          name: activity
+          schema:
+            type: string
+        - in: query
+          name: active
+          schema:
+            type: string
+            enum: [all, active, inactive, "true", "false"]
+        - in: query
+          name: payment
+          schema:
+            type: string
+            enum: [all, outstanding, paid, no_projects]
       responses:
         "200":
           description: Clients list
@@ -597,6 +611,52 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Client"
+
+  /clients/export:
+    get:
+      operationId: exportClients
+      tags: [clients]
+      summary: Export filtered clients to Excel with payment totals
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: activity
+          schema:
+            type: string
+        - in: query
+          name: active
+          schema:
+            type: string
+        - in: query
+          name: payment
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Excel file
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+
+  /clients/activities:
+    get:
+      operationId: listClientActivities
+      tags: [clients]
+      summary: Distinct client activity/business values for filters
+      responses:
+        "200":
+          description: Activity list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
 
   /clients/{id}:
     get:
@@ -1644,6 +1704,16 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        active:
+          type: boolean
+        projectCount:
+          type: integer
+        totalValue:
+          type: number
+        totalPaid:
+          type: number
+        totalRemaining:
+          type: number
 
     ClientInput:
       type: object
@@ -1661,6 +1731,8 @@ components:
           type: string
         notes:
           type: string
+        active:
+          type: boolean
 
     ClientUpdate:
       type: object
@@ -1677,6 +1749,8 @@ components:
           type: string
         notes:
           type: string
+        active:
+          type: boolean
 
     ClientProfile:
       allOf:

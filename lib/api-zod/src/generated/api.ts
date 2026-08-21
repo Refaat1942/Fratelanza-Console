@@ -647,7 +647,10 @@ export const DeleteFreelancerParams = zod.object({
  */
 export const ListClientsQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
-  "project": zod.coerce.string().optional()
+  "project": zod.coerce.string().optional(),
+  "activity": zod.coerce.string().optional(),
+  "active": zod.enum(['all', 'active', 'inactive', 'true', 'false']).optional(),
+  "payment": zod.enum(['all', 'outstanding', 'paid', 'no_projects']).optional()
 })
 
 export const ListClientsResponseItem = zod.object({
@@ -657,7 +660,12 @@ export const ListClientsResponseItem = zod.object({
   "address": zod.string().nullish(),
   "activity": zod.string().nullish(),
   "project": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "active": zod.boolean().optional(),
+  "projectCount": zod.number().optional(),
+  "totalValue": zod.number().optional(),
+  "totalPaid": zod.number().optional(),
+  "totalRemaining": zod.number().optional()
 })
 export const ListClientsResponse = zod.array(ListClientsResponseItem)
 
@@ -671,8 +679,27 @@ export const CreateClientBody = zod.object({
   "address": zod.string().optional(),
   "activity": zod.string().optional(),
   "project": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "active": zod.boolean().optional()
 })
+
+
+/**
+ * @summary Export filtered clients to Excel with payment totals
+ */
+export const ExportClientsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "activity": zod.coerce.string().optional(),
+  "active": zod.coerce.string().optional(),
+  "payment": zod.coerce.string().optional()
+})
+
+
+/**
+ * @summary Distinct client activity/business values for filters
+ */
+export const ListClientActivitiesResponseItem = zod.string()
+export const ListClientActivitiesResponse = zod.array(ListClientActivitiesResponseItem)
 
 
 /**
@@ -689,7 +716,12 @@ export const GetClientResponse = zod.object({
   "address": zod.string().nullish(),
   "activity": zod.string().nullish(),
   "project": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "active": zod.boolean().optional(),
+  "projectCount": zod.number().optional(),
+  "totalValue": zod.number().optional(),
+  "totalPaid": zod.number().optional(),
+  "totalRemaining": zod.number().optional()
 }).and(zod.object({
   "projects": zod.array(zod.object({
   "id": zod.number(),
@@ -736,7 +768,8 @@ export const UpdateClientBody = zod.object({
   "address": zod.string().optional(),
   "activity": zod.string().optional(),
   "project": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "active": zod.boolean().optional()
 })
 
 export const UpdateClientResponse = zod.object({
@@ -746,7 +779,12 @@ export const UpdateClientResponse = zod.object({
   "address": zod.string().nullish(),
   "activity": zod.string().nullish(),
   "project": zod.string().nullish(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "active": zod.boolean().optional(),
+  "projectCount": zod.number().optional(),
+  "totalValue": zod.number().optional(),
+  "totalPaid": zod.number().optional(),
+  "totalRemaining": zod.number().optional()
 })
 
 
