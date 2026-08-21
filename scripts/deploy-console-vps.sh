@@ -35,6 +35,15 @@ else
   git -C "$REPO_DIR" pull --ff-only origin "$BRANCH"
 fi
 
+COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD)
+echo "==> Git commit: $COMMIT"
+
+if [[ -f "$REPO_DIR/scripts/vps-migrate.sql" ]] && docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-db'; then
+  echo "==> DB migrate..."
+  docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console \
+    < "$REPO_DIR/scripts/vps-migrate.sql"
+fi
+
 echo "==> Building API image (fratelanza-console-api:local)"
 docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 
@@ -52,5 +61,6 @@ docker restart fratelanza-console-web
 
 echo "==> Done. Hard-refresh the browser (Ctrl+Shift+R)."
 echo "    Deployed branch: $BRANCH"
-echo "    Git commit: $(git -C "$REPO_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+echo "    Git commit: $COMMIT"
+echo "    Look for sidebar version: v2026.08.21-a"
 docker ps --filter "name=fratelanza-console" --format "table {{.Names}}\t{{.Status}}"

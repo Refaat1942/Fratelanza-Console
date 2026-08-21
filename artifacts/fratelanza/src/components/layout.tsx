@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { CONSOLE_VERSION } from '@/lib/console-version';
 
 function NavBody({ onNav }: { onNav?: () => void }) {
   const [location] = useLocation();
@@ -214,6 +215,9 @@ function SidebarContent({ onNav }: { onNav?: () => void } = {}) {
         >
           <LogOut className="me-3 h-5 w-5" /> {t('nav.logout')}
         </button>
+        <div className="px-3 pt-2 text-[10px] text-muted-foreground/60 text-center" data-testid="console-version">
+          v{CONSOLE_VERSION}
+        </div>
       </div>
     </>
   );
