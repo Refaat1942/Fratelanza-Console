@@ -123,7 +123,29 @@ BRANCH=cursor/smart-platform-phase1-924f /tmp/deploy-console-vps.sh
 
 Hard-refresh the browser: **Ctrl+Shift+R**
 
-> **Note:** The app runs in **Docker** containers (`fratelanza-console-web`, `fratelanza-console-api`), not systemd. Do not use `systemctl restart fratelanza-console-web`. Use `docker restart fratelanza-console-web` instead.
+> **Note:** The app runs in **Docker** containers (`fratelanza-console-web`, `fratelanza-console-api`), not systemd. Do not use `systemctl restart fratelanza-console-web`. Use `docker compose up -d --force-recreate web` instead.
+
+### If the site looks unchanged after deploy
+
+Host nginx on the VPS may serve static files from a **different folder** than `/opt/fratelanza-console/web-static` (common cause: old `root` directive while API already updated).
+
+On the VPS:
+
+```bash
+bash /opt/fratelanza-console/source/scripts/vps-diagnose.sh
+grep -R 'root\|proxy_pass' /etc/nginx/sites-enabled/
+```
+
+Redeploy (syncs host nginx `root` automatically when detected):
+
+```bash
+bash /opt/fratelanza-console/source/scripts/vps-update-now.sh
+```
+
+Expected after a successful deploy:
+
+- Sidebar shows **v2026.08.21-b**
+- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.08.21-b"`
 
 ### Manual build (without Docker)
 

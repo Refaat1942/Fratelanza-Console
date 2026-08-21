@@ -7,6 +7,7 @@ APP_DIR="/opt/fratelanza-console"
 REPO_DIR="/opt/fratelanza-console/source"
 REPO_URL="${REPO_URL:-https://github.com/Refaat1942/Fratelanza-Console.git}"
 BRANCH="${BRANCH:-main}"
+EXPECTED_VERSION="2026.08.21-b"
 
 echo "==> Fratelanza Console deploy (isolated)"
 echo "    APP_DIR=$APP_DIR"
@@ -38,6 +39,9 @@ fi
 COMMIT=$(git -C "$REPO_DIR" rev-parse --short HEAD)
 echo "==> Git commit: $COMMIT"
 
+# shellcheck source=vps-deploy-lib.sh
+source "$REPO_DIR/scripts/vps-deploy-lib.sh"
+
 if [[ -f "$REPO_DIR/scripts/vps-migrate.sql" ]] && docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-db'; then
   echo "==> DB migrate..."
   docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console \
@@ -45,7 +49,7 @@ if [[ -f "$REPO_DIR/scripts/vps-migrate.sql" ]] && docker ps --format '{{.Names}
 fi
 
 echo "==> Building API image (fratelanza-console-api:local)"
-docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
+docker build --no-cache -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 
 echo "==> Building web assets (no stale cache)"
 docker build --no-cache --build-arg CACHEBUST="$COMMIT" -f "$REPO_DIR/Dockerfile.web" -t fratelanza-console-web:build "$REPO_DIR"
@@ -54,18 +58,16 @@ docker create --name fc-web-extract fratelanza-console-web:build
 rm -rf "${APP_DIR:?}/web-static"/*
 docker cp fc-web-extract:/usr/share/nginx/html/. "$APP_DIR/web-static/"
 docker rm fc-web-extract
-if ! grep -rq "2026.08.21-a" "$APP_DIR/web-static/assets/" 2>/dev/null; then
-  echo "ERROR: web-static missing v2026.08.21-a after build"
-  exit 1
-fi
-echo "==> Web static verified"
+verify_web_static
 
-echo "==> Restarting ONLY console containers"
-docker restart fratelanza-console-api
-docker restart fratelanza-console-web
+sync_host_nginx_static
+restart_console_containers
+
+verify_local_web || true
+verify_public_site || true
 
 echo "==> Done. Hard-refresh the browser (Ctrl+Shift+R)."
 echo "    Deployed branch: $BRANCH"
 echo "    Git commit: $COMMIT"
-echo "    Look for sidebar version: v2026.08.21-a"
+echo "    Look for sidebar version: v$EXPECTED_VERSION"
 docker ps --filter "name=fratelanza-console" --format "table {{.Names}}\t{{.Status}}"

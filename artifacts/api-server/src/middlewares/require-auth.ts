@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from "express";
 
 const PUBLIC_PATHS = new Set([
   "/healthz",
+  "/version",
   "/auth/login",
   "/auth/me",
   "/auth/logout",
