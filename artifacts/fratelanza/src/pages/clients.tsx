@@ -86,8 +86,8 @@ function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
                           <td className="px-3 py-2">{p.projectName}</td>
                           <td className="px-3 py-2 text-muted-foreground">{p.type}</td>
                           <td className="px-3 py-2"><PrivacyWrapper value={p.clientPrice} /></td>
-                          <td className="px-3 py-2 text-blue-400"><PrivacyWrapper value={p.paidAmount} /></td>
-                          <td className="px-3 py-2 text-red-400"><PrivacyWrapper value={p.remainingAmount} /></td>
+                          <td className="px-3 py-2 text-blue-400"><PrivacyWrapper value={p.paidAmount ?? 0} /></td>
+                          <td className="px-3 py-2 text-red-400"><PrivacyWrapper value={p.remainingAmount ?? 0} /></td>
                           <td className="px-3 py-2">{p.status}</td>
                         </tr>
                       ))}
