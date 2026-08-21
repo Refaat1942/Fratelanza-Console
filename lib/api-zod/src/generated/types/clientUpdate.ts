@@ -13,4 +13,5 @@ export interface ClientUpdate {
   activity?: string;
   project?: string;
   notes?: string;
+  active?: boolean;
 }

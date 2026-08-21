@@ -29,6 +29,7 @@ import type {
   Expense,
   ExpenseInput,
   ExpenseSummary,
+  ExportClientsParams,
   FinanceReport,
   Freelancer,
   FreelancerCvUpload,
@@ -2273,6 +2274,167 @@ export const useCreateClient = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateClientMutationOptions(options));
     }
+
+export const getExportClientsUrl = (params?: ExportClientsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/clients/export?${stringifiedParams}` : `/api/clients/export`
+}
+
+/**
+ * @summary Export filtered clients to Excel with payment totals
+ */
+export const exportClients = async (params?: ExportClientsParams, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getExportClientsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportClientsQueryKey = (params?: ExportClientsParams,) => {
+    return [
+    `/api/clients/export`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportClientsQueryOptions = <TData = Awaited<ReturnType<typeof exportClients>>, TError = ErrorType<unknown>>(params?: ExportClientsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportClients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportClientsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportClients>>> = ({ signal }) => exportClients(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportClients>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportClientsQueryResult = NonNullable<Awaited<ReturnType<typeof exportClients>>>
+export type ExportClientsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export filtered clients to Excel with payment totals
+ */
+
+export function useExportClients<TData = Awaited<ReturnType<typeof exportClients>>, TError = ErrorType<unknown>>(
+ params?: ExportClientsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportClients>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportClientsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListClientActivitiesUrl = () => {
+
+
+
+
+  return `/api/clients/activities`
+}
+
+/**
+ * @summary Distinct client activity/business values for filters
+ */
+export const listClientActivities = async ( options?: RequestInit): Promise<string[]> => {
+
+  return customFetch<string[]>(getListClientActivitiesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListClientActivitiesQueryKey = () => {
+    return [
+    `/api/clients/activities`
+    ] as const;
+    }
+
+
+export const getListClientActivitiesQueryOptions = <TData = Awaited<ReturnType<typeof listClientActivities>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listClientActivities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListClientActivitiesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listClientActivities>>> = ({ signal }) => listClientActivities({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listClientActivities>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListClientActivitiesQueryResult = NonNullable<Awaited<ReturnType<typeof listClientActivities>>>
+export type ListClientActivitiesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Distinct client activity/business values for filters
+ */
+
+export function useListClientActivities<TData = Awaited<ReturnType<typeof listClientActivities>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listClientActivities>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListClientActivitiesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getGetClientUrl = (id: number,) => {
 

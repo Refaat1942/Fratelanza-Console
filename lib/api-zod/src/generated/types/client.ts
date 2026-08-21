@@ -19,4 +19,9 @@ export interface Client {
   project?: string | null;
   /** @nullable */
   notes?: string | null;
+  active?: boolean;
+  projectCount?: number;
+  totalValue?: number;
+  totalPaid?: number;
+  totalRemaining?: number;
 }

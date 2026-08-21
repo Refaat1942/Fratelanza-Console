@@ -5,8 +5,13 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListClientsActive } from './listClientsActive';
+import type { ListClientsPayment } from './listClientsPayment';
 
 export type ListClientsParams = {
 search?: string;
 project?: string;
+activity?: string;
+active?: ListClientsActive;
+payment?: ListClientsPayment;
 };
