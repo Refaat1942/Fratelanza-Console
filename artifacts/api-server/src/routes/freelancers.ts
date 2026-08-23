@@ -277,19 +277,39 @@ router.get("/freelancers/specializations", async (req, res): Promise<void> => {
 });
 
 router.post("/freelancers", async (req, res): Promise<void> => {
-  const body = req.body ?? {};
-  const code = `FL-${Date.now()}`;
-  const [row] = await db.insert(freelancersTable).values({
-    code,
-    name: body.name,
-    phone: body.phone ?? null,
-    spec: body.spec ?? null,
-    position: body.position ?? null,
-    earned: String(Number(body.earned ?? 0)),
-    balance: String(Number(body.balance ?? 0)),
-    rating: "5",
-  }).returning();
-  res.status(201).json(toShape(row));
+  try {
+    const body = req.body ?? {};
+    const name = String(body.name ?? "").trim();
+    if (!name) {
+      res.status(400).json({ error: "Name is required" });
+      return;
+    }
+
+    const code = `FL-${Date.now()}`;
+    const skills = Array.isArray(body.skills) ? JSON.stringify(body.skills) : null;
+
+    const [row] = await db.insert(freelancersTable).values({
+      code,
+      name,
+      phone: body.phone ? String(body.phone) : null,
+      spec: body.spec ? String(body.spec) : null,
+      position: body.position ? String(body.position) : null,
+      earned: String(Number(body.earned ?? 0)),
+      balance: String(Number(body.balance ?? 0)),
+      rating: String(Math.max(1, Math.min(5, Number(body.rating ?? 5) || 5))),
+      bio: body.bio ?? null,
+      portfolioUrl: body.portfolioUrl ?? null,
+      skills,
+    }).returning();
+
+    if (!row) {
+      res.status(500).json({ error: "Failed to create freelancer" });
+      return;
+    }
+    res.status(201).json(toShape(row));
+  } catch (err) {
+    res.status(500).json({ error: (err as Error).message ?? "Failed to create freelancer" });
+  }
 });
 
 router.patch("/freelancers/:code", async (req, res): Promise<void> => {
