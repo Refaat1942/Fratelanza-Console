@@ -112,6 +112,7 @@ export const ar: Translations = {
     totalEarned: "إجمالي الأرباح (ج.م)", balance: "الرصيد (ج.م)",
     selectSpec: "اختر التخصص", searchPlaceholder: "ابحث في المستقلين...",
     noFreelancers: "لا يوجد مستقلون", created: "تم إضافة المستقل",
+    nameRequired: "الاسم الكامل مطلوب",
     updated: "تم تحديث المستقل", deleted: "تم حذف المستقل",
     deleteTitle: "حذف المستقل؟",
     bio: "نبذة / ملخص",

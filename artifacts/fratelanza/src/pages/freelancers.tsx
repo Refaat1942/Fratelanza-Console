@@ -127,22 +127,33 @@ export default function Freelancers() {
     text.split(/[,;]/).map((s) => s.trim()).filter(Boolean);
 
   const handleSave = () => {
+    if (!form.name.trim()) {
+      toast({ title: t("common.error"), description: t("freelancers.nameRequired"), variant: "destructive" });
+      return;
+    }
     const skills = parseSkills(form.skillsText);
     const data = {
-      name: form.name, phone: form.phone, spec: form.spec, position: form.position,
+      name: form.name.trim(), phone: form.phone, spec: form.spec, position: form.position,
       earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating),
       bio: form.bio || null, portfolioUrl: form.portfolioUrl || null,
       skills: skills.length ? skills : null,
     };
+    const onError = (err: unknown) => {
+      toast({
+        title: t("common.error"),
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    };
     if (editing) {
       update.mutate({ code: editing.code, data } as Parameters<typeof update.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Updated" }); },
-        onError: () => toast({ title: "Error", variant: "destructive" }),
+        onError,
       });
     } else {
       create.mutate({ data } as Parameters<typeof create.mutate>[0], {
         onSuccess: () => { invalidate(); setShowForm(false); toast({ title: "Freelancer added" }); },
-        onError: () => toast({ title: "Error", variant: "destructive" }),
+        onError,
       });
     }
   };

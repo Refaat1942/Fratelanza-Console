@@ -109,6 +109,7 @@ export const en = {
     totalEarned: "Total Earned (EGP)", balance: "Balance (EGP)",
     selectSpec: "Select specialization", searchPlaceholder: "Search freelancers...",
     noFreelancers: "No freelancers found", created: "Freelancer added",
+    nameRequired: "Full name is required",
     updated: "Freelancer updated", deleted: "Freelancer deleted",
     deleteTitle: "Delete Freelancer?",
     bio: "Bio / Summary",
