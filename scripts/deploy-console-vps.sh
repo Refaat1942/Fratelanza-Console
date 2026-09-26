@@ -7,7 +7,6 @@ APP_DIR="/opt/fratelanza-console"
 REPO_DIR="/opt/fratelanza-console/source"
 REPO_URL="${REPO_URL:-https://github.com/Refaat1942/Fratelanza-Console.git}"
 BRANCH="${BRANCH:-main}"
-EXPECTED_VERSION="2026.08.21-b"
 
 echo "==> Fratelanza Console deploy (isolated)"
 echo "    APP_DIR=$APP_DIR"
@@ -43,9 +42,8 @@ echo "==> Git commit: $COMMIT"
 source "$REPO_DIR/scripts/vps-deploy-lib.sh"
 
 if [[ -f "$REPO_DIR/scripts/vps-migrate.sql" ]] && docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-db'; then
-  echo "==> DB migrate..."
-  docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console \
-    < "$REPO_DIR/scripts/vps-migrate.sql"
+  backup_db
+  run_migrations
 fi
 
 echo "==> Building API image (fratelanza-console-api:local)"
