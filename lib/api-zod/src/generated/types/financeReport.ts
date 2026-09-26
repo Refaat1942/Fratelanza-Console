@@ -5,6 +5,7 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { FinanceMonth } from './financeMonth';
 import type { Project } from './project';
 import type { RemainingItem } from './remainingItem';
 
@@ -17,12 +18,17 @@ export interface FinanceReport {
   totalCost: number;
   /** Total contract value (client prices) */
   totalContractValue: number;
-  /** Sum of project net profit minus operating expenses */
+  /** Contract value minus project costs, before operating expenses */
   grossMargin: number;
-  /** Cash net = paid - direct costs - operating expenses */
+  grossMarginPct?: number;
+  /** Gross margin minus operating expenses (once all balances are collected) */
+  expectedNetProfit?: number;
+  netMarginPct?: number;
+  /** Cash net = cash received in period - project costs - operating expenses */
   totalNetProfit: number;
   totalExpenses: number;
   netBalance: number;
+  monthly?: FinanceMonth[];
   projects: Project[];
   remainingBreakdown: RemainingItem[];
 }

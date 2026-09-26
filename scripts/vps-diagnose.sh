@@ -4,7 +4,7 @@ set -euo pipefail
 
 APP_DIR="/opt/fratelanza-console"
 PUBLIC_URL="${PUBLIC_URL:-https://console.fratelanza.com}"
-EXPECTED_VERSION="${EXPECTED_VERSION:-2026.08.21-b}"
+EXPECTED_VERSION="${EXPECTED_VERSION:-$(sed -nE 's/.*CONSOLE_VERSION = "([^"]+)".*/\1/p' /opt/fratelanza-console/source/artifacts/fratelanza/src/lib/console-version.ts 2>/dev/null | head -1)}"
 
 echo "=========================================="
 echo " Fratelanza Console — deploy diagnosis"

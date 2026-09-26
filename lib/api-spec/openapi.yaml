@@ -1265,13 +1265,31 @@ components:
           type: number
         totalNetProfit:
           type: number
-          description: Net profit = gross revenue - total expenses
+          description: Cash net profit = collected - project costs (freelancers + direct) - operating expenses
         totalExpenses:
           type: number
+        totalCost:
+          type: number
+          description: Project delivery costs (freelancer commissions + direct costs)
+        totalContractValue:
+          type: number
+          description: Signed contract value (cancelled projects count only what was paid)
+        expectedNetProfit:
+          type: number
+          description: Net profit once every open balance is collected = contract value - project costs - expenses
+        grossMarginPct:
+          type: number
+          description: (contract value - project costs) / contract value, in percent
+        netMarginPct:
+          type: number
+          description: Expected net profit / contract value, in percent
         activeProjects:
           type: integer
         completedProjects:
           type: integer
+        lossProjects:
+          type: integer
+          description: Projects whose costs exceed their contract value
         totalClients:
           type: integer
         totalFreelancers:
@@ -1328,6 +1346,22 @@ components:
           type: string
         notes:
           type: string
+
+    FinanceMonth:
+      type: object
+      required: [month, collected, cost, expenses, net]
+      properties:
+        month:
+          type: string
+          description: YYYY-MM
+        collected:
+          type: number
+        cost:
+          type: number
+        expenses:
+          type: number
+        net:
+          type: number
 
     RemainingItem:
       type: object
@@ -2134,14 +2168,25 @@ components:
           description: Total contract value (client prices)
         grossMargin:
           type: number
-          description: Sum of project net profit minus operating expenses
+          description: Contract value minus project costs, before operating expenses
+        grossMarginPct:
+          type: number
+        expectedNetProfit:
+          type: number
+          description: Gross margin minus operating expenses (once all balances are collected)
+        netMarginPct:
+          type: number
         totalNetProfit:
           type: number
-          description: Cash net = paid - direct costs - operating expenses
+          description: Cash net = cash received in period - project costs - operating expenses
         totalExpenses:
           type: number
         netBalance:
           type: number
+        monthly:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinanceMonth"
         projects:
           type: array
           items:

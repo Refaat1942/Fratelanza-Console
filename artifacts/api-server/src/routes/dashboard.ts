@@ -1,22 +1,13 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
 import { projectsTable, expensesTable, clientsTable, freelancersTable } from "@workspace/db";
-import { sql, gt, lte, and, isNotNull } from "drizzle-orm";
+import { sql, and, isNotNull, ne } from "drizzle-orm";
+import { projectFigures, pct } from "../lib/financials.js";
 
 const router: IRouter = Router();
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
-  const [projAgg] = await db
-    .select({
-      totalRevenue: sql<number>`coalesce(sum(client_price::numeric), 0)`,
-      totalPaid: sql<number>`coalesce(sum(paid_amount::numeric), 0)`,
-      totalRemaining: sql<number>`coalesce(sum(remaining_amount::numeric), 0)`,
-      totalCost: sql<number>`coalesce(sum(total_cost::numeric), 0)`,
-      totalNetProfit: sql<number>`coalesce(sum(net_profit::numeric), 0)`,
-      activeProjects: sql<number>`count(*) filter (where status = 'Ongoing')`,
-      completedProjects: sql<number>`count(*) filter (where status = 'Completed')`,
-    })
-    .from(projectsTable);
+  const projects = await db.select().from(projectsTable);
 
   const [expAgg] = await db
     .select({ totalExpenses: sql<number>`coalesce(sum(amount::numeric), 0)` })
@@ -30,63 +21,73 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .select({ count: sql<number>`count(*)` })
     .from(freelancersTable);
 
-  const totalPaid = Number(projAgg?.totalPaid ?? 0);
+  let totalPaid = 0;
+  let totalRemaining = 0;
+  let totalCost = 0;
+  let totalContractValue = 0;
+  let expectedProjectProfit = 0;
+  for (const p of projects) {
+    const f = projectFigures(p);
+    totalPaid += f.paid;
+    totalRemaining += f.receivable;
+    totalCost += f.cost;
+    totalContractValue += f.contractValue;
+    expectedProjectProfit += f.expectedProfit;
+  }
   const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
 
-  // Per-project remaining breakdown (only projects with balance > 0)
-  const remainingRows = await db
-    .select({
-      id: projectsTable.id,
-      projectName: projectsTable.projectName,
-      clientName: projectsTable.clientName,
-      remaining: projectsTable.remainingAmount,
-    })
-    .from(projectsTable)
-    .where(sql`remaining_amount::numeric > 0`)
-    .orderBy(sql`remaining_amount::numeric desc`);
+  // Per-project remaining breakdown (only projects the client still owes money on)
+  const remainingBreakdown = projects
+    .map((p) => ({ p, remaining: projectFigures(p).receivable }))
+    .filter((r) => r.remaining > 0)
+    .sort((a, b) => b.remaining - a.remaining)
+    .map(({ p, remaining }) => ({
+      id: p.id,
+      projectName: p.projectName,
+      clientName: p.clientName ?? "",
+      remaining,
+    }));
+
+  // Cash net profit = money collected - project costs (freelancers + direct) - operating expenses
+  const totalNetProfit = totalPaid - totalCost - totalExpenses;
+  // Expected net profit = what is left once every open balance is collected
+  const expectedNetProfit = expectedProjectProfit - totalExpenses;
 
   res.json({
     // Gross revenue = money actually collected (paid). Unpaid balances are NOT revenue.
     totalRevenue: totalPaid,
     totalPaid,
-    totalRemaining: Number(projAgg?.totalRemaining ?? 0),
-    // Net profit = gross revenue - total expenses
-    totalNetProfit: totalPaid - totalExpenses,
+    totalRemaining,
+    totalNetProfit,
     totalExpenses,
-    activeProjects: Number(projAgg?.activeProjects ?? 0),
-    completedProjects: Number(projAgg?.completedProjects ?? 0),
+    totalCost,
+    totalContractValue,
+    expectedNetProfit,
+    grossMarginPct: pct(totalContractValue - totalCost, totalContractValue),
+    netMarginPct: pct(expectedNetProfit, totalContractValue),
+    activeProjects: projects.filter((p) => p.status === "Ongoing").length,
+    completedProjects: projects.filter((p) => p.status === "Completed").length,
+    lossProjects: projects.filter((p) => projectFigures(p).expectedProfit < 0).length,
     totalClients: Number(clientCount?.count ?? 0),
     totalFreelancers: Number(freelancerCount?.count ?? 0),
-    remainingBreakdown: remainingRows.map((r) => ({
-      id: r.id,
-      projectName: r.projectName,
-      clientName: r.clientName ?? "",
-      remaining: Number(r.remaining),
-    })),
+    remainingBreakdown,
   });
 });
 
 router.get("/dashboard/profit-by-type", async (req, res): Promise<void> => {
-  const rows = await db
-    .select({
-      type: projectsTable.type,
-      netProfit: sql<number>`coalesce(sum(net_profit::numeric), 0)`,
-      count: sql<number>`count(*)`,
-    })
-    .from(projectsTable)
-    .groupBy(projectsTable.type);
+  const projects = await db.select().from(projectsTable);
+  const byType = new Map<string, { netProfit: number; count: number }>();
+  for (const p of projects) {
+    const cur = byType.get(p.type) ?? { netProfit: 0, count: 0 };
+    cur.netProfit += projectFigures(p).expectedProfit;
+    cur.count += 1;
+    byType.set(p.type, cur);
+  }
 
-  res.json(
-    rows.map((r) => ({
-      type: r.type,
-      netProfit: Number(r.netProfit),
-      count: Number(r.count),
-    }))
-  );
+  res.json([...byType.entries()].map(([type, v]) => ({ type, ...v })));
 });
 
 router.get("/dashboard/payment-alerts", async (req, res): Promise<void> => {
-  const today = new Date().toISOString().slice(0, 10);
   const rows = await db
     .select({
       id: projectsTable.id,
@@ -99,7 +100,9 @@ router.get("/dashboard/payment-alerts", async (req, res): Promise<void> => {
     .where(
       and(
         sql`remaining_amount::numeric > 0`,
-        isNotNull(projectsTable.nextPaymentDate)
+        ne(projectsTable.status, "Cancelled"),
+        isNotNull(projectsTable.nextPaymentDate),
+        ne(projectsTable.nextPaymentDate, "")
       )
     )
     .orderBy(projectsTable.nextPaymentDate)

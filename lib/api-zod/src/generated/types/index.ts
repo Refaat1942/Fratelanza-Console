@@ -16,6 +16,7 @@ export * from './expense';
 export * from './expenseInput';
 export * from './expenseSummary';
 export * from './exportClientsParams';
+export * from './financeMonth';
 export * from './financeReport';
 export * from './freelancer';
 export * from './freelancerCvUpload';

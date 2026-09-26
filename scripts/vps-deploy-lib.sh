@@ -3,8 +3,91 @@
 # Source from vps-update-now.sh / deploy-console-vps.sh — do not run directly.
 
 : "${APP_DIR:=/opt/fratelanza-console}"
-: "${EXPECTED_VERSION:=2026.08.21-b}"
+: "${REPO_DIR:=$APP_DIR/source}"
 : "${PUBLIC_URL:=https://console.fratelanza.com}"
+: "${DB_CONTAINER:=fratelanza-console-db}"
+
+# Version the frontend is built with — read from source so it never goes stale.
+source_console_version() {
+  sed -nE 's/.*CONSOLE_VERSION = "([^"]+)".*/\1/p' \
+    "$REPO_DIR/artifacts/fratelanza/src/lib/console-version.ts" 2>/dev/null | head -1
+}
+: "${EXPECTED_VERSION:=$(source_console_version)}"
+
+# Fetch BRANCH and make the VPS checkout match it exactly (the VPS copy is deploy-only).
+pull_source() {
+  local branch="$1"
+  echo "==> Pulling latest source (branch: $branch)..."
+  git -C "$REPO_DIR" fetch origin "$branch"
+  git -C "$REPO_DIR" checkout -B "$branch" "origin/$branch"
+  git -C "$REPO_DIR" reset --hard "origin/$branch"
+  EXPECTED_VERSION="$(source_console_version)"
+  echo "==> Source commit: $(git -C "$REPO_DIR" rev-parse --short HEAD) (v$EXPECTED_VERSION)"
+}
+
+# Start the DB if needed and wait until it accepts connections.
+ensure_db_running() {
+  if ! docker ps --format '{{.Names}}' | grep -qx "$DB_CONTAINER"; then
+    echo "==> DB container not running — starting db..."
+    docker compose -f "$APP_DIR/docker-compose.yml" up -d db
+  fi
+  for _ in $(seq 1 30); do
+    if docker exec "$DB_CONTAINER" pg_isready -U fratelanza_console -d fratelanza_console >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: $DB_CONTAINER did not become ready"
+  return 1
+}
+
+# Compressed pg_dump before any migration; keeps the 10 most recent.
+backup_db() {
+  local dir="$APP_DIR/backups"
+  local file
+  file="$dir/fratelanza_console-$(date +%Y%m%d-%H%M%S).sql.gz"
+  mkdir -p "$dir"
+  echo "==> Backing up database -> $file"
+  docker exec "$DB_CONTAINER" pg_dump -U fratelanza_console -d fratelanza_console | gzip > "$file"
+  if [[ ! -s "$file" ]]; then
+    echo "ERROR: backup is empty — aborting before migration"
+    return 1
+  fi
+  ls -1t "$dir"/fratelanza_console-*.sql.gz 2>/dev/null | tail -n +11 | xargs -r rm -f
+}
+
+# Apply scripts/vps-migrate.sql; any SQL error aborts the deploy.
+run_migrations() {
+  echo "==> DB migrate..."
+  docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U fratelanza_console -d fratelanza_console \
+    < "$REPO_DIR/scripts/vps-migrate.sql"
+  echo "==> DB migrate OK"
+}
+
+build_api_image() {
+  echo "==> Building API image..."
+  docker build --no-cache -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
+}
+
+# Build the frontend and copy it into web-static (bind-mounted by the web container).
+build_web_static() {
+  local commit
+  commit=$(git -C "$REPO_DIR" rev-parse --short HEAD)
+  echo "==> Building WEB (no stale cache)..."
+  docker build --no-cache \
+    --build-arg CACHEBUST="$commit" \
+    -f "$REPO_DIR/Dockerfile.web" \
+    -t fratelanza-console-web:build \
+    "$REPO_DIR"
+  echo "==> Copying web to web-static..."
+  mkdir -p "$APP_DIR/web-static"
+  docker rm -f fc-web-extract 2>/dev/null || true
+  docker create --name fc-web-extract fratelanza-console-web:build >/dev/null
+  rm -rf "${APP_DIR:?}/web-static"/*
+  docker cp fc-web-extract:/usr/share/nginx/html/. "$APP_DIR/web-static/"
+  docker rm fc-web-extract >/dev/null
+  verify_web_static
+}
 
 verify_web_static() {
   local static_dir="$APP_DIR/web-static"
@@ -106,12 +189,17 @@ bundle_from_html() {
 
 verify_api_health() {
   echo "==> Checking http://127.0.0.1:3101/api/healthz ..."
-  if curl -sf --max-time 10 http://127.0.0.1:3101/api/healthz | grep -q '"status"'; then
-    echo "    API healthz OK"
-    return 0
-  fi
+  local i
+  for i in $(seq 1 20); do
+    if curl -sf --max-time 5 http://127.0.0.1:3101/api/healthz | grep -q '"status"'; then
+      echo "    API healthz OK (attempt $i)"
+      return 0
+    fi
+    sleep 3
+  done
+  docker logs fratelanza-console-api --tail 40 2>&1 || true
   echo "ERROR: API not responding (login will fail with 502)"
-  echo "       Run: bash $APP_DIR/source/scripts/vps-fix-api.sh"
+  echo "       Check: docker logs fratelanza-console-api --tail 80"
   return 1
 }
 

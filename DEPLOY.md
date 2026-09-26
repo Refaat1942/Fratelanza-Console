@@ -113,6 +113,28 @@ certbot --nginx -d console.yourdomain.com
 
 ## Updating to a new version
 
+**Recommended — one command block (pull → DB backup → migrate → build API + web → restart → verify):**
+
+```bash
+cd /opt/fratelanza-console
+docker compose up -d
+cd source
+git fetch origin main && git reset --hard origin/main
+bash scripts/vps-fix-api.sh
+```
+
+- Pull **before** running the script: otherwise bash runs the old copy of it.
+  (From now on the script also re-runs itself after pulling.)
+- To deploy a branch that is not merged yet, use its name in both places:
+  `git fetch origin BRANCH && git reset --hard origin/BRANCH && BRANCH=BRANCH bash scripts/vps-fix-api.sh`
+- A compressed DB backup is written to `/opt/fratelanza-console/backups/` before
+  every migration (last 10 kept). Restore with:
+  `gunzip -c backups/FILE.sql.gz | docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console`
+- The expected version is read from `artifacts/fratelanza/src/lib/console-version.ts`
+  — bump it there when releasing.
+
+Older scripts (still work):
+
 ```bash
 # Default: deploy main branch
 /tmp/deploy-console-vps.sh
@@ -144,16 +166,13 @@ bash /opt/fratelanza-console/source/scripts/vps-update-now.sh
 
 Expected after a successful deploy:
 
-- Sidebar shows **v2026.08.21-b**
-- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.08.21-b"`
+- Sidebar shows **v2026.09.26-a**
+- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.09.26-a"`
 
 ### Login fails / "Invalid credentials"
 
-If the API container is down, login shows an error (502). On the VPS:
-
-```bash
-bash /opt/fratelanza-console/source/scripts/vps-fix-api.sh
-```
+If the API container is down, login shows an error (502). On the VPS, run the
+update block from **Updating to a new version** above (it rebuilds and restarts everything).
 
 Ensure `/opt/fratelanza-console/.env` has `SESSION_SECRET`, `POSTGRES_PASSWORD`, and `ADMIN_PASSWORD`.
 

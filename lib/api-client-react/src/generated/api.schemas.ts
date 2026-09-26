@@ -57,11 +57,23 @@ export interface DashboardSummary {
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
-  /** Net profit = gross revenue - total expenses */
+  /** Cash net profit = collected - project costs (freelancers + direct) - operating expenses */
   totalNetProfit: number;
   totalExpenses: number;
+  /** Project delivery costs (freelancer commissions + direct costs) */
+  totalCost?: number;
+  /** Signed contract value (cancelled projects count only what was paid) */
+  totalContractValue?: number;
+  /** Net profit once every open balance is collected = contract value - project costs - expenses */
+  expectedNetProfit?: number;
+  /** (contract value - project costs) / contract value, in percent */
+  grossMarginPct?: number;
+  /** Expected net profit / contract value, in percent */
+  netMarginPct?: number;
   activeProjects: number;
   completedProjects: number;
+  /** Projects whose costs exceed their contract value */
+  lossProjects?: number;
   totalClients: number;
   totalFreelancers: number;
   remainingBreakdown: RemainingItem[];
@@ -132,6 +144,15 @@ export interface FreelancerHistory {
   tasks: Task[];
   projects: FreelancerProjectItem[];
   totals: FreelancerHistoryTotals;
+}
+
+export interface FinanceMonth {
+  /** YYYY-MM */
+  month: string;
+  collected: number;
+  cost: number;
+  expenses: number;
+  net: number;
 }
 
 export interface ProfitByType {
@@ -593,12 +614,17 @@ export interface FinanceReport {
   totalCost: number;
   /** Total contract value (client prices) */
   totalContractValue: number;
-  /** Sum of project net profit minus operating expenses */
+  /** Contract value minus project costs, before operating expenses */
   grossMargin: number;
-  /** Cash net = paid - direct costs - operating expenses */
+  grossMarginPct?: number;
+  /** Gross margin minus operating expenses (once all balances are collected) */
+  expectedNetProfit?: number;
+  netMarginPct?: number;
+  /** Cash net = cash received in period - project costs - operating expenses */
   totalNetProfit: number;
   totalExpenses: number;
   netBalance: number;
+  monthly?: FinanceMonth[];
   projects: Project[];
   remainingBreakdown: RemainingItem[];
 }

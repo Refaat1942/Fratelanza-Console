@@ -5,7 +5,6 @@ set -euo pipefail
 APP_DIR="/opt/fratelanza-console"
 REPO_DIR="$APP_DIR/source"
 REPO_URL="https://github.com/Refaat1942/Fratelanza-Console.git"
-EXPECTED_VERSION="2026.08.21-b"
 
 echo "=========================================="
 echo " Fratelanza Console — deploy + migrate"
@@ -34,16 +33,13 @@ echo "==> Source commit: $COMMIT"
 # shellcheck source=vps-deploy-lib.sh
 source "$REPO_DIR/scripts/vps-deploy-lib.sh"
 
-echo "==> DB migrate (new tables/columns)..."
-if docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-db'; then
-  docker exec -i fratelanza-console-db psql -U fratelanza_console -d fratelanza_console \
-    < "$REPO_DIR/scripts/vps-migrate.sql"
-  echo "==> DB migrate OK"
-else
+if ! docker ps --format '{{.Names}}' | grep -qx 'fratelanza-console-db'; then
   echo "WARN: fratelanza-console-db not running — start with: cd $APP_DIR && docker compose up -d db"
   echo "      Then re-run this script."
   exit 1
 fi
+backup_db
+run_migrations
 
 echo "==> Building WEB (no stale cache)..."
 docker build --no-cache \
