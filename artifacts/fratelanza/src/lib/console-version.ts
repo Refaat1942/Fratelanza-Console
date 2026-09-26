@@ -1,2 +1,2 @@
 /** Bump when deploying — visible in sidebar to confirm VPS has latest build */
-export const CONSOLE_VERSION = "2026.09.27-c";
+export const CONSOLE_VERSION = "2026.09.27-d";
