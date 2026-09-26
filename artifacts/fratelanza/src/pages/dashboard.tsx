@@ -43,6 +43,9 @@ export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary(params, { query: { queryKey: getGetDashboardSummaryQueryKey(params) } });
   const { data: profitByType, isLoading: loadingProfit } = useGetProfitByType(params, { query: { queryKey: getGetProfitByTypeQueryKey(params) } });
   const { data: alerts, isLoading: loadingAlerts } = useGetPaymentAlerts();
+  const { isPrivate } = usePrivacy();
+  const fmt = (v?: number) => (isPrivate ? "***" : `EGP ${Math.round(v ?? 0).toLocaleString()}`);
+  const costsNote = t('dashboard.kpiCostsNote2', { paid: fmt(summary?.totalCostPaid), owed: fmt(summary?.freelancerOwed) });
   const dealsPct = (v?: number) => {
     const total = summary?.totalContractValue ?? 0;
     return total > 0 ? Math.round(((v ?? 0) / total) * 100) : 0;
@@ -60,6 +63,8 @@ export default function Dashboard() {
             contractValue={summary.totalContractValue ?? 0}
             collected={summary.totalPaid}
             projectCosts={summary.totalCost ?? 0}
+            projectCostsPaid={summary.totalCostPaid}
+            freelancerOwed={summary.freelancerOwed ?? 0}
             expenses={summary.totalExpenses}
             totalRemaining={summary.totalRemaining}
             grossMarginPct={summary.grossMarginPct ?? 0}
@@ -74,9 +79,9 @@ export default function Dashboard() {
         <Kpi label={t('dashboard.kpiContract')} note={t('dashboard.kpiContractNote')} value={summary?.totalContractValue ?? 0} icon={TrendingUp} color="bg-blue-500/10 text-blue-400" delay={0} />
         <Kpi label={t('dashboard.kpiPaid')} note={`${t('dashboard.kpiPaidNote')} · ${t('dashboard.ofDeals', { pct: dealsPct(summary?.totalPaid) })}`} value={summary?.totalPaid ?? 0} icon={Wallet} color="bg-green-500/10 text-green-400" delay={0.05} />
         <Kpi label={t('dashboard.kpiRemaining')} note={`${t('dashboard.kpiRemainingNote')} · ${t('dashboard.ofDeals', { pct: dealsPct(summary?.totalRemaining) })}`} value={summary?.totalRemaining ?? 0} icon={Clock} color="bg-orange-500/10 text-orange-400" delay={0.1} />
-        <Kpi label={t('dashboard.kpiCosts')} note={t('dashboard.kpiCostsNote')} value={summary?.totalCost ?? 0} icon={Users} color="bg-muted text-muted-foreground" delay={0.12} negative valueColor="text-red-400" />
+        <Kpi label={t('dashboard.kpiCosts')} note={costsNote} value={summary?.totalCost ?? 0} icon={Users} color="bg-muted text-muted-foreground" delay={0.12} negative valueColor="text-red-400" />
         <Kpi label={t('dashboard.kpiExpenses')} note={t('dashboard.kpiExpensesNote')} value={summary?.totalExpenses ?? 0} icon={ReceiptText} color="bg-red-500/10 text-red-400" delay={0.15} negative valueColor="text-red-400" />
-        <Kpi label={t('dashboard.kpiCash')} note={t('dashboard.kpiCashNote')} value={summary?.totalNetProfit ?? 0} icon={Activity} color="bg-primary/10 text-primary" delay={0.2} valueColor={(summary?.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400"} />
+        <Kpi label={t('dashboard.kpiCash')} note={t('dashboard.kpiCashNote2')} value={summary?.totalNetProfit ?? 0} icon={Activity} color="bg-primary/10 text-primary" delay={0.2} valueColor={(summary?.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

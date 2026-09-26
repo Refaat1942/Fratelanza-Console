@@ -16,6 +16,10 @@ export interface FinanceReport {
   totalRemaining: number;
   /** Direct project delivery costs */
   totalCost: number;
+  /** Project costs actually paid out (other costs + freelancer amounts paid, from Freelancers "Earned") */
+  totalCostPaid?: number;
+  /** Freelancer commissions not yet paid */
+  freelancerOwed?: number;
   /** Total contract value (client prices) */
   totalContractValue: number;
   /** Contract value minus project costs, before operating expenses */

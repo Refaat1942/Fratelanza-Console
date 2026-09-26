@@ -62,6 +62,10 @@ export interface DashboardSummary {
   totalExpenses: number;
   /** Project delivery costs (freelancer commissions + direct costs) */
   totalCost?: number;
+  /** Project costs actually paid out (other costs + freelancer amounts paid, from Freelancers "Earned") */
+  totalCostPaid?: number;
+  /** Freelancer commissions not yet paid */
+  freelancerOwed?: number;
   /** Signed contract value (cancelled projects count only what was paid) */
   totalContractValue?: number;
   /** Fratelanza estimated profit until collection = deals - project costs - expenses */
@@ -95,8 +99,13 @@ export interface Freelancer {
   spec?: string | null;
   /** @nullable */
   position?: string | null;
+  /** Paid to the freelancer so far */
   earned: number;
   balance: number;
+  /** Sum of this freelancer's project commissions */
+  totalCommission?: number;
+  /** Commissions not yet paid (auto) */
+  owed?: number;
   rating: number;
   /** @nullable */
   bio?: string | null;
@@ -612,6 +621,10 @@ export interface FinanceReport {
   totalRemaining: number;
   /** Direct project delivery costs */
   totalCost: number;
+  /** Project costs actually paid out (other costs + freelancer amounts paid, from Freelancers "Earned") */
+  totalCostPaid?: number;
+  /** Freelancer commissions not yet paid */
+  freelancerOwed?: number;
   /** Total contract value (client prices) */
   totalContractValue: number;
   /** Contract value minus project costs, before operating expenses */

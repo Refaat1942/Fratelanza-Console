@@ -36,10 +36,11 @@ export default function Finance() {
     { label: "Cash Collected", value: report.totalPaid, color: "text-blue-400", hint: "Payments actually received in this period, from any project" },
     { label: "Remaining", value: report.totalRemaining, color: "text-orange-400", hint: "Still owed by clients on projects in this period (excludes cancelled)" },
     { label: t("finance.projectCost", { defaultValue: "Project Cost" }), value: report.totalCost, color: "text-muted-foreground", forceNegative: true, hint: "Freelancer commissions + direct project costs" },
+    { label: t("dashboard.freelancerOwed"), value: report.freelancerOwed ?? 0, color: "text-red-400", forceNegative: true, hint: "Freelancer commissions not paid yet (commissions − Paid in the Freelancers tab)" },
     { label: "Expenses", value: report.totalExpenses, color: "text-red-400", forceNegative: true, hint: "Operating expenses dated in this period" },
     { label: t("finance.grossMargin", { defaultValue: "Gross Margin" }), value: report.grossMargin ?? 0, color: (report.grossMargin ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Contract value − project costs", report.grossMarginPct) },
     { label: t("finance.expectedNetProfit", { defaultValue: "Expected Net Profit" }), value: report.expectedNetProfit ?? 0, color: (report.expectedNetProfit ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Deals − project costs − company expenses, once clients pay everything", report.netMarginPct) },
-    { label: t("finance.cashNetProfit", { defaultValue: "Cash Net Profit" }), value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", useSign: true, hint: "Cash collected − project costs − expenses" },
+    { label: t("finance.cashNetProfit", { defaultValue: "Cash Net Profit" }), value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", useSign: true, hint: "Cash collected − project costs actually paid − expenses" },
   ] : [];
 
   const formatKpiValue = (value: number, opts?: { forceNegative?: boolean; useSign?: boolean }) => {
@@ -75,6 +76,8 @@ export default function Finance() {
               contractValue={report.totalContractValue ?? 0}
               collected={report.totalPaid}
               projectCosts={report.totalCost}
+            projectCostsPaid={report.totalCostPaid}
+            freelancerOwed={report.freelancerOwed ?? 0}
               expenses={report.totalExpenses}
               totalRemaining={report.totalRemaining}
               grossMarginPct={report.grossMarginPct ?? 0}
@@ -83,7 +86,7 @@ export default function Finance() {
             />
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
             {kpis.map((kpi) => (
               <Card key={kpi.label} className="bg-card/50" title={kpi.hint}>
                 <CardHeader className="pb-1 pt-3 px-3"><CardTitle className="text-xs text-muted-foreground">{kpi.label}</CardTitle></CardHeader>
