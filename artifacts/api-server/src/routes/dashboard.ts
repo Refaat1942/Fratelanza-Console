@@ -30,6 +30,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     totalNetProfit: totals.totalNetProfit,
     totalExpenses: totals.totalExpenses,
     totalCost: totals.totalCost,
+    totalCostPaid: totals.totalCostPaid,
+    freelancerOwed: totals.freelancerOwed,
     totalContractValue: totals.totalContractValue,
     expectedNetProfit: totals.expectedNetProfit,
     grossMarginPct: totals.grossMarginPct,

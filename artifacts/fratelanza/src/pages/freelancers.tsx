@@ -18,7 +18,7 @@ import { useTranslation } from "react-i18next";
 
 type Freelancer = {
   code: string; name: string; phone?: string | null; spec?: string | null; position?: string | null;
-  earned: number; balance: number; rating: number;
+  earned: number; balance: number; rating: number; totalCommission?: number; owed?: number;
   bio?: string | null; portfolioUrl?: string | null; cvFileName?: string | null;
   hasCv?: boolean; skills?: string[] | null;
 };
@@ -337,14 +337,14 @@ export default function Freelancers() {
           <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Code", "Name", "Phone", "Specialization", "Position", "Earned", "Balance", "Rating", "Profile", "Actions"].map((h) => (
+                {["Code", "Name", "Phone", "Specialization", "Position", "Commissions", "Paid", "Still owed", "Rating", "Profile", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">{t('freelancers.noFreelancers')}</td></tr>
+                <tr><td colSpan={11} className="px-4 py-8 text-center text-muted-foreground">{t("freelancers.noFreelancers")}</td></tr>
               ) : filtered.map((fr) => (
                 <tr key={fr.code} data-testid={`row-freelancer-${fr.code}`} className="border-b border-border hover:bg-card/50 transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{fr.code}</td>
@@ -352,8 +352,9 @@ export default function Freelancers() {
                   <td className="px-4 py-3 text-muted-foreground">{fr.phone ?? "—"}</td>
                   <td className="px-4 py-3">{fr.spec ? <Badge variant="outline" className="text-primary border-primary/30">{fr.spec}</Badge> : "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{fr.position ?? "—"}</td>
-                  <td className="px-4 py-3 text-green-400"><PrivacyWrapper value={fr.earned} /></td>
-                  <td className="px-4 py-3 text-yellow-400"><PrivacyWrapper value={fr.balance} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap" title="Total of this freelancer's project commissions"><PrivacyWrapper value={fr.totalCommission ?? 0} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-green-400" title="Paid to the freelancer so far"><PrivacyWrapper value={fr.earned} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-orange-400" title="Commissions − paid (automatic)"><PrivacyWrapper value={fr.owed ?? 0} /></td>
                   <td className="px-4 py-3"><Stars rating={fr.rating} /></td>
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1 items-center">
@@ -415,8 +416,8 @@ export default function Freelancers() {
             </div>
             <div className="space-y-1"><Label>Position</Label><Input value={form.position} onChange={f("position")} /></div>
             <div className="space-y-1"><Label>Rating (1-5)</Label><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={f("rating")} /></div>
-            <div className="space-y-1"><Label>Total Earned (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>
-            <div className="space-y-1"><Label>Balance (EGP)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
+            <div className="space-y-1"><Label>Paid to freelancer so far (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>
+            <div className="space-y-1"><Label>Balance (EGP, optional note)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
 
             <div className="col-span-2 pt-2 border-t border-border">
               <div className="text-sm font-semibold mb-3">{t("freelancers.profileSection")}</div>
@@ -485,7 +486,7 @@ export default function Freelancers() {
                   <CardContentLite icon={<CheckCircle2 className="h-4 w-4 text-green-400" />} label="Completed" value={evaluation.completedProjects} />
                 </Card>
                 <Card className="bg-card/50">
-                  <CardContentLite icon={<span className="text-primary text-xs font-bold">EGP</span>} label="Total Earned" value={<PrivacyWrapper value={evaluation.totalEarned} />} />
+                  <CardContentLite icon={<span className="text-primary text-xs font-bold">EGP</span>} label="Total Commissions" value={<PrivacyWrapper value={evaluation.totalEarned} />} />
                 </Card>
                 <Card className="bg-card/50">
                   <CardContentLite icon={<KanbanSquareLite />} label="Tasks" value={`${evaluation.completedTasks}/${evaluation.tasksCount}`} />

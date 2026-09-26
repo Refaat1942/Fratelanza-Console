@@ -1289,6 +1289,12 @@ components:
         totalCost:
           type: number
           description: Project delivery costs (freelancer commissions + direct costs)
+        totalCostPaid:
+          type: number
+          description: Project costs actually paid out (other costs + freelancer amounts paid, from Freelancers "Earned")
+        freelancerOwed:
+          type: number
+          description: Freelancer commissions not yet paid
         totalContractValue:
           type: number
           description: Signed contract value (cancelled projects count only what was paid)
@@ -1643,8 +1649,15 @@ components:
           type: ["string", "null"]
         earned:
           type: number
+          description: Paid to the freelancer so far
         balance:
           type: number
+        totalCommission:
+          type: number
+          description: Sum of this freelancer's project commissions
+        owed:
+          type: number
+          description: Commissions not yet paid (auto)
         rating:
           type: number
         bio:
@@ -2181,6 +2194,12 @@ components:
         totalCost:
           type: number
           description: Direct project delivery costs
+        totalCostPaid:
+          type: number
+          description: Project costs actually paid out (other costs + freelancer amounts paid, from Freelancers "Earned")
+        freelancerOwed:
+          type: number
+          description: Freelancer commissions not yet paid
         totalContractValue:
           type: number
           description: Total contract value (client prices)

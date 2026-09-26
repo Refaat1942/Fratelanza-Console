@@ -15,8 +15,13 @@ export interface Freelancer {
   spec?: string | null;
   /** @nullable */
   position?: string | null;
+  /** Paid to the freelancer so far */
   earned: number;
   balance: number;
+  /** Sum of this freelancer's project commissions */
+  totalCommission?: number;
+  /** Commissions not yet paid (auto) */
+  owed?: number;
   rating: number;
   /** @nullable */
   bio?: string | null;

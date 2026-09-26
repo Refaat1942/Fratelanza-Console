@@ -17,6 +17,10 @@ export interface DashboardSummary {
   totalExpenses: number;
   /** Project delivery costs (freelancer commissions + direct costs) */
   totalCost?: number;
+  /** Project costs actually paid out (other costs + freelancer amounts paid, from Freelancers "Earned") */
+  totalCostPaid?: number;
+  /** Freelancer commissions not yet paid */
+  freelancerOwed?: number;
   /** Signed contract value (cancelled projects count only what was paid) */
   totalContractValue?: number;
   /** Fratelanza estimated profit until collection = deals - project costs - expenses */

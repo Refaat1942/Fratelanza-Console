@@ -8,6 +8,9 @@ type Props = {
   contractValue: number;
   collected: number;
   projectCosts: number;
+  /** Part of projectCosts actually paid out so far (freelancers paid + other costs) */
+  projectCostsPaid?: number;
+  freelancerOwed?: number;
   expenses: number;
   totalRemaining: number;
   grossMarginPct: number;
@@ -17,11 +20,12 @@ type Props = {
 };
 
 /** Plain-language verdict with the two calculations spelled out step by step. */
-export function FinancialHealth({ contractValue, collected, projectCosts, expenses, totalRemaining, grossMarginPct, netMarginPct, lossProjects, periodLabel }: Props) {
+export function FinancialHealth({ contractValue, collected, projectCosts, projectCostsPaid, freelancerOwed = 0, expenses, totalRemaining, grossMarginPct, netMarginPct, lossProjects, periodLabel }: Props) {
   const { t } = useTranslation();
   const { isPrivate } = usePrivacy();
 
-  const cashResult = collected - projectCosts - expenses;
+  const costsPaid = projectCostsPaid ?? projectCosts;
+  const cashResult = collected - costsPaid - expenses;
   const finalProfit = contractValue - projectCosts - expenses;
   const state = finalProfit < 0 ? "loss" : cashResult < 0 ? "pending" : "profit";
   const styles = {
@@ -37,11 +41,11 @@ export function FinancialHealth({ contractValue, collected, projectCosts, expens
   );
   const percent = (v: number) => (isPrivate ? "***" : `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`);
 
-  const Calc = ({ title, first, firstLabel, result, resultLabel }: { title: string; first: number; firstLabel: string; result: number; resultLabel: string }) => (
+  const Calc = ({ title, first, firstLabel, costs, costsLabel, result, resultLabel }: { title: string; first: number; firstLabel: string; costs: number; costsLabel: string; result: number; resultLabel: string }) => (
     <div className="rounded-lg border border-border/60 bg-background/60 p-3 text-sm min-w-[260px]">
       <div className="text-xs font-semibold text-muted-foreground mb-2">{title}</div>
       <div className="flex justify-between gap-4"><span>{firstLabel}</span>{money(first)}</div>
-      <div className="flex justify-between gap-4 text-muted-foreground"><span>{t("dashboard.calcCosts")}</span>{money(-projectCosts)}</div>
+      <div className="flex justify-between gap-4 text-muted-foreground"><span>{costsLabel}</span>{money(-costs)}</div>
       <div className="flex justify-between gap-4 text-muted-foreground"><span>{t("dashboard.calcExpenses")}</span>{money(-expenses)}</div>
       <div className="flex justify-between gap-4 border-t border-border mt-1 pt-1 font-bold"><span>{resultLabel}</span>{money(result, true)}</div>
     </div>
@@ -72,13 +76,15 @@ export function FinancialHealth({ contractValue, collected, projectCosts, expens
               <span className="text-end font-semibold">{money(cashResult, true)}</span>
               <span className="text-muted-foreground">{t("dashboard.estProfitToCollect")}</span>
               <span className="text-end font-semibold text-orange-500"><PrivacyWrapper value={totalRemaining} /></span>
+              <span className="text-muted-foreground">{t("dashboard.freelancerOwed")}</span>
+              <span className="text-end font-semibold text-red-500">- <PrivacyWrapper value={freelancerOwed} /></span>
             </div>
             <p className="mt-2 text-[11px] leading-snug text-muted-foreground">{t("dashboard.estProfitNote")}</p>
           </div>
         </div>
         <div className="flex flex-col md:flex-row gap-3">
-          <Calc title={t("dashboard.calcCashTitle")} first={collected} firstLabel={t("dashboard.calcReceived")} result={cashResult} resultLabel={t("dashboard.calcCashResult")} />
-          <Calc title={t("dashboard.calcFinalTitle")} first={contractValue} firstLabel={t("dashboard.calcDeals")} result={finalProfit} resultLabel={t("dashboard.calcFinalResult")} />
+          <Calc title={t("dashboard.calcCashTitle")} first={collected} firstLabel={t("dashboard.calcReceived")} costs={costsPaid} costsLabel={t("dashboard.calcCostsPaid")} result={cashResult} resultLabel={t("dashboard.calcCashResult")} />
+          <Calc title={t("dashboard.calcFinalTitle")} first={contractValue} firstLabel={t("dashboard.calcDeals")} costs={projectCosts} costsLabel={t("dashboard.calcCosts")} result={finalProfit} resultLabel={t("dashboard.calcFinalResult")} />
           <div className="text-sm space-y-1 md:self-center">
             {totalRemaining > 0 && (
               <p className="text-orange-500 font-medium">

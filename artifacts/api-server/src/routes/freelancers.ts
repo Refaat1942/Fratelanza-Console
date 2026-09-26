@@ -5,6 +5,8 @@ import { db } from "@workspace/db";
 import { freelancersTable, projectsTable, projectTeamTable, tasksTable } from "@workspace/db";
 import { eq, or, sql, ilike, and, desc, inArray } from "drizzle-orm";
 
+import { loadFreelancerPayables } from "../lib/financials.js";
+
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -43,7 +45,8 @@ router.get("/freelancers", async (req, res): Promise<void> => {
     ? await db.select().from(freelancersTable).where(and(...conditions)).orderBy(freelancersTable.name)
     : await db.select().from(freelancersTable).orderBy(freelancersTable.name);
 
-  res.json(rows.map(toShape));
+  const payables = await loadFreelancerPayables();
+  res.json(rows.map((r) => ({ ...toShape(r), ...payables.forFreelancer(r.name) })));
 });
 
 function parseFreelancerRows(buffer: Buffer): Record<string, unknown>[] {
