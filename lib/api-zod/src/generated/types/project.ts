@@ -26,6 +26,10 @@ export interface Project {
   status: string;
   paidAmount?: number;
   remainingAmount?: number;
+  /** Part of the money received given to freelancers (+ other project costs) */
+  toFreelancers?: number;
+  /** Money received minus what was given to freelancers / other costs */
+  fratelanzaShare?: number;
   /** @nullable */
   nextPaymentDate?: string | null;
   /** @nullable */

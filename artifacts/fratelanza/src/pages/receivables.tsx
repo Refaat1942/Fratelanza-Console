@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { DollarSign } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-type Project = { id: number; projectName: string; clientName?: string | null; clientPrice: number; paidAmount: number; remainingAmount: number; nextPaymentDate?: string | null; status: string; };
+type Project = { id: number; projectName: string; clientName?: string | null; clientPrice: number; paidAmount: number; remainingAmount: number; nextPaymentDate?: string | null; status: string; toFreelancers?: number; fratelanzaShare?: number; };
 
 export default function Receivables() {
   const { t } = useTranslation();
@@ -37,18 +37,18 @@ export default function Receivables() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
       ) : (
-        <div className="rounded-lg border border-border overflow-hidden">
+        <div className="rounded-lg border border-border overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {[t('receivables.client'), t('receivables.project'), t('receivables.totalPrice'), t('receivables.paid'), t('receivables.remaining'), t('receivables.nextDue'), ""].map((h) => (
+                {[t('receivables.client'), t('receivables.project'), t('receivables.totalPrice'), t('receivables.paid'), t('receivables.toFreelancers'), t('receivables.fratelanzaShare'), t('receivables.remaining'), t('receivables.nextDue'), ""].map((h) => (
                   <th key={h || "actions"} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {(receivables as Project[]).length === 0 ? (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">{t('receivables.noReceivables')}</td></tr>
+                <tr><td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">{t('receivables.noReceivables')}</td></tr>
               ) : (receivables as Project[]).map((p) => {
                 const overdue = p.nextPaymentDate && p.nextPaymentDate < now;
                 return (
@@ -57,6 +57,8 @@ export default function Receivables() {
                     <td className="px-4 py-3">{p.projectName}</td>
                     <td className="px-4 py-3"><PrivacyWrapper value={p.clientPrice} /></td>
                     <td className="px-4 py-3 text-blue-400"><PrivacyWrapper value={p.paidAmount} /></td>
+                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap" title={t('receivables.toFreelancersHint')}><PrivacyWrapper value={p.toFreelancers ?? 0} /></td>
+                    <td className={`px-4 py-3 font-semibold whitespace-nowrap ${(p.fratelanzaShare ?? 0) < 0 ? "text-red-400" : "text-green-400"}`} title={t('receivables.fratelanzaShareHint')}><PrivacyWrapper value={p.fratelanzaShare ?? 0} /></td>
                     <td className="px-4 py-3 text-red-400 font-semibold"><PrivacyWrapper value={p.remainingAmount} /></td>
                     <td className="px-4 py-3">
                       {p.nextPaymentDate ? (

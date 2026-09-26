@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable } from "@workspace/db";
 import { eq, sql, and, ilike, inArray, desc, ne } from "drizzle-orm";
 import { extractTextFromUpload } from "../lib/document-parser.js";
-import { derivedProjectColumns } from "../lib/financials.js";
+import { derivedProjectColumns, loadFreelancerPayables } from "../lib/financials.js";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -21,6 +21,14 @@ function toPaymentShape(r: typeof projectPaymentsTable.$inferSelect) {
     notes: r.notes,
     createdAt: r.createdAt.toISOString(),
   };
+}
+
+type Payables = Awaited<ReturnType<typeof loadFreelancerPayables>>;
+
+/** How the money received on a project splits: given to freelancers (+ other costs) vs Fratelanza */
+function withSplit(shape: ReturnType<typeof toProjectShape>, r: typeof projectsTable.$inferSelect, payables: Payables) {
+  const toFreelancers = Math.min(payables.costPaid(r), Number(r.totalCost));
+  return { ...shape, toFreelancers, fratelanzaShare: Number(r.paidAmount) - toFreelancers };
 }
 
 function toProjectShape(
@@ -117,7 +125,8 @@ router.get("/projects", async (req, res): Promise<void> => {
     : await db.select().from(projectsTable).orderBy(sql`created_at desc`);
 
   const teamMap = await teamMapForProjects(rows.map((r) => r.id));
-  res.json(rows.map((r) => toProjectShape(r, teamMap.get(r.id) ?? [])));
+  const payables = await loadFreelancerPayables();
+  res.json(rows.map((r) => withSplit(toProjectShape(r, teamMap.get(r.id) ?? []), r, payables)));
 });
 
 router.get("/projects/quotes-by-client", async (req, res): Promise<void> => {
@@ -133,7 +142,8 @@ router.get("/projects/receivables", async (req, res): Promise<void> => {
     .where(and(sql`remaining_amount::numeric > 0`, ne(projectsTable.status, "Cancelled")))
     .orderBy(projectsTable.nextPaymentDate);
   const teamMap = await teamMapForProjects(rows.map((r) => r.id));
-  res.json(rows.map((r) => toProjectShape(r, teamMap.get(r.id) ?? [])));
+  const payables = await loadFreelancerPayables();
+  res.json(rows.map((r) => withSplit(toProjectShape(r, teamMap.get(r.id) ?? []), r, payables)));
 });
 
 router.post("/projects", async (req, res): Promise<void> => {

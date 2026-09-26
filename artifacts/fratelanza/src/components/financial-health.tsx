@@ -46,6 +46,7 @@ export function FinancialHealth({ contractValue, collected, projectCosts, projec
       <div className="text-xs font-semibold text-muted-foreground mb-2">{title}</div>
       <div className="flex justify-between gap-4"><span>{firstLabel}</span>{money(first)}</div>
       <div className="flex justify-between gap-4 text-muted-foreground"><span>{costsLabel}</span>{money(-costs)}</div>
+      <div className="flex justify-between gap-4 border-t border-border/60 mt-1 pt-1 font-semibold"><span>{t("dashboard.calcShare")}</span>{money(first - costs)}</div>
       <div className="flex justify-between gap-4 text-muted-foreground"><span>{t("dashboard.calcExpenses")}</span>{money(-expenses)}</div>
       <div className="flex justify-between gap-4 border-t border-border mt-1 pt-1 font-bold"><span>{resultLabel}</span>{money(result, true)}</div>
     </div>

@@ -1463,6 +1463,12 @@ components:
           type: number
         remainingAmount:
           type: number
+        toFreelancers:
+          type: number
+          description: Part of the money received given to freelancers (+ other project costs)
+        fratelanzaShare:
+          type: number
+          description: Money received minus what was given to freelancers / other costs
         nextPaymentDate:
           type: ["string", "null"]
         notes:
