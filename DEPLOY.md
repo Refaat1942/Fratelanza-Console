@@ -166,8 +166,8 @@ bash /opt/fratelanza-console/source/scripts/vps-update-now.sh
 
 Expected after a successful deploy:
 
-- Sidebar shows **v2026.09.26-a**
-- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.09.26-a"`
+- Sidebar shows **v2026.09.27-a**
+- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.09.27-a"`
 
 ### Login fails / "Invalid credentials"
 

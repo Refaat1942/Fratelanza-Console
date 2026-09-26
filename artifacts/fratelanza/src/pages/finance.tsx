@@ -92,8 +92,10 @@ export default function Finance() {
         <>
           {report && (
             <FinancialHealth
-              expectedNetProfit={report.expectedNetProfit ?? report.grossMargin}
-              cashNetProfit={report.totalNetProfit}
+              contractValue={report.totalContractValue ?? 0}
+              collected={report.totalPaid}
+              projectCosts={report.totalCost}
+              expenses={report.totalExpenses}
               totalRemaining={report.totalRemaining}
               grossMarginPct={report.grossMarginPct ?? 0}
               netMarginPct={report.netMarginPct ?? 0}
