@@ -64,7 +64,7 @@ export interface DashboardSummary {
   totalCost?: number;
   /** Signed contract value (cancelled projects count only what was paid) */
   totalContractValue?: number;
-  /** Net profit once every open balance is collected = contract value - project costs - expenses */
+  /** Fratelanza estimated profit until collection = deals - project costs - expenses */
   expectedNetProfit?: number;
   /** (contract value - project costs) / contract value, in percent */
   grossMarginPct?: number;
@@ -628,6 +628,16 @@ export interface FinanceReport {
   projects: Project[];
   remainingBreakdown: RemainingItem[];
 }
+
+export type GetDashboardSummaryParams = {
+startDate?: string;
+endDate?: string;
+};
+
+export type GetProfitByTypeParams = {
+startDate?: string;
+endDate?: string;
+};
 
 export type ListProjectsParams = {
 type?: string;

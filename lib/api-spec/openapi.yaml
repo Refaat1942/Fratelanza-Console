@@ -81,6 +81,15 @@ paths:
       operationId: getDashboardSummary
       tags: [dashboard]
       summary: Get overall financial summary stats
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
       responses:
         "200":
           description: Dashboard summary
@@ -94,6 +103,15 @@ paths:
       operationId: getProfitByType
       tags: [dashboard]
       summary: Get net profit grouped by project type
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
       responses:
         "200":
           description: Profit by type
@@ -1276,7 +1294,7 @@ components:
           description: Signed contract value (cancelled projects count only what was paid)
         expectedNetProfit:
           type: number
-          description: Net profit once every open balance is collected = contract value - project costs - expenses
+          description: Fratelanza estimated profit until collection = deals - project costs - expenses
         grossMarginPct:
           type: number
           description: (contract value - project costs) / contract value, in percent

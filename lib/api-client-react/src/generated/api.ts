@@ -39,8 +39,10 @@ import type {
   FreelancerUpdate,
   GenerateQuoteFromOutlineInput,
   GenerateQuoteFromOutlineResult,
+  GetDashboardSummaryParams,
   GetExpenseSummaryParams,
   GetFinanceReportParams,
+  GetProfitByTypeParams,
   HealthStatus,
   ListClientsParams,
   ListExpensesParams,
@@ -307,20 +309,27 @@ export const useVerifyPassword = <TError = ErrorType<void>,
       return useMutation(getVerifyPasswordMutationOptions(options));
     }
 
-export const getGetDashboardSummaryUrl = () => {
+export const getGetDashboardSummaryUrl = (params?: GetDashboardSummaryParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/dashboard/summary`
+  return stringifiedParams.length > 0 ? `/api/dashboard/summary?${stringifiedParams}` : `/api/dashboard/summary`
 }
 
 /**
  * @summary Get overall financial summary stats
  */
-export const getDashboardSummary = async ( options?: RequestInit): Promise<DashboardSummary> => {
+export const getDashboardSummary = async (params?: GetDashboardSummaryParams, options?: RequestInit): Promise<DashboardSummary> => {
 
-  return customFetch<DashboardSummary>(getGetDashboardSummaryUrl(),
+  return customFetch<DashboardSummary>(getGetDashboardSummaryUrl(params),
   {
     ...options,
     method: 'GET'
@@ -333,23 +342,23 @@ export const getDashboardSummary = async ( options?: RequestInit): Promise<Dashb
 
 
 
-export const getGetDashboardSummaryQueryKey = () => {
+export const getGetDashboardSummaryQueryKey = (params?: GetDashboardSummaryParams,) => {
     return [
-    `/api/dashboard/summary`
+    `/api/dashboard/summary`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetDashboardSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardSummary>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetDashboardSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getDashboardSummary>>, TError = ErrorType<unknown>>(params?: GetDashboardSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetDashboardSummaryQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetDashboardSummaryQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardSummary>>> = ({ signal }) => getDashboardSummary({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDashboardSummary>>> = ({ signal }) => getDashboardSummary(params, { signal, ...requestOptions });
 
 
 
@@ -367,11 +376,11 @@ export type GetDashboardSummaryQueryError = ErrorType<unknown>
  */
 
 export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDashboardSummary>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetDashboardSummaryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDashboardSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetDashboardSummaryQueryOptions(options)
+  const queryOptions = getGetDashboardSummaryQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -384,20 +393,27 @@ export function useGetDashboardSummary<TData = Awaited<ReturnType<typeof getDash
 
 
 
-export const getGetProfitByTypeUrl = () => {
+export const getGetProfitByTypeUrl = (params?: GetProfitByTypeParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/dashboard/profit-by-type`
+  return stringifiedParams.length > 0 ? `/api/dashboard/profit-by-type?${stringifiedParams}` : `/api/dashboard/profit-by-type`
 }
 
 /**
  * @summary Get net profit grouped by project type
  */
-export const getProfitByType = async ( options?: RequestInit): Promise<ProfitByType[]> => {
+export const getProfitByType = async (params?: GetProfitByTypeParams, options?: RequestInit): Promise<ProfitByType[]> => {
 
-  return customFetch<ProfitByType[]>(getGetProfitByTypeUrl(),
+  return customFetch<ProfitByType[]>(getGetProfitByTypeUrl(params),
   {
     ...options,
     method: 'GET'
@@ -410,23 +426,23 @@ export const getProfitByType = async ( options?: RequestInit): Promise<ProfitByT
 
 
 
-export const getGetProfitByTypeQueryKey = () => {
+export const getGetProfitByTypeQueryKey = (params?: GetProfitByTypeParams,) => {
     return [
-    `/api/dashboard/profit-by-type`
+    `/api/dashboard/profit-by-type`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetProfitByTypeQueryOptions = <TData = Awaited<ReturnType<typeof getProfitByType>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProfitByType>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetProfitByTypeQueryOptions = <TData = Awaited<ReturnType<typeof getProfitByType>>, TError = ErrorType<unknown>>(params?: GetProfitByTypeParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProfitByType>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetProfitByTypeQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetProfitByTypeQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProfitByType>>> = ({ signal }) => getProfitByType({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProfitByType>>> = ({ signal }) => getProfitByType(params, { signal, ...requestOptions });
 
 
 
@@ -444,11 +460,11 @@ export type GetProfitByTypeQueryError = ErrorType<unknown>
  */
 
 export function useGetProfitByType<TData = Awaited<ReturnType<typeof getProfitByType>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProfitByType>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetProfitByTypeParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProfitByType>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetProfitByTypeQueryOptions(options)
+  const queryOptions = getGetProfitByTypeQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
