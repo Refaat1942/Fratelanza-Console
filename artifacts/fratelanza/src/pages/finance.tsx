@@ -1,14 +1,11 @@
-import { useState } from "react";
 import { useGetFinanceReport, getGetFinanceReportQueryKey } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useTranslation } from "react-i18next";
 import { FinancialHealth } from "@/components/financial-health";
+import { PeriodPicker, usePeriod, usePeriodLabel } from "@/components/period-picker";
 
 type Project = {
   id: number; type: string; projectName: string; clientName?: string | null;
@@ -20,15 +17,9 @@ type RemainingItem = { id: number; projectName: string; clientName: string; rema
 
 export default function Finance() {
   const { t } = useTranslation();
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [applied, setApplied] = useState({ startDate: "", endDate: "" });
-
-  const params = { startDate: applied.startDate || undefined, endDate: applied.endDate || undefined };
+  const { period, setPeriod, params } = usePeriod();
+  const periodLabel = usePeriodLabel(period);
   const { data: report, isLoading } = useGetFinanceReport(params, { query: { queryKey: getGetFinanceReportQueryKey(params) } });
-
-  const applyFilter = () => setApplied({ startDate, endDate });
-  const clearFilter = () => { setStartDate(""); setEndDate(""); setApplied({ startDate: "", endDate: "" }); };
 
   type FinanceKpi = {
     label: string;
@@ -47,7 +38,7 @@ export default function Finance() {
     { label: t("finance.projectCost", { defaultValue: "Project Cost" }), value: report.totalCost, color: "text-muted-foreground", forceNegative: true, hint: "Freelancer commissions + direct project costs" },
     { label: "Expenses", value: report.totalExpenses, color: "text-red-400", forceNegative: true, hint: "Operating expenses dated in this period" },
     { label: t("finance.grossMargin", { defaultValue: "Gross Margin" }), value: report.grossMargin ?? 0, color: (report.grossMargin ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Contract value − project costs", report.grossMarginPct) },
-    { label: t("finance.expectedNetProfit", { defaultValue: "Expected Net Profit" }), value: report.expectedNetProfit ?? 0, color: (report.expectedNetProfit ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Gross margin − expenses, once every balance is collected", report.netMarginPct) },
+    { label: t("finance.expectedNetProfit", { defaultValue: "Expected Net Profit" }), value: report.expectedNetProfit ?? 0, color: (report.expectedNetProfit ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Deals − project costs − company expenses, once clients pay everything", report.netMarginPct) },
     { label: t("finance.cashNetProfit", { defaultValue: "Cash Net Profit" }), value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", useSign: true, hint: "Cash collected − project costs − expenses" },
   ] : [];
 
@@ -72,18 +63,7 @@ export default function Finance() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t("finance.title")}</h1>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex items-center gap-1">
-            <Label className="text-xs whitespace-nowrap">From</Label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="w-36" data-testid="input-start-date" />
-          </div>
-          <div className="flex items-center gap-1">
-            <Label className="text-xs whitespace-nowrap">To</Label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="w-36" data-testid="input-end-date" />
-          </div>
-          <Button onClick={applyFilter} data-testid="button-apply-filter">Apply</Button>
-          <Button variant="outline" onClick={clearFilter}>Clear</Button>
-        </div>
+        <PeriodPicker period={period} onChange={setPeriod} />
       </div>
 
       {isLoading ? (
@@ -99,15 +79,16 @@ export default function Finance() {
               totalRemaining={report.totalRemaining}
               grossMarginPct={report.grossMarginPct ?? 0}
               netMarginPct={report.netMarginPct ?? 0}
+              periodLabel={periodLabel}
             />
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-3">
             {kpis.map((kpi) => (
               <Card key={kpi.label} className="bg-card/50" title={kpi.hint}>
                 <CardHeader className="pb-1 pt-3 px-3"><CardTitle className="text-xs text-muted-foreground">{kpi.label}</CardTitle></CardHeader>
                 <CardContent className="px-3 pb-3">
-                  <div className={`text-lg font-bold ${kpi.color}`}>
+                  <div className={`text-base font-bold whitespace-nowrap ${kpi.color}`}>
                     {formatKpiValue(kpi.value ?? 0, { forceNegative: kpi.forceNegative, useSign: kpi.useSign })}
                   </div>
                 </CardContent>

@@ -1,17 +1,19 @@
 import { Router, type IRouter } from "express";
 import { db } from "@workspace/db";
-import { projectsTable, expensesTable, clientsTable, freelancersTable } from "@workspace/db";
+import { projectsTable, clientsTable, freelancersTable } from "@workspace/db";
 import { sql, and, isNotNull, ne } from "drizzle-orm";
-import { projectFigures, pct } from "../lib/financials.js";
+import { periodFinancials, projectFigures } from "../lib/financials.js";
 
 const router: IRouter = Router();
 
-router.get("/dashboard/summary", async (req, res): Promise<void> => {
-  const projects = await db.select().from(projectsTable);
+function periodParams(req: { query: unknown }) {
+  const { startDate, endDate } = (req.query ?? {}) as Record<string, string | undefined>;
+  return { startDate: startDate || undefined, endDate: endDate || undefined };
+}
 
-  const [expAgg] = await db
-    .select({ totalExpenses: sql<number>`coalesce(sum(amount::numeric), 0)` })
-    .from(expensesTable);
+router.get("/dashboard/summary", async (req, res): Promise<void> => {
+  const { startDate, endDate } = periodParams(req);
+  const { projects, totals, remainingBreakdown } = await periodFinancials(startDate, endDate);
 
   const [clientCount] = await db
     .select({ count: sql<number>`count(*)` })
@@ -21,50 +23,17 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     .select({ count: sql<number>`count(*)` })
     .from(freelancersTable);
 
-  let totalPaid = 0;
-  let totalRemaining = 0;
-  let totalCost = 0;
-  let totalContractValue = 0;
-  let expectedProjectProfit = 0;
-  for (const p of projects) {
-    const f = projectFigures(p);
-    totalPaid += f.paid;
-    totalRemaining += f.receivable;
-    totalCost += f.cost;
-    totalContractValue += f.contractValue;
-    expectedProjectProfit += f.expectedProfit;
-  }
-  const totalExpenses = Number(expAgg?.totalExpenses ?? 0);
-
-  // Per-project remaining breakdown (only projects the client still owes money on)
-  const remainingBreakdown = projects
-    .map((p) => ({ p, remaining: projectFigures(p).receivable }))
-    .filter((r) => r.remaining > 0)
-    .sort((a, b) => b.remaining - a.remaining)
-    .map(({ p, remaining }) => ({
-      id: p.id,
-      projectName: p.projectName,
-      clientName: p.clientName ?? "",
-      remaining,
-    }));
-
-  // Cash net profit = money collected - project costs (freelancers + direct) - operating expenses
-  const totalNetProfit = totalPaid - totalCost - totalExpenses;
-  // Expected net profit = what is left once every open balance is collected
-  const expectedNetProfit = expectedProjectProfit - totalExpenses;
-
   res.json({
-    // Gross revenue = money actually collected (paid). Unpaid balances are NOT revenue.
-    totalRevenue: totalPaid,
-    totalPaid,
-    totalRemaining,
-    totalNetProfit,
-    totalExpenses,
-    totalCost,
-    totalContractValue,
-    expectedNetProfit,
-    grossMarginPct: pct(totalContractValue - totalCost, totalContractValue),
-    netMarginPct: pct(expectedNetProfit, totalContractValue),
+    totalRevenue: totals.totalPaid,
+    totalPaid: totals.totalPaid,
+    totalRemaining: totals.totalRemaining,
+    totalNetProfit: totals.totalNetProfit,
+    totalExpenses: totals.totalExpenses,
+    totalCost: totals.totalCost,
+    totalContractValue: totals.totalContractValue,
+    expectedNetProfit: totals.expectedNetProfit,
+    grossMarginPct: totals.grossMarginPct,
+    netMarginPct: totals.netMarginPct,
     activeProjects: projects.filter((p) => p.status === "Ongoing").length,
     completedProjects: projects.filter((p) => p.status === "Completed").length,
     lossProjects: projects.filter((p) => projectFigures(p).expectedProfit < 0).length,
@@ -75,7 +44,8 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
 });
 
 router.get("/dashboard/profit-by-type", async (req, res): Promise<void> => {
-  const projects = await db.select().from(projectsTable);
+  const { startDate, endDate } = periodParams(req);
+  const { projects } = await periodFinancials(startDate, endDate);
   const byType = new Map<string, { netProfit: number; count: number }>();
   for (const p of projects) {
     const cur = byType.get(p.type) ?? { netProfit: 0, count: 0 };

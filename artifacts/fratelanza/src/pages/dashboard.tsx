@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useGetDashboardSummary, useGetProfitByType, useGetPaymentAlerts } from '@workspace/api-client-react';
+import { useGetDashboardSummary, useGetProfitByType, useGetPaymentAlerts, getGetDashboardSummaryQueryKey, getGetProfitByTypeQueryKey } from '@workspace/api-client-react';
+import { PeriodPicker, usePeriod, usePeriodLabel } from "@/components/period-picker";
 import { PrivacyWrapper } from '@/components/privacy-wrapper';
 import { MotionCard } from "@/components/page-transition";
 import { AnimatedNumber } from "@/components/animated-number";
@@ -37,8 +38,10 @@ function Kpi({ label, value, icon: Icon, color, delay, negative, valueColor, not
 
 export default function Dashboard() {
   const { t } = useTranslation();
-  const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary();
-  const { data: profitByType, isLoading: loadingProfit } = useGetProfitByType();
+  const { period, setPeriod, params } = usePeriod();
+  const periodLabel = usePeriodLabel(period);
+  const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary(params, { query: { queryKey: getGetDashboardSummaryQueryKey(params) } });
+  const { data: profitByType, isLoading: loadingProfit } = useGetProfitByType(params, { query: { queryKey: getGetProfitByTypeQueryKey(params) } });
   const { data: alerts, isLoading: loadingAlerts } = useGetPaymentAlerts();
   const dealsPct = (v?: number) => {
     const total = summary?.totalContractValue ?? 0;
@@ -47,6 +50,10 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-end">
+        <PeriodPicker period={period} onChange={setPeriod} />
+      </div>
+
       {summary && (
         <MotionCard delay={0}>
           <FinancialHealth
@@ -58,6 +65,7 @@ export default function Dashboard() {
             grossMarginPct={summary.grossMarginPct ?? 0}
             netMarginPct={summary.netMarginPct ?? 0}
             lossProjects={summary.lossProjects}
+            periodLabel={periodLabel}
           />
         </MotionCard>
       )}

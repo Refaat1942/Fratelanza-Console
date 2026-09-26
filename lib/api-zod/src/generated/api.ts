@@ -51,6 +51,11 @@ export const VerifyPasswordResponse = zod.object({
 /**
  * @summary Get overall financial summary stats
  */
+export const GetDashboardSummaryQueryParams = zod.object({
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional()
+})
+
 export const GetDashboardSummaryResponse = zod.object({
   "totalRevenue": zod.number().describe('Gross revenue = total paid amounts only'),
   "totalPaid": zod.number(),
@@ -59,7 +64,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "totalExpenses": zod.number(),
   "totalCost": zod.number().optional().describe('Project delivery costs (freelancer commissions + direct costs)'),
   "totalContractValue": zod.number().optional().describe('Signed contract value (cancelled projects count only what was paid)'),
-  "expectedNetProfit": zod.number().optional().describe('Net profit once every open balance is collected = contract value - project costs - expenses'),
+  "expectedNetProfit": zod.number().optional().describe('Fratelanza estimated profit until collection = deals - project costs - expenses'),
   "grossMarginPct": zod.number().optional().describe('(contract value - project costs) \/ contract value, in percent'),
   "netMarginPct": zod.number().optional().describe('Expected net profit \/ contract value, in percent'),
   "activeProjects": zod.number(),
@@ -79,6 +84,11 @@ export const GetDashboardSummaryResponse = zod.object({
 /**
  * @summary Get net profit grouped by project type
  */
+export const GetProfitByTypeQueryParams = zod.object({
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional()
+})
+
 export const GetProfitByTypeResponseItem = zod.object({
   "type": zod.string(),
   "netProfit": zod.number(),
