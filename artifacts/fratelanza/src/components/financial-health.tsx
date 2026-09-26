@@ -5,37 +5,51 @@ import { usePrivacy } from "@/lib/privacy-context";
 import { CheckCircle2, Hourglass, AlertTriangle } from "lucide-react";
 
 type Props = {
-  expectedNetProfit: number;
-  cashNetProfit: number;
+  contractValue: number;
+  collected: number;
+  projectCosts: number;
+  expenses: number;
   totalRemaining: number;
   grossMarginPct: number;
   netMarginPct: number;
   lossProjects?: number;
 };
 
-/** Plain-language verdict: is the business making or losing money? */
-export function FinancialHealth({ expectedNetProfit, cashNetProfit, totalRemaining, grossMarginPct, netMarginPct, lossProjects }: Props) {
+/** Plain-language verdict with the two calculations spelled out step by step. */
+export function FinancialHealth({ contractValue, collected, projectCosts, expenses, totalRemaining, grossMarginPct, netMarginPct, lossProjects }: Props) {
   const { t } = useTranslation();
   const { isPrivate } = usePrivacy();
 
-  const state = expectedNetProfit < 0 ? "loss" : cashNetProfit < 0 ? "pending" : "profit";
+  const cashResult = collected - projectCosts - expenses;
+  const finalProfit = contractValue - projectCosts - expenses;
+  const state = finalProfit < 0 ? "loss" : cashResult < 0 ? "pending" : "profit";
   const styles = {
-    profit: { box: "border-green-500/40 bg-green-500/10", text: "text-green-400", Icon: CheckCircle2, title: t("dashboard.healthProfit"), desc: t("dashboard.healthProfitDesc") },
-    pending: { box: "border-yellow-500/40 bg-yellow-500/10", text: "text-yellow-400", Icon: Hourglass, title: t("dashboard.healthPending"), desc: t("dashboard.healthPendingDesc") },
-    loss: { box: "border-red-500/40 bg-red-500/10", text: "text-red-400", Icon: AlertTriangle, title: t("dashboard.healthLoss"), desc: t("dashboard.healthLossDesc") },
+    profit: { box: "border-green-500/40 bg-green-500/10", text: "text-green-500", Icon: CheckCircle2, title: t("dashboard.healthProfit"), desc: t("dashboard.healthProfitDesc") },
+    pending: { box: "border-yellow-500/40 bg-yellow-500/10", text: "text-yellow-500", Icon: Hourglass, title: t("dashboard.healthPending"), desc: t("dashboard.healthPendingDesc") },
+    loss: { box: "border-red-500/40 bg-red-500/10", text: "text-red-500", Icon: AlertTriangle, title: t("dashboard.healthLoss"), desc: t("dashboard.healthLossDesc") },
   }[state];
 
-  const signed = (v: number) => (
-    <span className={v < 0 ? "text-red-400" : "text-green-400"}>
+  const money = (v: number, sign = false) => (
+    <span className={sign ? (v < 0 ? "text-red-500" : "text-green-500") : ""}>
       {v < 0 ? "- " : ""}<PrivacyWrapper value={Math.abs(v)} />
     </span>
   );
   const percent = (v: number) => (isPrivate ? "***" : `${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}%`);
 
+  const Calc = ({ title, first, firstLabel, result, resultLabel }: { title: string; first: number; firstLabel: string; result: number; resultLabel: string }) => (
+    <div className="rounded-lg border border-border/60 bg-background/60 p-3 text-sm min-w-[260px]">
+      <div className="text-xs font-semibold text-muted-foreground mb-2">{title}</div>
+      <div className="flex justify-between gap-4"><span>{firstLabel}</span>{money(first)}</div>
+      <div className="flex justify-between gap-4 text-muted-foreground"><span>{t("dashboard.calcCosts")}</span>{money(-projectCosts)}</div>
+      <div className="flex justify-between gap-4 text-muted-foreground"><span>{t("dashboard.calcExpenses")}</span>{money(-expenses)}</div>
+      <div className="flex justify-between gap-4 border-t border-border mt-1 pt-1 font-bold"><span>{resultLabel}</span>{money(result, true)}</div>
+    </div>
+  );
+
   return (
     <Card className={`border ${styles.box}`} data-testid="financial-health">
-      <CardContent className="p-4 flex flex-col md:flex-row md:items-center gap-4">
-        <div className="flex items-start gap-3 flex-1 min-w-0">
+      <CardContent className="p-4 space-y-3">
+        <div className="flex items-start gap-3">
           <styles.Icon className={`h-6 w-6 shrink-0 ${styles.text}`} />
           <div className="min-w-0">
             <div className="text-xs uppercase tracking-wider text-muted-foreground">{t("dashboard.healthTitle")}</div>
@@ -43,21 +57,20 @@ export function FinancialHealth({ expectedNetProfit, cashNetProfit, totalRemaini
             <p className="text-sm text-muted-foreground">{styles.desc}</p>
           </div>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-1 text-sm shrink-0">
-          <span className="text-muted-foreground">{t("dashboard.expectedNetProfit")}</span>
-          <span className="font-semibold md:col-span-2">{signed(expectedNetProfit)}</span>
-          <span className="text-muted-foreground">{t("dashboard.cashNetProfit")}</span>
-          <span className="font-semibold md:col-span-2">{signed(cashNetProfit)}</span>
-          <span className="text-muted-foreground">{t("dashboard.totalRemaining")}</span>
-          <span className="font-semibold text-orange-400 md:col-span-2"><PrivacyWrapper value={totalRemaining} /></span>
-          <span className="text-muted-foreground">{t("dashboard.grossMarginPct")} / {t("dashboard.netMarginPct")}</span>
-          <span className="font-semibold md:col-span-2">{percent(grossMarginPct)} / {percent(netMarginPct)}</span>
-          {lossProjects !== undefined && (
-            <>
-              <span className="text-muted-foreground">{t("dashboard.lossProjects")}</span>
-              <span className={`font-semibold md:col-span-2 ${lossProjects > 0 ? "text-red-400" : ""}`}>{lossProjects}</span>
-            </>
-          )}
+        <div className="flex flex-col md:flex-row gap-3">
+          <Calc title={t("dashboard.calcCashTitle")} first={collected} firstLabel={t("dashboard.calcReceived")} result={cashResult} resultLabel={t("dashboard.calcCashResult")} />
+          <Calc title={t("dashboard.calcFinalTitle")} first={contractValue} firstLabel={t("dashboard.calcDeals")} result={finalProfit} resultLabel={t("dashboard.calcFinalResult")} />
+          <div className="text-sm space-y-1 md:self-center">
+            {totalRemaining > 0 && (
+              <p className="text-orange-500 font-medium">
+                {t("dashboard.calcCollectHint", { amount: isPrivate ? "***" : `EGP ${Math.round(totalRemaining).toLocaleString()}` })}
+              </p>
+            )}
+            <p className="text-muted-foreground">{t("dashboard.grossMarginPct")}: <b className="text-foreground">{percent(grossMarginPct)}</b> · {t("dashboard.netMarginPct")}: <b className="text-foreground">{percent(netMarginPct)}</b></p>
+            {lossProjects !== undefined && (
+              <p className="text-muted-foreground">{t("dashboard.lossProjects")}: <b className={lossProjects > 0 ? "text-red-500" : "text-foreground"}>{lossProjects}</b></p>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

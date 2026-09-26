@@ -10,7 +10,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
 import { TrendingUp, Wallet, Clock, Activity, ReceiptText, Users } from "lucide-react";
 import { FinancialHealth } from "@/components/financial-health";
 
-function Kpi({ label, value, icon: Icon, color, delay, negative, valueColor }: { label: string; value: number; icon: React.ComponentType<{ className?: string }>; color: string; delay: number; negative?: boolean; valueColor?: string }) {
+function Kpi({ label, value, icon: Icon, color, delay, negative, valueColor, note }: { label: string; value: number; icon: React.ComponentType<{ className?: string }>; color: string; delay: number; negative?: boolean; valueColor?: string; note?: string }) {
   const { isPrivate } = usePrivacy();
   const displayValue = negative ? -Math.abs(value) : value;
   return (
@@ -23,11 +23,12 @@ function Kpi({ label, value, icon: Icon, color, delay, negative, valueColor }: {
           </div>
         </CardHeader>
         <CardContent>
-          <div className={`text-2xl font-bold ${valueColor ?? "text-foreground"}`}>
+          <div className={`text-xl 2xl:text-2xl font-bold whitespace-nowrap ${valueColor ?? "text-foreground"}`}>
             {isPrivate ? <span>***</span> : (
               <span>{displayValue < 0 ? "- " : ""}EGP <AnimatedNumber value={Math.abs(displayValue)} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 })} /></span>
             )}
           </div>
+          {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}
         </CardContent>
       </Card>
     </MotionCard>
@@ -39,14 +40,20 @@ export default function Dashboard() {
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary();
   const { data: profitByType, isLoading: loadingProfit } = useGetProfitByType();
   const { data: alerts, isLoading: loadingAlerts } = useGetPaymentAlerts();
+  const dealsPct = (v?: number) => {
+    const total = summary?.totalContractValue ?? 0;
+    return total > 0 ? Math.round(((v ?? 0) / total) * 100) : 0;
+  };
 
   return (
     <div className="space-y-6">
       {summary && (
         <MotionCard delay={0}>
           <FinancialHealth
-            expectedNetProfit={summary.expectedNetProfit ?? 0}
-            cashNetProfit={summary.totalNetProfit}
+            contractValue={summary.totalContractValue ?? 0}
+            collected={summary.totalPaid}
+            projectCosts={summary.totalCost ?? 0}
+            expenses={summary.totalExpenses}
             totalRemaining={summary.totalRemaining}
             grossMarginPct={summary.grossMarginPct ?? 0}
             netMarginPct={summary.netMarginPct ?? 0}
@@ -55,13 +62,13 @@ export default function Dashboard() {
         </MotionCard>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <Kpi label={t('dashboard.contractValue')} value={summary?.totalContractValue ?? 0} icon={TrendingUp} color="bg-blue-500/10 text-blue-400" delay={0} />
-        <Kpi label={t('dashboard.totalPaid')} value={summary?.totalPaid ?? 0} icon={Wallet} color="bg-green-500/10 text-green-400" delay={0.05} />
-        <Kpi label={t('dashboard.totalRemaining')} value={summary?.totalRemaining ?? 0} icon={Clock} color="bg-orange-500/10 text-orange-400" delay={0.1} />
-        <Kpi label={t('dashboard.projectCosts')} value={summary?.totalCost ?? 0} icon={Users} color="bg-muted text-muted-foreground" delay={0.12} negative valueColor="text-red-400" />
-        <Kpi label={t('dashboard.totalExpenses')} value={summary?.totalExpenses ?? 0} icon={ReceiptText} color="bg-red-500/10 text-red-400" delay={0.15} negative valueColor="text-red-400" />
-        <Kpi label={t('dashboard.cashNetProfit')} value={summary?.totalNetProfit ?? 0} icon={Activity} color="bg-primary/10 text-primary" delay={0.2} valueColor={(summary?.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400"} />
+      <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <Kpi label={t('dashboard.kpiContract')} note={t('dashboard.kpiContractNote')} value={summary?.totalContractValue ?? 0} icon={TrendingUp} color="bg-blue-500/10 text-blue-400" delay={0} />
+        <Kpi label={t('dashboard.kpiPaid')} note={`${t('dashboard.kpiPaidNote')} · ${t('dashboard.ofDeals', { pct: dealsPct(summary?.totalPaid) })}`} value={summary?.totalPaid ?? 0} icon={Wallet} color="bg-green-500/10 text-green-400" delay={0.05} />
+        <Kpi label={t('dashboard.kpiRemaining')} note={`${t('dashboard.kpiRemainingNote')} · ${t('dashboard.ofDeals', { pct: dealsPct(summary?.totalRemaining) })}`} value={summary?.totalRemaining ?? 0} icon={Clock} color="bg-orange-500/10 text-orange-400" delay={0.1} />
+        <Kpi label={t('dashboard.kpiCosts')} note={t('dashboard.kpiCostsNote')} value={summary?.totalCost ?? 0} icon={Users} color="bg-muted text-muted-foreground" delay={0.12} negative valueColor="text-red-400" />
+        <Kpi label={t('dashboard.kpiExpenses')} note={t('dashboard.kpiExpensesNote')} value={summary?.totalExpenses ?? 0} icon={ReceiptText} color="bg-red-500/10 text-red-400" delay={0.15} negative valueColor="text-red-400" />
+        <Kpi label={t('dashboard.kpiCash')} note={t('dashboard.kpiCashNote')} value={summary?.totalNetProfit ?? 0} icon={Activity} color="bg-primary/10 text-primary" delay={0.2} valueColor={(summary?.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -69,7 +76,7 @@ export default function Dashboard() {
           <Card className="bg-card/60 backdrop-blur">
             <CardHeader>
               <CardTitle>{t('dashboard.profitByType')}</CardTitle>
-              <p className="text-xs text-muted-foreground">Contract value − project costs, before operating expenses</p>
+              <p className="text-xs text-muted-foreground">{t('dashboard.profitByTypeNote')}</p>
             </CardHeader>
             <CardContent>
               <div className="h-64">
