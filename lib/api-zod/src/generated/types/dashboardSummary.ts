@@ -12,11 +12,23 @@ export interface DashboardSummary {
   totalRevenue: number;
   totalPaid: number;
   totalRemaining: number;
-  /** Net profit = gross revenue - total expenses */
+  /** Cash net profit = collected - project costs (freelancers + direct) - operating expenses */
   totalNetProfit: number;
   totalExpenses: number;
+  /** Project delivery costs (freelancer commissions + direct costs) */
+  totalCost?: number;
+  /** Signed contract value (cancelled projects count only what was paid) */
+  totalContractValue?: number;
+  /** Net profit once every open balance is collected = contract value - project costs - expenses */
+  expectedNetProfit?: number;
+  /** (contract value - project costs) / contract value, in percent */
+  grossMarginPct?: number;
+  /** Expected net profit / contract value, in percent */
+  netMarginPct?: number;
   activeProjects: number;
   completedProjects: number;
+  /** Projects whose costs exceed their contract value */
+  lossProjects?: number;
   totalClients: number;
   totalFreelancers: number;
   remainingBreakdown: RemainingItem[];

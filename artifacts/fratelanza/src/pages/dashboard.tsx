@@ -7,7 +7,8 @@ import { MotionCard } from "@/components/page-transition";
 import { AnimatedNumber } from "@/components/animated-number";
 import { usePrivacy } from "@/lib/privacy-context";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
-import { TrendingUp, Wallet, Clock, Activity, ReceiptText } from "lucide-react";
+import { TrendingUp, Wallet, Clock, Activity, ReceiptText, Users } from "lucide-react";
+import { FinancialHealth } from "@/components/financial-health";
 
 function Kpi({ label, value, icon: Icon, color, delay, negative, valueColor }: { label: string; value: number; icon: React.ComponentType<{ className?: string }>; color: string; delay: number; negative?: boolean; valueColor?: string }) {
   const { isPrivate } = usePrivacy();
@@ -41,12 +42,26 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-        <Kpi label={t('dashboard.totalRevenue')} value={summary?.totalRevenue ?? 0} icon={TrendingUp} color="bg-blue-500/10 text-blue-400" delay={0} />
+      {summary && (
+        <MotionCard delay={0}>
+          <FinancialHealth
+            expectedNetProfit={summary.expectedNetProfit ?? 0}
+            cashNetProfit={summary.totalNetProfit}
+            totalRemaining={summary.totalRemaining}
+            grossMarginPct={summary.grossMarginPct ?? 0}
+            netMarginPct={summary.netMarginPct ?? 0}
+            lossProjects={summary.lossProjects}
+          />
+        </MotionCard>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Kpi label={t('dashboard.contractValue')} value={summary?.totalContractValue ?? 0} icon={TrendingUp} color="bg-blue-500/10 text-blue-400" delay={0} />
         <Kpi label={t('dashboard.totalPaid')} value={summary?.totalPaid ?? 0} icon={Wallet} color="bg-green-500/10 text-green-400" delay={0.05} />
         <Kpi label={t('dashboard.totalRemaining')} value={summary?.totalRemaining ?? 0} icon={Clock} color="bg-orange-500/10 text-orange-400" delay={0.1} />
+        <Kpi label={t('dashboard.projectCosts')} value={summary?.totalCost ?? 0} icon={Users} color="bg-muted text-muted-foreground" delay={0.12} negative valueColor="text-red-400" />
         <Kpi label={t('dashboard.totalExpenses')} value={summary?.totalExpenses ?? 0} icon={ReceiptText} color="bg-red-500/10 text-red-400" delay={0.15} negative valueColor="text-red-400" />
-        <Kpi label={t('dashboard.netProfit')} value={summary?.totalNetProfit ?? 0} icon={Activity} color="bg-primary/10 text-primary" delay={0.2} valueColor={(summary?.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400"} />
+        <Kpi label={t('dashboard.cashNetProfit')} value={summary?.totalNetProfit ?? 0} icon={Activity} color="bg-primary/10 text-primary" delay={0.2} valueColor={(summary?.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400"} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -54,6 +69,7 @@ export default function Dashboard() {
           <Card className="bg-card/60 backdrop-blur">
             <CardHeader>
               <CardTitle>{t('dashboard.profitByType')}</CardTitle>
+              <p className="text-xs text-muted-foreground">Contract value − project costs, before operating expenses</p>
             </CardHeader>
             <CardContent>
               <div className="h-64">

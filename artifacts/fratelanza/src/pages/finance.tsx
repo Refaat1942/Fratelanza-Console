@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { useTranslation } from "react-i18next";
+import { FinancialHealth } from "@/components/financial-health";
 
 type Project = {
   id: number; type: string; projectName: string; clientName?: string | null;
@@ -38,14 +39,16 @@ export default function Finance() {
     hint?: string;
   };
 
+  const marginHint = (label: string, v?: number) => (v !== undefined ? `${label} — ${v.toLocaleString(undefined, { maximumFractionDigits: 1 })}% of contract value` : label);
   const kpis: FinanceKpi[] = report ? [
-    { label: t("finance.contractValue", { defaultValue: "Contract Value" }), value: report.totalContractValue ?? 0, color: "text-foreground", hint: "Total signed project value" },
-    { label: "Cash Collected", value: report.totalPaid, color: "text-blue-400", hint: "Payments received" },
-    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400", hint: "Outstanding receivables" },
-    { label: "Project Cost", value: report.totalCost, color: "text-muted-foreground", forceNegative: true, hint: "Freelancer + direct costs" },
-    { label: "Expenses", value: report.totalExpenses, color: "text-red-400", forceNegative: true, hint: "Operating expenses" },
-    { label: t("finance.grossMargin", { defaultValue: "Gross Margin" }), value: report.grossMargin ?? 0, color: (report.grossMargin ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: "Project profit minus expenses" },
-    { label: t("finance.cashNetProfit", { defaultValue: "Cash Net Profit" }), value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", useSign: true, hint: "Paid − costs − expenses" },
+    { label: t("finance.contractValue", { defaultValue: "Contract Value" }), value: report.totalContractValue ?? 0, color: "text-foreground", hint: "Signed value of projects started in this period (cancelled projects count only what was paid)" },
+    { label: "Cash Collected", value: report.totalPaid, color: "text-blue-400", hint: "Payments actually received in this period, from any project" },
+    { label: "Remaining", value: report.totalRemaining, color: "text-orange-400", hint: "Still owed by clients on projects in this period (excludes cancelled)" },
+    { label: t("finance.projectCost", { defaultValue: "Project Cost" }), value: report.totalCost, color: "text-muted-foreground", forceNegative: true, hint: "Freelancer commissions + direct project costs" },
+    { label: "Expenses", value: report.totalExpenses, color: "text-red-400", forceNegative: true, hint: "Operating expenses dated in this period" },
+    { label: t("finance.grossMargin", { defaultValue: "Gross Margin" }), value: report.grossMargin ?? 0, color: (report.grossMargin ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Contract value − project costs", report.grossMarginPct) },
+    { label: t("finance.expectedNetProfit", { defaultValue: "Expected Net Profit" }), value: report.expectedNetProfit ?? 0, color: (report.expectedNetProfit ?? 0) >= 0 ? "text-green-400" : "text-red-400", useSign: true, hint: marginHint("Gross margin − expenses, once every balance is collected", report.netMarginPct) },
+    { label: t("finance.cashNetProfit", { defaultValue: "Cash Net Profit" }), value: report.totalNetProfit, color: (report.totalNetProfit ?? 0) >= 0 ? "text-primary" : "text-red-400", useSign: true, hint: "Cash collected − project costs − expenses" },
   ] : [];
 
   const formatKpiValue = (value: number, opts?: { forceNegative?: boolean; useSign?: boolean }) => {
@@ -61,22 +64,7 @@ export default function Finance() {
     );
   };
 
-  const chartData = report?.projects
-    ? Object.entries(
-        (report.projects as Project[]).reduce((acc: Record<string, { paid: number; cost: number; cashNet: number }>, p) => {
-          const month = p.date.slice(0, 7);
-          const entry = acc[month] ?? { paid: 0, cost: 0, cashNet: 0 };
-          entry.paid += p.paidAmount;
-          entry.cost += p.totalCost;
-          entry.cashNet += p.paidAmount - p.totalCost;
-          acc[month] = entry;
-          return acc;
-        }, {}),
-      )
-        .sort(([a], [b]) => a.localeCompare(b))
-        .slice(-12)
-        .map(([month, v]) => ({ month, paid: v.paid, cost: v.cost, cashNet: v.cashNet }))
-    : [];
+  const chartData = (report?.monthly ?? []).slice(-12);
 
   const receivables = (report?.remainingBreakdown ?? []) as RemainingItem[];
 
@@ -102,7 +90,17 @@ export default function Finance() {
         <div className="text-center py-12 text-muted-foreground">Loading report...</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          {report && (
+            <FinancialHealth
+              expectedNetProfit={report.expectedNetProfit ?? report.grossMargin}
+              cashNetProfit={report.totalNetProfit}
+              totalRemaining={report.totalRemaining}
+              grossMarginPct={report.grossMarginPct ?? 0}
+              netMarginPct={report.netMarginPct ?? 0}
+            />
+          )}
+
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
             {kpis.map((kpi) => (
               <Card key={kpi.label} className="bg-card/50" title={kpi.hint}>
                 <CardHeader className="pb-1 pt-3 px-3"><CardTitle className="text-xs text-muted-foreground">{kpi.label}</CardTitle></CardHeader>
@@ -127,9 +125,10 @@ export default function Finance() {
                       <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} />
                       <Tooltip contentStyle={{ backgroundColor: "hsl(var(--card))", borderColor: "hsl(var(--border))" }} itemStyle={{ color: "hsl(var(--foreground))" }} />
                       <Legend />
-                      <Bar dataKey="paid" name="Collected" fill="hsl(var(--chart-2, 217 91% 60%))" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="cost" name="Direct Cost" fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} />
-                      <Bar dataKey="cashNet" name="Cash Net" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="collected" name="Collected" fill="hsl(var(--chart-2, 217 91% 60%))" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="cost" name="Project Cost" fill="hsl(var(--muted-foreground))" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="expenses" name="Expenses" fill="hsl(0 72% 51%)" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="net" name="Cash Net" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

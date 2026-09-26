@@ -2,8 +2,9 @@ import { Router, type IRouter } from "express";
 import multer from "multer";
 import { db } from "@workspace/db";
 import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable } from "@workspace/db";
-import { eq, sql, and, ilike, inArray, desc } from "drizzle-orm";
+import { eq, sql, and, ilike, inArray, desc, ne } from "drizzle-orm";
 import { extractTextFromUpload } from "../lib/document-parser.js";
+import { derivedProjectColumns } from "../lib/financials.js";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -129,7 +130,7 @@ router.get("/projects/receivables", async (req, res): Promise<void> => {
   const rows = await db
     .select()
     .from(projectsTable)
-    .where(sql`remaining_amount::numeric > 0`)
+    .where(and(sql`remaining_amount::numeric > 0`, ne(projectsTable.status, "Cancelled")))
     .orderBy(projectsTable.nextPaymentDate);
   const teamMap = await teamMapForProjects(rows.map((r) => r.id));
   res.json(rows.map((r) => toProjectShape(r, teamMap.get(r.id) ?? [])));
@@ -145,14 +146,26 @@ router.post("/projects", async (req, res): Promise<void> => {
     ...body,
     clientPrice: String(price),
     totalCost: String(cost),
-    netProfit: String(price - cost),
     paidAmount: String(paid),
-    remainingAmount: String(price - paid),
+    ...derivedProjectColumns(price, cost, paid),
     freelancerCommission: String(Number(body.freelancerCommission ?? 0)),
     quoteId: body.quoteId != null ? Number(body.quoteId) : undefined,
   };
 
   const [project] = await db.insert(projectsTable).values(values).returning();
+
+  // Record the down payment in the payment history so cash reports can date it
+  if (paid > 0) {
+    await db.insert(projectPaymentsTable).values({
+      projectId: project.id,
+      amount: String(paid),
+      paymentMethod: PAYMENT_METHODS.has(body.paymentMethod) ? body.paymentMethod : "bank_transfer",
+      paidAt: /^\d{4}-\d{2}-\d{2}/.test(body.startDate ?? "")
+        ? String(body.startDate).slice(0, 10)
+        : new Date().toISOString().slice(0, 10),
+      notes: "Down payment",
+    });
+  }
 
   if (Array.isArray(team) && team.length > 0) {
     await db.insert(projectTeamTable).values(
@@ -201,25 +214,23 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   const { team, ...body } = req.body ?? {};
 
-  const updates: Record<string, string | number | null | undefined> = {};
-  if (body.clientPrice !== undefined) {
-    const price = Number(body.clientPrice);
-    const cost = Number(body.totalCost ?? 0);
-    updates.clientPrice = String(price);
-    updates.netProfit = String(price - cost);
+  const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Project not found" });
+    return;
   }
-  if (body.totalCost !== undefined) {
-    const price = Number(body.clientPrice ?? 0);
-    const cost = Number(body.totalCost);
-    updates.totalCost = String(cost);
-    updates.netProfit = String(price - cost);
-  }
-  if (body.paidAmount !== undefined) {
-    updates.paidAmount = String(Number(body.paidAmount));
-  }
-  if (body.remainingAmount !== undefined) {
-    updates.remainingAmount = String(Number(body.remainingAmount));
-  }
+
+  // Money fields: take what was sent, fall back to stored values, then always
+  // re-derive net profit and remaining so they can never drift out of sync.
+  const price = body.clientPrice !== undefined ? Number(body.clientPrice) : Number(existing.clientPrice);
+  const cost = body.totalCost !== undefined ? Number(body.totalCost) : Number(existing.totalCost);
+  const paid = body.paidAmount !== undefined ? Number(body.paidAmount) : Number(existing.paidAmount);
+  const updates: Record<string, string | number | null | undefined> = {
+    clientPrice: String(price),
+    totalCost: String(cost),
+    paidAmount: String(paid),
+    ...derivedProjectColumns(price, cost, paid),
+  };
   if (body.freelancerCommission !== undefined) {
     updates.freelancerCommission = String(Number(body.freelancerCommission));
   }
@@ -420,8 +431,7 @@ router.post("/projects/:id/link-quote", async (req, res): Promise<void> => {
   };
   if (importPrice && price > 0) {
     patch.clientPrice = String(price);
-    patch.remainingAmount = String(Math.max(0, price - Number(project.paidAmount)));
-    patch.netProfit = String(price - Number(project.totalCost));
+    Object.assign(patch, derivedProjectColumns(price, Number(project.totalCost), Number(project.paidAmount)));
   }
 
   const [updated] = await db.update(projectsTable).set(patch).where(eq(projectsTable.id, id)).returning();

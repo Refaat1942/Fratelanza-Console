@@ -199,7 +199,9 @@ export default function Projects() {
   };
 
   const downPaymentPct = form.clientPrice > 0 ? Math.round((Number(form.paidAmount) / Number(form.clientPrice)) * 100) : 0;
-  const remainingPreview = Number(form.clientPrice) - Number(form.paidAmount);
+  const remainingPreview = Math.max(0, Number(form.clientPrice) - Number(form.paidAmount));
+  const profitPreview = Number(form.clientPrice) - Number(form.totalCost) - team.reduce((s, m) => s + Number(m.commission || 0), 0);
+  const marginPreview = Number(form.clientPrice) > 0 ? Math.round((profitPreview / Number(form.clientPrice)) * 1000) / 10 : 0;
 
   return (
     <div className="space-y-6">
@@ -394,7 +396,10 @@ export default function Projects() {
             <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Down payment</span><span className="font-semibold">{downPaymentPct}% of price</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className="text-green-500 font-semibold"><PrivacyWrapper value={Number(form.clientPrice) - Number(form.totalCost) - team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className={`font-semibold ${profitPreview < 0 ? "text-red-400" : "text-green-500"}`}>{profitPreview < 0 ? "- " : ""}<PrivacyWrapper value={Math.abs(profitPreview)} /> ({marginPreview}%)</span></div>
+              {profitPreview < 0 && (
+                <div className="text-xs text-red-400">This project costs more than the client pays — it will lose money.</div>
+              )}
             </div>
 
             <div className="space-y-1">

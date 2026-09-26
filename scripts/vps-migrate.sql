@@ -63,3 +63,12 @@ ALTER TABLE freelancers ADD COLUMN IF NOT EXISTS skills text;
 ALTER TABLE freelancers ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 
 CREATE UNIQUE INDEX IF NOT EXISTS freelancers_code_key ON freelancers (code);
+
+-- Repair derived money columns (older PATCH logic could store net_profit as
+-- price - 0 when only the price was edited, and remaining could go negative).
+-- Recomputes from the source values; rows that are already correct are untouched.
+UPDATE pricing_records
+SET net_profit = client_price - total_cost,
+    remaining_amount = GREATEST(0, client_price - paid_amount)
+WHERE net_profit IS DISTINCT FROM client_price - total_cost
+   OR remaining_amount IS DISTINCT FROM GREATEST(0, client_price - paid_amount);
