@@ -3,6 +3,7 @@ export const PAYMENT_METHODS = [
   { value: "vodafone_cash", labelEn: "Vodafone Cash", labelAr: "فودافون كاش" },
   { value: "instapay", labelEn: "InstaPay", labelAr: "انستا باي" },
   { value: "check", labelEn: "Certified check", labelAr: "شيك مقبول الدفع" },
+  { value: "cash", labelEn: "Cash", labelAr: "نقداً" },
 ] as const;
 
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number]["value"];

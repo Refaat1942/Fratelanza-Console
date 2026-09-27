@@ -31,6 +31,16 @@ type Project = {
   nextPaymentDate?: string | null; notes?: string | null; date: string;
   technicalOutline?: string | null; generatedReport?: string | null;
   quoteId?: number | null; outlineFileName?: string | null; hasOutlineFile?: boolean;
+  freelancersCost?: number; otherCosts?: number; freelancersOwed?: number;
+  toFreelancers?: number; fratelanzaShare?: number;
+};
+
+type View = "all" | "outstanding" | "overdue";
+const initialView = (): View => {
+  try {
+    const v = new URLSearchParams(window.location.search).get("view");
+    return v === "outstanding" || v === "overdue" ? v : "all";
+  } catch { return "all"; }
 };
 
 type TeamMember = { freelancerName: string; commission: number };
@@ -63,6 +73,11 @@ export default function Projects() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [paymentProject, setPaymentProject] = useState<Project | null>(null);
+  const [paymentTab, setPaymentTab] = useState<"client" | "freelancers">("client");
+  const [view, setView] = useState<View>(initialView);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isOverdue = (p: Project) => p.remainingAmount > 0 && p.status !== "Cancelled" && !!p.nextPaymentDate && p.nextPaymentDate < todayIso;
+  const openPayments = (p: Project, tab: "client" | "freelancers") => { setPaymentTab(tab); setPaymentProject(p); };
 
   const { data: projects = [], isLoading } = useListProjects();
   const { data: clients = [] } = useListClients();
@@ -76,8 +91,14 @@ export default function Projects() {
     const matchType = typeFilter === "All" || p.type === typeFilter;
     const matchStatus = statusFilter === "All" || p.status === statusFilter;
     const matchSearch = !search || p.projectName.toLowerCase().includes(search.toLowerCase()) || (p.clientName ?? "").toLowerCase().includes(search.toLowerCase());
-    return matchType && matchStatus && matchSearch;
+    const matchView = view === "all"
+      || (view === "outstanding" && p.remainingAmount > 0 && p.status !== "Cancelled")
+      || (view === "overdue" && isOverdue(p));
+    return matchType && matchStatus && matchSearch && matchView;
   });
+  const outstanding = (projects as Project[]).filter((p) => p.remainingAmount > 0 && p.status !== "Cancelled");
+  const overdue = outstanding.filter(isOverdue);
+  const sum = (list: Project[]) => list.reduce((s, p) => s + Number(p.remainingAmount), 0);
 
   const openCreate = () => { setForm({ ...empty }); setTeam([]); setEditing(null); setShowForm(true); };
 
@@ -212,6 +233,25 @@ export default function Projects() {
         </Button>
       </div>
 
+      <div className="flex items-center gap-2 flex-wrap">
+        {([
+          ["all", t("projects.viewAll"), (projects as Project[]).length, null],
+          ["outstanding", t("projects.viewOutstanding"), outstanding.length, sum(outstanding)],
+          ["overdue", t("projects.viewOverdue"), overdue.length, sum(overdue)],
+        ] as [View, string, number, number | null][]).map(([key, label, count, total]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setView(key)}
+            data-testid={`view-${key}`}
+            className={`rounded-lg border px-3 py-2 text-sm transition-colors ${view === key ? "border-primary bg-primary/10 text-primary" : "border-border hover:bg-card"} ${key === "overdue" && count > 0 && view !== key ? "border-red-500/40 text-red-400" : ""}`}
+          >
+            <span className="font-medium">{label}</span> <span className="text-muted-foreground">({count})</span>
+            {total !== null && total > 0 && <span className="ms-2 font-semibold"><PrivacyWrapper value={total} /></span>}
+          </button>
+        ))}
+      </div>
+
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -240,54 +280,76 @@ export default function Projects() {
         <div className="text-center py-12 text-muted-foreground">{t('projects.loading')}</div>
       ) : (
         <div className="rounded-lg border border-border overflow-x-auto">
-          <table className="w-full text-sm min-w-[800px]">
+          <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {[t('common.type'), t('projects.projectName'), t('projects.clientName'), t('projects.freelancers'), t('projects.price'), t('dashboard.netProfit'), t('projects.paid'), t('projects.remaining'), t('common.status'), t('projects.actions')].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
+                {[t('projects.projectName'), t('projects.colDeal'), t('projects.colCollection'), t('projects.colSplit'), t('common.status'), t('projects.actions')].map((h) => (
+                  <th key={h} className="px-4 py-3 text-start text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} className="px-4 py-8 text-center text-muted-foreground">{t('projects.noProjects')}</td></tr>
+                <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">{t('projects.noProjects')}</td></tr>
               ) : filtered.map((p) => {
                 const freelancerNames = (p.teamFreelancers && p.teamFreelancers.length > 0)
                   ? p.teamFreelancers
                   : (p.freelancerName ? [p.freelancerName] : []);
+                const freelancersCost = p.freelancersCost ?? 0;
+                const otherCosts = p.otherCosts ?? Math.max(0, p.totalCost - freelancersCost);
+                const pctPaid = p.clientPrice > 0 ? Math.min(100, Math.round((p.paidAmount / p.clientPrice) * 100)) : 0;
+                const late = isOverdue(p);
                 return (
-                <tr key={p.id} data-testid={`row-project-${p.id}`} className="border-b border-border hover:bg-card/50 transition-colors">
-                  <td className="px-4 py-3"><Badge variant="outline" className={p.type === "Software" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}>{p.type}</Badge></td>
-                  <td className="px-4 py-3 font-medium">
-                    <div className="flex items-center gap-1.5">
+                <tr key={p.id} data-testid={`row-project-${p.id}`} className={`border-b border-border hover:bg-card/50 transition-colors align-top ${late ? "bg-red-500/5" : ""}`}>
+                  <td className="px-4 py-3 min-w-[220px]">
+                    <div className="flex items-center gap-1.5 font-medium">
                       {p.projectName}
                       {(p.hasOutlineFile || p.technicalOutline || p.quoteId) && (
                         <span title={t("projects.hasDocuments")}><FileText className="h-3.5 w-3.5 text-primary shrink-0" /></span>
                       )}
                     </div>
+                    <div className="text-xs text-muted-foreground">{p.clientName ?? "—"}</div>
+                    <div className="mt-1 flex flex-wrap gap-1 max-w-[240px]">
+                      <Badge variant="outline" className={`text-[10px] ${p.type === "Software" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}`}>{p.type}</Badge>
+                      {freelancerNames.map((name) => (
+                        <Badge key={name} variant="outline" className="text-[10px] text-primary border-primary/30">{name}</Badge>
+                      ))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3 text-muted-foreground">{p.clientName ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    {freelancerNames.length === 0 ? (
-                      <span className="text-muted-foreground">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1 max-w-[180px]">
-                        {freelancerNames.map((name) => (
-                          <Badge key={name} variant="outline" className="text-[10px] text-primary border-primary/30">{name}</Badge>
-                        ))}
-                      </div>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs" data-testid={`deal-${p.id}`}>
+                    <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t('projects.price')}</span><span className="font-semibold text-sm"><PrivacyWrapper value={p.clientPrice} /></span></div>
+                    <div className="flex justify-between gap-3 text-muted-foreground"><span>− {t('projects.freelancersCost')}</span><PrivacyWrapper value={freelancersCost} /></div>
+                    {otherCosts > 0 && <div className="flex justify-between gap-3 text-muted-foreground"><span>− {t('projects.otherCostsShort')}</span><PrivacyWrapper value={otherCosts} /></div>}
+                    <div className={`flex justify-between gap-3 border-t border-border/60 mt-0.5 pt-0.5 font-semibold ${p.netProfit < 0 ? "text-red-400" : "text-green-400"}`}><span>= {t('projects.projectNet')}</span><PrivacyWrapper value={p.netProfit} /></div>
+                  </td>
+                  <td className="px-4 py-3 min-w-[190px] text-xs">
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden mb-1"><div className="h-full bg-blue-500" style={{ width: `${pctPaid}%` }} /></div>
+                    <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t('projects.paid')} ({pctPaid}%)</span><span className="text-blue-400 font-semibold"><PrivacyWrapper value={p.paidAmount} /></span></div>
+                    <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t('projects.remaining')}</span><span className={p.remainingAmount > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}><PrivacyWrapper value={p.remainingAmount} /></span></div>
+                    {p.remainingAmount > 0 && p.nextPaymentDate && (
+                      <div className={`mt-0.5 ${late ? "text-red-400 font-semibold" : "text-muted-foreground"}`}>{t('projects.nextDue')}: {p.nextPaymentDate}{late ? ` · ${t('projects.overdue')}` : ""}</div>
                     )}
                   </td>
-                  <td className="px-4 py-3"><PrivacyWrapper value={p.clientPrice} /></td>
-                  <td className="px-4 py-3 text-green-400"><PrivacyWrapper value={p.netProfit} /></td>
-                  <td className="px-4 py-3 text-blue-400"><PrivacyWrapper value={p.paidAmount} /></td>
-                  <td className="px-4 py-3 text-red-400"><PrivacyWrapper value={p.remainingAmount} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-xs">
+                    <div className="flex justify-between gap-3"><span className="text-muted-foreground">{t('projects.givenToFreelancers')}</span><PrivacyWrapper value={p.toFreelancers ?? 0} /></div>
+                    {(p.freelancersOwed ?? 0) > 0 && <div className="flex justify-between gap-3 text-orange-400"><span>{t('projects.stillOwedFreelancers')}</span><PrivacyWrapper value={p.freelancersOwed ?? 0} /></div>}
+                    <div className={`flex justify-between gap-3 font-semibold ${(p.fratelanzaShare ?? 0) < 0 ? "text-red-400" : "text-green-400"}`}><span>{t('projects.fratelanzaShare')}</span><PrivacyWrapper value={p.fratelanzaShare ?? 0} /></div>
+                  </td>
                   <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[p.status] ?? "bg-gray-500/20 text-gray-400"}`}>{p.status}</span></td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-1">
-                      <Button size="icon" variant="ghost" title={t('projects.logPayment')} data-testid={`button-pay-${p.id}`} onClick={() => setPaymentProject(p)}><DollarSign className="h-4 w-4 text-green-400" /></Button>
-                      <Button size="icon" variant="ghost" data-testid={`button-edit-${p.id}`} onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" data-testid={`button-delete-${p.id}`} onClick={() => setDeleteId(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    <div className="flex flex-col gap-1 items-start">
+                      <Button size="sm" variant="outline" className="h-7 border-green-500/30 text-green-500 hover:bg-green-500/10" data-testid={`button-pay-${p.id}`} onClick={() => openPayments(p, "client")}>
+                        <DollarSign className="h-3 w-3 me-1" />{t('projects.receivePayment')}
+                      </Button>
+                      {freelancerNames.length > 0 && (
+                        <Button size="sm" variant="outline" className="h-7" data-testid={`button-pay-freelancer-${p.id}`} onClick={() => openPayments(p, "freelancers")}>
+                          <Users className="h-3 w-3 me-1" />{t('projects.payFreelancer')}
+                        </Button>
+                      )}
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" className="h-7 w-7" data-testid={`button-edit-${p.id}`} onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" data-testid={`button-delete-${p.id}`} onClick={() => setDeleteId(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -381,7 +443,7 @@ export default function Projects() {
               <Input data-testid="input-client-price" type="number" value={form.clientPrice} onChange={f("clientPrice")} />
             </div>
             <div className="space-y-1">
-              <Label>Other Costs (EGP)</Label>
+              <Label>{t('projects.otherCostsLabel')}</Label>
               <Input type="number" value={form.totalCost} onChange={f("totalCost")} />
             </div>
             <div className="space-y-1">
@@ -395,8 +457,10 @@ export default function Projects() {
 
             <div className="md:col-span-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Down payment</span><span className="font-semibold">{downPaymentPct}% of price</span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Total freelancer cost</span><span><PrivacyWrapper value={team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span></div>
-              <div className="flex justify-between"><span className="text-muted-foreground">Estimated net profit</span><span className={`font-semibold ${profitPreview < 0 ? "text-red-400" : "text-green-500"}`}>{profitPreview < 0 ? "- " : ""}<PrivacyWrapper value={Math.abs(profitPreview)} /> ({marginPreview}%)</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">{t('projects.price')}</span><span><PrivacyWrapper value={Number(form.clientPrice)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">− {t('projects.freelancersCost')}</span><span><PrivacyWrapper value={team.reduce((s, m) => s + Number(m.commission || 0), 0)} /></span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">− {t('projects.otherCostsShort')}</span><span><PrivacyWrapper value={Number(form.totalCost)} /></span></div>
+              <div className="flex justify-between border-t border-border/60 pt-1"><span className="font-medium">= {t('projects.projectNet')}</span><span className={`font-semibold ${profitPreview < 0 ? "text-red-400" : "text-green-500"}`}>{profitPreview < 0 ? "- " : ""}<PrivacyWrapper value={Math.abs(profitPreview)} /> ({marginPreview}%)</span></div>
               {profitPreview < 0 && (
                 <div className="text-xs text-red-400">This project costs more than the client pays — it will lose money.</div>
               )}
@@ -447,7 +511,8 @@ export default function Projects() {
         project={paymentProject}
         open={!!paymentProject}
         onOpenChange={(v) => !v && setPaymentProject(null)}
-        onSuccess={() => { invalidate(); toast({ title: t('projects.paymentLogged') }); }}
+        onSuccess={invalidate}
+        initialTab={paymentTab}
       />
 
       <AlertDialog open={deleteId !== null} onOpenChange={(v) => !v && setDeleteId(null)}>

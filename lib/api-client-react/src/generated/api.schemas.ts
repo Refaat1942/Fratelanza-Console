@@ -200,6 +200,12 @@ export interface Project {
   remainingAmount?: number;
   /** Part of the money received given to freelancers (+ other project costs) */
   toFreelancers?: number;
+  /** Freelancer commissions on the project */
+  freelancersCost?: number;
+  /** Non-freelancer project costs */
+  otherCosts?: number;
+  /** Commissions not paid yet */
+  freelancersOwed?: number;
   /** Money received minus what was given to freelancers / other costs */
   fratelanzaShare?: number;
   /** @nullable */
@@ -585,17 +591,127 @@ export interface Expense {
   description: string;
   amount: number;
   date: string;
+  /** rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other */
+  category?: string;
 }
 
 export interface ExpenseInput {
   description: string;
   amount: number;
   date?: string;
+  category?: string;
+}
+
+export interface ExpenseUpdate {
+  description?: string;
+  amount?: number;
+  date?: string;
+  category?: string;
+}
+
+export interface ReportExpenseCategory {
+  category: string;
+  total: number;
+  count: number;
 }
 
 export interface ExpenseSummary {
   totalExpenses: number;
   count: number;
+  byCategory?: ReportExpenseCategory[];
+}
+
+export interface ReportSummary {
+  contractValue: number;
+  moneyReceived: number;
+  givenToFreelancers: number;
+  fratelanzaShare: number;
+  companyExpenses: number;
+  fratelanzaProfitSoFar: number;
+  projectCosts: number;
+  estimatedProfit: number;
+  stillToCollect: number;
+  stillOwedToFreelancers: number;
+  netMarginPct: number;
+}
+
+export interface ReportProject {
+  id: number;
+  projectName: string;
+  clientName: string;
+  type: string;
+  status: string;
+  startDate: string;
+  price: number;
+  freelancersCost: number;
+  otherCosts: number;
+  projectNet: number;
+  paid: number;
+  remaining: number;
+  toFreelancers: number;
+  fratelanzaShare: number;
+  freelancersOwed: number;
+}
+
+export interface ReportCollection {
+  date: string;
+  projectName: string;
+  clientName: string;
+  amount: number;
+  method: string;
+  notes: string;
+}
+
+export interface ReportFreelancerPayment {
+  date: string;
+  freelancerName: string;
+  projectName: string;
+  amount: number;
+  method: string;
+  notes: string;
+}
+
+export interface ReportExpense {
+  date: string;
+  category: string;
+  description: string;
+  amount: number;
+}
+
+export interface ReportFreelancer {
+  name: string;
+  spec: string;
+  commissions: number;
+  paid: number;
+  paidInPeriod: number;
+  owed: number;
+}
+
+export interface ReportReceivable {
+  projectName: string;
+  clientName: string;
+  price: number;
+  paid: number;
+  remaining: number;
+  nextPaymentDate: string;
+  overdue: boolean;
+}
+
+export interface ReportPeriod {
+  startDate: string;
+  endDate: string;
+}
+
+export interface Reports {
+  period: ReportPeriod;
+  summary: ReportSummary;
+  projects: ReportProject[];
+  collections: ReportCollection[];
+  freelancerPayments: ReportFreelancerPayment[];
+  expenses: ReportExpense[];
+  expensesByCategory: ReportExpenseCategory[];
+  freelancers: ReportFreelancer[];
+  receivables: ReportReceivable[];
 }
 
 export interface TaskInput {
@@ -719,9 +835,16 @@ search?: string;
 export type ListExpensesParams = {
 startDate?: string;
 endDate?: string;
+category?: string;
 };
 
 export type GetExpenseSummaryParams = {
+startDate?: string;
+endDate?: string;
+category?: string;
+};
+
+export type GetReportsParams = {
 startDate?: string;
 endDate?: string;
 };

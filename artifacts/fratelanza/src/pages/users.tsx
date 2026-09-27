@@ -39,7 +39,6 @@ type UserRow = {
 const ALL_PAGES: { key: string; label: string }[] = [
   { key: "dashboard", label: "Dashboard" },
   { key: "projects", label: "Projects" },
-  { key: "receivables", label: "Receivables" },
   { key: "freelancers", label: "Freelancers" },
   { key: "clients", label: "Clients" },
   { key: "templates", label: "Templates" },
@@ -47,6 +46,7 @@ const ALL_PAGES: { key: string; label: string }[] = [
   { key: "expenses", label: "Expenses" },
   { key: "tasks", label: "Tasks" },
   { key: "finance", label: "Finance" },
+  { key: "reports", label: "Reports" },
   { key: "settings", label: "Settings" },
 ];
 

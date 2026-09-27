@@ -72,3 +72,19 @@ SET net_profit = client_price - total_cost,
     remaining_amount = GREATEST(0, client_price - paid_amount)
 WHERE net_profit IS DISTINCT FROM client_price - total_cost
    OR remaining_amount IS DISTINCT FROM GREATEST(0, client_price - paid_amount);
+
+-- Expense categories
+ALTER TABLE general_expenses ADD COLUMN IF NOT EXISTS category text NOT NULL DEFAULT 'other';
+
+-- Money given to freelancers, recorded per project (replaces the manual "Earned" field;
+-- existing Earned values are moved here automatically by the API on start-up)
+CREATE TABLE IF NOT EXISTS freelancer_payments (
+  id serial PRIMARY KEY,
+  project_id integer,
+  freelancer_name text NOT NULL,
+  amount numeric(12, 2) NOT NULL,
+  payment_method text NOT NULL DEFAULT 'bank_transfer',
+  paid_at text,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);

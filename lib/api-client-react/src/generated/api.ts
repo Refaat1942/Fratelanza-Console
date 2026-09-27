@@ -29,6 +29,7 @@ import type {
   Expense,
   ExpenseInput,
   ExpenseSummary,
+  ExpenseUpdate,
   ExportClientsParams,
   FinanceReport,
   Freelancer,
@@ -43,6 +44,7 @@ import type {
   GetExpenseSummaryParams,
   GetFinanceReportParams,
   GetProfitByTypeParams,
+  GetReportsParams,
   HealthStatus,
   ListClientsParams,
   ListExpensesParams,
@@ -65,6 +67,7 @@ import type {
   QuoteInput,
   QuoteSummary,
   QuoteUpdate,
+  Reports,
   Task,
   TaskInput,
   TaskUpdate,
@@ -3575,6 +3578,78 @@ export function useGetExpenseSummary<TData = Awaited<ReturnType<typeof getExpens
 
 
 
+export const getUpdateExpenseUrl = (id: number,) => {
+
+
+
+
+  return `/api/expenses/${id}`
+}
+
+/**
+ * @summary Edit an expense (e.g. change its category)
+ */
+export const updateExpense = async (id: number,
+    expenseUpdate: ExpenseUpdate, options?: RequestInit): Promise<Expense> => {
+
+  return customFetch<Expense>(getUpdateExpenseUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      expenseUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateExpenseMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExpense>>, TError,{id: number;data: BodyType<ExpenseUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateExpense>>, TError,{id: number;data: BodyType<ExpenseUpdate>}, TContext> => {
+
+const mutationKey = ['updateExpense'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateExpense>>, {id: number;data: BodyType<ExpenseUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateExpense(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateExpenseMutationResult = NonNullable<Awaited<ReturnType<typeof updateExpense>>>
+    export type UpdateExpenseMutationBody = BodyType<ExpenseUpdate>
+    export type UpdateExpenseMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Edit an expense (e.g. change its category)
+ */
+export const useUpdateExpense = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateExpense>>, TError,{id: number;data: BodyType<ExpenseUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateExpense>>,
+        TError,
+        {id: number;data: BodyType<ExpenseUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateExpenseMutationOptions(options));
+    }
+
 export const getDeleteExpenseUrl = (id: number,) => {
 
 
@@ -3644,6 +3719,90 @@ export const useDeleteExpense = <TError = ErrorType<void>,
       > => {
       return useMutation(getDeleteExpenseMutationOptions(options));
     }
+
+export const getGetReportsUrl = (params?: GetReportsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reports?${stringifiedParams}` : `/api/reports`
+}
+
+/**
+ * @summary All reports for a date range (Excel export at /reports/export)
+ */
+export const getReports = async (params?: GetReportsParams, options?: RequestInit): Promise<Reports> => {
+
+  return customFetch<Reports>(getGetReportsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetReportsQueryKey = (params?: GetReportsParams,) => {
+    return [
+    `/api/reports`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetReportsQueryOptions = <TData = Awaited<ReturnType<typeof getReports>>, TError = ErrorType<unknown>>(params?: GetReportsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetReportsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getReports>>> = ({ signal }) => getReports(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getReports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetReportsQueryResult = NonNullable<Awaited<ReturnType<typeof getReports>>>
+export type GetReportsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary All reports for a date range (Excel export at /reports/export)
+ */
+
+export function useGetReports<TData = Awaited<ReturnType<typeof getReports>>, TError = ErrorType<unknown>>(
+ params?: GetReportsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetReportsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListTasksUrl = (params?: ListTasksParams,) => {
   const normalizedParams = new URLSearchParams();

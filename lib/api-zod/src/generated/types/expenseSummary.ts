@@ -5,8 +5,10 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { ReportExpenseCategory } from './reportExpenseCategory';
 
 export interface ExpenseSummary {
   totalExpenses: number;
   count: number;
+  byCategory?: ReportExpenseCategory[];
 }

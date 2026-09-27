@@ -935,6 +935,10 @@ paths:
           name: endDate
           schema:
             type: string
+        - in: query
+          name: category
+          schema:
+            type: string
       responses:
         "200":
           description: Expenses list
@@ -976,6 +980,10 @@ paths:
           name: endDate
           schema:
             type: string
+        - in: query
+          name: category
+          schema:
+            type: string
       responses:
         "200":
           description: Expense summary
@@ -985,6 +993,29 @@ paths:
                 $ref: "#/components/schemas/ExpenseSummary"
 
   /expenses/{id}:
+    patch:
+      operationId: updateExpense
+      tags: [expenses]
+      summary: Edit an expense (e.g. change its category)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpenseUpdate"
+      responses:
+        "200":
+          description: Updated expense
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Expense"
     delete:
       operationId: deleteExpense
       tags: [expenses]
@@ -1000,6 +1031,29 @@ paths:
           description: Deleted
         "404":
           description: Not found
+
+  # ── Reports ───────────────────────────────────────────────────────────
+  /reports:
+    get:
+      operationId: getReports
+      tags: [reports]
+      summary: All reports for a date range (Excel export at /reports/export)
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Reports"
 
   # ── Tasks ─────────────────────────────────────────────────────────────
   /tasks:
@@ -1466,6 +1520,15 @@ components:
         toFreelancers:
           type: number
           description: Part of the money received given to freelancers (+ other project costs)
+        freelancersCost:
+          type: number
+          description: Freelancer commissions on the project
+        otherCosts:
+          type: number
+          description: Non-freelancer project costs
+        freelancersOwed:
+          type: number
+          description: Commissions not paid yet
         fratelanzaShare:
           type: number
           description: Money received minus what was given to freelancers / other costs
@@ -2101,6 +2164,9 @@ components:
           type: number
         date:
           type: string
+        category:
+          type: string
+          description: rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other
 
     ExpenseInput:
       type: object
@@ -2112,6 +2178,20 @@ components:
           type: number
         date:
           type: string
+        category:
+          type: string
+
+    ExpenseUpdate:
+      type: object
+      properties:
+        description:
+          type: string
+        amount:
+          type: number
+        date:
+          type: string
+        category:
+          type: string
 
     ExpenseSummary:
       type: object
@@ -2121,6 +2201,213 @@ components:
           type: number
         count:
           type: integer
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportExpenseCategory"
+
+    ReportSummary:
+      type: object
+      required: [contractValue, moneyReceived, givenToFreelancers, fratelanzaShare, companyExpenses, fratelanzaProfitSoFar, projectCosts, estimatedProfit, stillToCollect, stillOwedToFreelancers, netMarginPct]
+      properties:
+        contractValue:
+          type: number
+        moneyReceived:
+          type: number
+        givenToFreelancers:
+          type: number
+        fratelanzaShare:
+          type: number
+        companyExpenses:
+          type: number
+        fratelanzaProfitSoFar:
+          type: number
+        projectCosts:
+          type: number
+        estimatedProfit:
+          type: number
+        stillToCollect:
+          type: number
+        stillOwedToFreelancers:
+          type: number
+        netMarginPct:
+          type: number
+
+    ReportProject:
+      type: object
+      required: [id, projectName, clientName, type, status, startDate, price, freelancersCost, otherCosts, projectNet, paid, remaining, toFreelancers, fratelanzaShare, freelancersOwed]
+      properties:
+        id:
+          type: integer
+        projectName:
+          type: string
+        clientName:
+          type: string
+        type:
+          type: string
+        status:
+          type: string
+        startDate:
+          type: string
+        price:
+          type: number
+        freelancersCost:
+          type: number
+        otherCosts:
+          type: number
+        projectNet:
+          type: number
+        paid:
+          type: number
+        remaining:
+          type: number
+        toFreelancers:
+          type: number
+        fratelanzaShare:
+          type: number
+        freelancersOwed:
+          type: number
+
+    ReportCollection:
+      type: object
+      required: [date, projectName, clientName, amount, method, notes]
+      properties:
+        date:
+          type: string
+        projectName:
+          type: string
+        clientName:
+          type: string
+        amount:
+          type: number
+        method:
+          type: string
+        notes:
+          type: string
+
+    ReportFreelancerPayment:
+      type: object
+      required: [date, freelancerName, projectName, amount, method, notes]
+      properties:
+        date:
+          type: string
+        freelancerName:
+          type: string
+        projectName:
+          type: string
+        amount:
+          type: number
+        method:
+          type: string
+        notes:
+          type: string
+
+    ReportExpense:
+      type: object
+      required: [date, category, description, amount]
+      properties:
+        date:
+          type: string
+        category:
+          type: string
+        description:
+          type: string
+        amount:
+          type: number
+
+    ReportExpenseCategory:
+      type: object
+      required: [category, total, count]
+      properties:
+        category:
+          type: string
+        total:
+          type: number
+        count:
+          type: integer
+
+    ReportFreelancer:
+      type: object
+      required: [name, spec, commissions, paid, paidInPeriod, owed]
+      properties:
+        name:
+          type: string
+        spec:
+          type: string
+        commissions:
+          type: number
+        paid:
+          type: number
+        paidInPeriod:
+          type: number
+        owed:
+          type: number
+
+    ReportReceivable:
+      type: object
+      required: [projectName, clientName, price, paid, remaining, nextPaymentDate, overdue]
+      properties:
+        projectName:
+          type: string
+        clientName:
+          type: string
+        price:
+          type: number
+        paid:
+          type: number
+        remaining:
+          type: number
+        nextPaymentDate:
+          type: string
+        overdue:
+          type: boolean
+
+    ReportPeriod:
+      type: object
+      required: [startDate, endDate]
+      properties:
+        startDate:
+          type: string
+        endDate:
+          type: string
+
+    Reports:
+      type: object
+      required: [period, summary, projects, collections, freelancerPayments, expenses, expensesByCategory, freelancers, receivables]
+      properties:
+        period:
+          $ref: "#/components/schemas/ReportPeriod"
+        summary:
+          $ref: "#/components/schemas/ReportSummary"
+        projects:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportProject"
+        collections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportCollection"
+        freelancerPayments:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportFreelancerPayment"
+        expenses:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportExpense"
+        expensesByCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportExpenseCategory"
+        freelancers:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportFreelancer"
+        receivables:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReportReceivable"
+
 
     # ── Task ───────────────────────────────────────────────────────────
     Task:

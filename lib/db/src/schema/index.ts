@@ -9,3 +9,4 @@ export * from "./team";
 export * from "./payments";
 export * from "./users";
 export * from "./session";
+export * from "./freelancer-payments";

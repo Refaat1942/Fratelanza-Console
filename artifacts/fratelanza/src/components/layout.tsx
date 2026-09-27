@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'wouter';
 import { useTranslation } from 'react-i18next';
 import {
-  LayoutDashboard, Briefcase, DollarSign, Users, Building2, FileText, FileEdit,
+  LayoutDashboard, Briefcase, FileSpreadsheet, Users, Building2, FileText, FileEdit,
   Receipt, KanbanSquare, PieChart, Lock, Unlock, LogOut, Menu, Sun, Moon,
   KeyRound, Settings as SettingsIcon, Languages, UserCog,
 } from 'lucide-react';
@@ -27,7 +27,6 @@ function NavBody({ onNav }: { onNav?: () => void }) {
   const allNav = [
     { name: t('nav.dashboard'), href: '/', icon: LayoutDashboard, key: 'dashboard' },
     { name: t('nav.projects'), href: '/projects', icon: Briefcase, key: 'projects' },
-    { name: t('nav.receivables'), href: '/receivables', icon: DollarSign, key: 'receivables' },
     { name: t('nav.freelancers'), href: '/freelancers', icon: Users, key: 'freelancers' },
     { name: t('nav.clients'), href: '/clients', icon: Building2, key: 'clients' },
     { name: t('nav.templates'), href: '/templates', icon: FileText, key: 'templates' },
@@ -35,6 +34,7 @@ function NavBody({ onNav }: { onNav?: () => void }) {
     { name: t('nav.expenses'), href: '/expenses', icon: Receipt, key: 'expenses' },
     { name: t('nav.tasks'), href: '/tasks', icon: KanbanSquare, key: 'tasks' },
     { name: t('nav.finance'), href: '/finance', icon: PieChart, key: 'finance' },
+    { name: t('nav.reports', { defaultValue: 'Reports' }), href: '/reports', icon: FileSpreadsheet, key: 'reports' },
     { name: t('nav.settings'), href: '/settings', icon: SettingsIcon, key: 'settings' },
     { name: t('nav.users', { defaultValue: 'Users' }), href: '/users', icon: UserCog, key: 'users', adminOnly: true },
   ];
@@ -233,7 +233,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const titleKey = location === '/' ? 'dashboard'
     : location.startsWith('/projects') ? 'projects'
-    : location.startsWith('/receivables') ? 'receivables'
     : location.startsWith('/freelancers') ? 'freelancers'
     : location.startsWith('/clients') ? 'clients'
     : location.startsWith('/templates') ? 'templates'
@@ -241,6 +240,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     : location.startsWith('/expenses') ? 'expenses'
     : location.startsWith('/tasks') ? 'tasks'
     : location.startsWith('/finance') ? 'finance'
+    : location.startsWith('/reports') ? 'reports'
     : location.startsWith('/settings') ? 'settings'
     : 'dashboard';
 

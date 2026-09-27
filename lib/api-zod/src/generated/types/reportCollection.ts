@@ -6,9 +6,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ExpenseInput {
-  description: string;
+export interface ReportCollection {
+  date: string;
+  projectName: string;
+  clientName: string;
   amount: number;
-  date?: string;
-  category?: string;
+  method: string;
+  notes: string;
 }
