@@ -11,4 +11,6 @@ export interface Expense {
   description: string;
   amount: number;
   date: string;
+  /** rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other */
+  category?: string;
 }

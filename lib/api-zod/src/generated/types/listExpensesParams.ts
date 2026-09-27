@@ -9,4 +9,5 @@
 export type ListExpensesParams = {
 startDate?: string;
 endDate?: string;
+category?: string;
 };

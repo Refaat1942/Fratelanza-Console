@@ -45,15 +45,15 @@ A full-stack web ERP system for managing software & training projects, freelance
 ## Product
 
 - **Dashboard** — KPI cards (revenue, paid, remaining, net profit, expenses), profit-by-type bar chart, payment alerts
-- **Projects** — Full CRUD for software & training projects with payment logging, status tracking, per-project profitability
-- **Receivables** — Filtered view of projects with outstanding balances; inline payment logging with overdue highlighting
-- **Freelancers** — Directory with specialization, rating (1–5 stars), earned/balance tracking
+- **Projects** — Full CRUD for software & training projects. Each row shows the deal (price − freelancers − other costs = project net), collection progress (received / remaining / next due, overdue highlighting) and how money received splits between freelancers and Fratelanza. Filters: All / Outstanding / Overdue (replaces the old Receivables page). One Payments window per project: money received from the client and money given to freelancers (both with history and delete)
+- **Freelancers** — Directory with specialization and rating; Commissions, Paid (auto — summed from freelancer payments recorded on projects) and Still owed
 - **Clients** — CRM with 360° profile (aggregated project history, totals)
 - **Templates** — Reusable service pricing templates (Software & Training categories)
 - **Sales Quotes** — Quote builder with line items, payment terms, milestones (English/Arabic)
-- **Expenses** — General expense log with date-range filter and running total
+- **Expenses** — Company expenses only (freelancer payments live on projects), with categories (rent, salaries, marketing, …), category filter and totals per category
 - **Tasks** — Kanban board (Todo / In Progress / Done) with priority, assignment, due date
 - **Finance / P&L** — Date-filtered P&L report with monthly bar chart, full project breakdown
+- **Reports** — Summary, Projects, Money received, Freelancer payments, Expenses (by category), Freelancers, Receivables for any date range, with one-click Excel export (EN/AR)
 
 ## Deployment (Hostinger VPS)
 

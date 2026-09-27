@@ -83,7 +83,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const canAccess = (pageKey: string) => {
     if (state.status !== "auth") return false;
     if (state.role === "admin") return true;
-    return state.pagePermissions.includes(pageKey);
+    const perms = state.pagePermissions;
+    // Receivables were merged into Projects; Reports extend Finance
+    if (pageKey === "projects" && perms.includes("receivables")) return true;
+    if (pageKey === "reports" && perms.includes("finance")) return true;
+    return perms.includes(pageKey);
   };
 
   return (

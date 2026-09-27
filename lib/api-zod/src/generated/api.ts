@@ -132,6 +132,9 @@ export const GetRecentProjectsResponseItem = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -171,6 +174,9 @@ export const ListProjectsResponseItem = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -253,6 +259,9 @@ export const ListReceivablesResponseItem = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -290,6 +299,9 @@ export const GetProjectResponse = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -356,6 +368,9 @@ export const UpdateProjectResponse = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -427,6 +442,9 @@ export const LogPaymentResponse = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -778,6 +796,9 @@ export const GetClientResponse = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),
@@ -1086,14 +1107,16 @@ export const GenerateQuoteFromOutlineResponse = zod.object({
  */
 export const ListExpensesQueryParams = zod.object({
   "startDate": zod.coerce.string().optional(),
-  "endDate": zod.coerce.string().optional()
+  "endDate": zod.coerce.string().optional(),
+  "category": zod.coerce.string().optional()
 })
 
 export const ListExpensesResponseItem = zod.object({
   "id": zod.number(),
   "description": zod.string(),
   "amount": zod.number(),
-  "date": zod.string()
+  "date": zod.string(),
+  "category": zod.string().optional().describe('rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other')
 })
 export const ListExpensesResponse = zod.array(ListExpensesResponseItem)
 
@@ -1104,7 +1127,8 @@ export const ListExpensesResponse = zod.array(ListExpensesResponseItem)
 export const CreateExpenseBody = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
-  "date": zod.string().optional()
+  "date": zod.string().optional(),
+  "category": zod.string().optional()
 })
 
 
@@ -1113,12 +1137,41 @@ export const CreateExpenseBody = zod.object({
  */
 export const GetExpenseSummaryQueryParams = zod.object({
   "startDate": zod.coerce.string().optional(),
-  "endDate": zod.coerce.string().optional()
+  "endDate": zod.coerce.string().optional(),
+  "category": zod.coerce.string().optional()
 })
 
 export const GetExpenseSummaryResponse = zod.object({
   "totalExpenses": zod.number(),
+  "count": zod.number(),
+  "byCategory": zod.array(zod.object({
+  "category": zod.string(),
+  "total": zod.number(),
   "count": zod.number()
+})).optional()
+})
+
+
+/**
+ * @summary Edit an expense (e.g. change its category)
+ */
+export const UpdateExpenseParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateExpenseBody = zod.object({
+  "description": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "date": zod.string().optional(),
+  "category": zod.string().optional()
+})
+
+export const UpdateExpenseResponse = zod.object({
+  "id": zod.number(),
+  "description": zod.string(),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "category": zod.string().optional().describe('rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other')
 })
 
 
@@ -1127,6 +1180,96 @@ export const GetExpenseSummaryResponse = zod.object({
  */
 export const DeleteExpenseParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary All reports for a date range (Excel export at /reports/export)
+ */
+export const GetReportsQueryParams = zod.object({
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional()
+})
+
+export const GetReportsResponse = zod.object({
+  "period": zod.object({
+  "startDate": zod.string(),
+  "endDate": zod.string()
+}),
+  "summary": zod.object({
+  "contractValue": zod.number(),
+  "moneyReceived": zod.number(),
+  "givenToFreelancers": zod.number(),
+  "fratelanzaShare": zod.number(),
+  "companyExpenses": zod.number(),
+  "fratelanzaProfitSoFar": zod.number(),
+  "projectCosts": zod.number(),
+  "estimatedProfit": zod.number(),
+  "stillToCollect": zod.number(),
+  "stillOwedToFreelancers": zod.number(),
+  "netMarginPct": zod.number()
+}),
+  "projects": zod.array(zod.object({
+  "id": zod.number(),
+  "projectName": zod.string(),
+  "clientName": zod.string(),
+  "type": zod.string(),
+  "status": zod.string(),
+  "startDate": zod.string(),
+  "price": zod.number(),
+  "freelancersCost": zod.number(),
+  "otherCosts": zod.number(),
+  "projectNet": zod.number(),
+  "paid": zod.number(),
+  "remaining": zod.number(),
+  "toFreelancers": zod.number(),
+  "fratelanzaShare": zod.number(),
+  "freelancersOwed": zod.number()
+})),
+  "collections": zod.array(zod.object({
+  "date": zod.string(),
+  "projectName": zod.string(),
+  "clientName": zod.string(),
+  "amount": zod.number(),
+  "method": zod.string(),
+  "notes": zod.string()
+})),
+  "freelancerPayments": zod.array(zod.object({
+  "date": zod.string(),
+  "freelancerName": zod.string(),
+  "projectName": zod.string(),
+  "amount": zod.number(),
+  "method": zod.string(),
+  "notes": zod.string()
+})),
+  "expenses": zod.array(zod.object({
+  "date": zod.string(),
+  "category": zod.string(),
+  "description": zod.string(),
+  "amount": zod.number()
+})),
+  "expensesByCategory": zod.array(zod.object({
+  "category": zod.string(),
+  "total": zod.number(),
+  "count": zod.number()
+})),
+  "freelancers": zod.array(zod.object({
+  "name": zod.string(),
+  "spec": zod.string(),
+  "commissions": zod.number(),
+  "paid": zod.number(),
+  "paidInPeriod": zod.number(),
+  "owed": zod.number()
+})),
+  "receivables": zod.array(zod.object({
+  "projectName": zod.string(),
+  "clientName": zod.string(),
+  "price": zod.number(),
+  "paid": zod.number(),
+  "remaining": zod.number(),
+  "nextPaymentDate": zod.string(),
+  "overdue": zod.boolean()
+}))
 })
 
 
@@ -1308,6 +1451,9 @@ export const GetFinanceReportResponse = zod.object({
   "paidAmount": zod.number().optional(),
   "remainingAmount": zod.number().optional(),
   "toFreelancers": zod.number().optional().describe('Part of the money received given to freelancers (+ other project costs)'),
+  "freelancersCost": zod.number().optional().describe('Freelancer commissions on the project'),
+  "otherCosts": zod.number().optional().describe('Non-freelancer project costs'),
+  "freelancersOwed": zod.number().optional().describe('Commissions not paid yet'),
   "fratelanzaShare": zod.number().optional().describe('Money received minus what was given to freelancers \/ other costs'),
   "nextPaymentDate": zod.string().nullish(),
   "notes": zod.string().nullish(),

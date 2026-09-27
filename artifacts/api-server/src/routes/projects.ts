@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import multer from "multer";
 import { db } from "@workspace/db";
-import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable } from "@workspace/db";
+import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable, freelancerPaymentsTable } from "@workspace/db";
 import { eq, sql, and, ilike, inArray, desc, ne } from "drizzle-orm";
 import { extractTextFromUpload } from "../lib/document-parser.js";
 import { derivedProjectColumns, loadFreelancerPayables } from "../lib/financials.js";
@@ -9,7 +9,7 @@ import { derivedProjectColumns, loadFreelancerPayables } from "../lib/financials
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
-const PAYMENT_METHODS = new Set(["bank_transfer", "vodafone_cash", "instapay", "check"]);
+const PAYMENT_METHODS = new Set(["bank_transfer", "vodafone_cash", "instapay", "check", "cash"]);
 
 function toPaymentShape(r: typeof projectPaymentsTable.$inferSelect) {
   return {
@@ -25,10 +25,20 @@ function toPaymentShape(r: typeof projectPaymentsTable.$inferSelect) {
 
 type Payables = Awaited<ReturnType<typeof loadFreelancerPayables>>;
 
-/** How the money received on a project splits: given to freelancers (+ other costs) vs Fratelanza */
+/**
+ * Project money at a glance: price − freelancers − other costs = project net,
+ * and how the money received so far splits between freelancers and Fratelanza.
+ */
 function withSplit(shape: ReturnType<typeof toProjectShape>, r: typeof projectsTable.$inferSelect, payables: Payables) {
-  const toFreelancers = Math.min(payables.costPaid(r), Number(r.totalCost));
-  return { ...shape, toFreelancers, fratelanzaShare: Number(r.paidAmount) - toFreelancers };
+  const toFreelancers = payables.costPaid(r);
+  return {
+    ...shape,
+    freelancersCost: payables.commissions(r),
+    otherCosts: payables.otherCosts(r),
+    freelancersOwed: payables.owedForProject(r),
+    toFreelancers,
+    fratelanzaShare: Number(r.paidAmount) - toFreelancers,
+  };
 }
 
 function toProjectShape(
@@ -288,6 +298,7 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
 router.delete("/projects/:id", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
   await db.delete(projectPaymentsTable).where(eq(projectPaymentsTable.projectId, id));
+  await db.delete(freelancerPaymentsTable).where(eq(freelancerPaymentsTable.projectId, id));
   await db.delete(projectTeamTable).where(eq(projectTeamTable.projectId, id));
   const [deleted] = await db.delete(projectsTable).where(eq(projectsTable.id, id)).returning();
   if (!deleted) {
@@ -477,6 +488,125 @@ router.delete("/projects/:id/team/:memberId", async (req, res): Promise<void> =>
     return;
   }
   res.sendStatus(204);
+});
+
+function toFreelancerPaymentShape(r: typeof freelancerPaymentsTable.$inferSelect) {
+  return {
+    id: r.id,
+    projectId: r.projectId,
+    freelancerName: r.freelancerName,
+    amount: Number(r.amount),
+    paymentMethod: r.paymentMethod,
+    paidAt: r.paidAt,
+    notes: r.notes,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+async function freelancerPaymentsSummary(id: number) {
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!project) return null;
+  const payables = await loadFreelancerPayables([project]);
+  const payments = await db
+    .select()
+    .from(freelancerPaymentsTable)
+    .where(eq(freelancerPaymentsTable.projectId, id))
+    .orderBy(desc(freelancerPaymentsTable.createdAt));
+  return {
+    members: payables.members(project),
+    totalPaid: payables.freelancerPaid(project),
+    totalOwed: payables.owedForProject(project),
+    payments: payments.map(toFreelancerPaymentShape),
+  };
+}
+
+/** Money given to the project's freelancers: who is owed what, and the history. */
+router.get("/projects/:id/freelancer-payments", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const summary = await freelancerPaymentsSummary(id);
+  if (!summary) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  res.json(summary);
+});
+
+router.post("/projects/:id/freelancer-payments", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const { freelancerName, amount, paymentMethod, paidAt, notes } = req.body ?? {};
+  const summary = await freelancerPaymentsSummary(id);
+  if (!summary) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  const member = summary.members.find((m) => m.freelancerName.trim().toLowerCase() === String(freelancerName ?? "").trim().toLowerCase());
+  if (!member) {
+    res.status(400).json({ error: "This freelancer is not on the project. Add them to the project first." });
+    return;
+  }
+  const payAmount = Number(amount);
+  if (!payAmount || payAmount <= 0) {
+    res.status(400).json({ error: "Payment amount must be greater than zero" });
+    return;
+  }
+  await db.insert(freelancerPaymentsTable).values({
+    projectId: id,
+    freelancerName: member.freelancerName,
+    amount: String(payAmount),
+    paymentMethod: PAYMENT_METHODS.has(paymentMethod) ? paymentMethod : "bank_transfer",
+    paidAt: /^\d{4}-\d{2}-\d{2}/.test(paidAt ?? "") ? String(paidAt).slice(0, 10) : new Date().toISOString().slice(0, 10),
+    notes: notes ? String(notes) : null,
+  });
+  res.status(201).json(await freelancerPaymentsSummary(id));
+});
+
+router.delete("/projects/:id/freelancer-payments/:paymentId", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const paymentId = parseInt(Array.isArray(req.params.paymentId) ? req.params.paymentId[0] : req.params.paymentId, 10);
+  const [deleted] = await db
+    .delete(freelancerPaymentsTable)
+    .where(and(eq(freelancerPaymentsTable.id, paymentId), eq(freelancerPaymentsTable.projectId, id)))
+    .returning();
+  if (!deleted) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+  res.json(await freelancerPaymentsSummary(id));
+});
+
+/** Undo a client payment logged by mistake; paid / remaining are adjusted. */
+router.delete("/projects/:id/payments/:paymentId", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const paymentId = parseInt(Array.isArray(req.params.paymentId) ? req.params.paymentId[0] : req.params.paymentId, 10);
+  const [existing] = await db.select().from(projectsTable).where(eq(projectsTable.id, id));
+  if (!existing) {
+    res.status(404).json({ error: "Project not found" });
+    return;
+  }
+  const [deleted] = await db
+    .delete(projectPaymentsTable)
+    .where(and(eq(projectPaymentsTable.id, paymentId), eq(projectPaymentsTable.projectId, id)))
+    .returning();
+  if (!deleted) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+  const price = Number(existing.clientPrice);
+  const paid = Math.max(0, Number(existing.paidAmount) - Number(deleted.amount));
+  const [updated] = await db.update(projectsTable).set({
+    paidAmount: String(paid),
+    ...derivedProjectColumns(price, Number(existing.totalCost), paid),
+  }).where(eq(projectsTable.id, id)).returning();
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(sql`created_at desc`);
+  const teamMap = await teamMapForProjects([id]);
+  res.json({
+    project: toProjectShape(updated!, teamMap.get(id) ?? []),
+    payments: payments.map(toPaymentShape),
+  });
 });
 
 export default router;

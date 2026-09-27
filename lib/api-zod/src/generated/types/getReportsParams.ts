@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type GetExpenseSummaryParams = {
+export type GetReportsParams = {
 startDate?: string;
 endDate?: string;
-category?: string;
 };

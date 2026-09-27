@@ -14,7 +14,6 @@ import Login from "@/pages/login";
 
 import Dashboard from "./pages/dashboard";
 import Projects from "./pages/projects";
-import Receivables from "./pages/receivables";
 import Freelancers from "./pages/freelancers";
 import Clients from "./pages/clients";
 import Templates from "./pages/templates";
@@ -22,16 +21,17 @@ import Quotes from "./pages/quotes";
 import Expenses from "./pages/expenses";
 import Tasks from "./pages/tasks";
 import Finance from "./pages/finance";
+import Reports from "./pages/reports";
 import Settings from "./pages/settings";
 import Users from "./pages/users";
 
 const queryClient = new QueryClient();
 
-const PAGE_ORDER = ["dashboard","projects","receivables","freelancers","clients","templates","quotes","expenses","tasks","finance","settings"];
+const PAGE_ORDER = ["dashboard","projects","freelancers","clients","templates","quotes","expenses","tasks","finance","reports","settings"];
 const PAGE_TO_PATH: Record<string,string> = {
-  dashboard: "/", projects: "/projects", receivables: "/receivables", freelancers: "/freelancers",
+  dashboard: "/", projects: "/projects", freelancers: "/freelancers",
   clients: "/clients", templates: "/templates", quotes: "/quotes", expenses: "/expenses",
-  tasks: "/tasks", finance: "/finance", settings: "/settings",
+  tasks: "/tasks", finance: "/finance", reports: "/reports", settings: "/settings",
 };
 
 function firstAllowedPath(canAccess: (k: string) => boolean, isAdmin: boolean): string | null {
@@ -70,7 +70,8 @@ function AnimatedRoutes() {
         <Switch location={location}>
           <Route path="/"><Guard pageKey="dashboard"><Dashboard /></Guard></Route>
           <Route path="/projects"><Guard pageKey="projects"><Projects /></Guard></Route>
-          <Route path="/receivables"><Guard pageKey="receivables"><Receivables /></Guard></Route>
+          {/* Receivables now live inside Projects (Outstanding filter) */}
+          <Route path="/receivables"><Redirect to="/projects?view=outstanding" /></Route>
           <Route path="/freelancers"><Guard pageKey="freelancers"><Freelancers /></Guard></Route>
           <Route path="/clients"><Guard pageKey="clients"><Clients /></Guard></Route>
           <Route path="/templates"><Guard pageKey="templates"><Templates /></Guard></Route>
@@ -78,6 +79,7 @@ function AnimatedRoutes() {
           <Route path="/expenses"><Guard pageKey="expenses"><Expenses /></Guard></Route>
           <Route path="/tasks"><Guard pageKey="tasks"><Tasks /></Guard></Route>
           <Route path="/finance"><Guard pageKey="finance"><Finance /></Guard></Route>
+          <Route path="/reports"><Guard pageKey="reports"><Reports /></Guard></Route>
           <Route path="/settings"><Guard pageKey="settings"><Settings /></Guard></Route>
           <Route path="/users"><Guard adminOnly><Users /></Guard></Route>
           <Route component={NotFound} />

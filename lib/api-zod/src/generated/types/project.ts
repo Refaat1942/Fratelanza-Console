@@ -28,6 +28,12 @@ export interface Project {
   remainingAmount?: number;
   /** Part of the money received given to freelancers (+ other project costs) */
   toFreelancers?: number;
+  /** Freelancer commissions on the project */
+  freelancersCost?: number;
+  /** Non-freelancer project costs */
+  otherCosts?: number;
+  /** Commissions not paid yet */
+  freelancersOwed?: number;
   /** Money received minus what was given to freelancers / other costs */
   fratelanzaShare?: number;
   /** @nullable */

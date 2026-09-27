@@ -46,7 +46,11 @@ router.get("/freelancers", async (req, res): Promise<void> => {
     : await db.select().from(freelancersTable).orderBy(freelancersTable.name);
 
   const payables = await loadFreelancerPayables();
-  res.json(rows.map((r) => ({ ...toShape(r), ...payables.forFreelancer(r.name) })));
+  res.json(rows.map((r) => {
+    const f = payables.forFreelancer(r.name);
+    // "earned" = money given to the freelancer, summed from project payments (read-only)
+    return { ...toShape(r), earned: f.paid + Number(r.earned), balance: f.owed, totalCommission: f.totalCommission, owed: f.owed };
+  }));
 });
 
 function parseFreelancerRows(buffer: Buffer): Record<string, unknown>[] {
@@ -68,22 +72,22 @@ function rowToFreelancerValues(r: Record<string, unknown>, i: number) {
     phone: norm("phone") != null ? String(norm("phone")) : null,
     spec: norm("spec") != null ? String(norm("spec")) : null,
     position: norm("position") != null ? String(norm("position")) : null,
-    earned: String(Number(norm("earned") ?? 0) || 0),
-    balance: String(Number(norm("balance") ?? 0) || 0),
     rating: String(Math.max(1, Math.min(5, Number(norm("rating") ?? 5) || 5))),
   };
 }
 
 router.get("/freelancers/export", async (_req, res): Promise<void> => {
   const rows = await db.select().from(freelancersTable).orderBy(freelancersTable.name);
+  const payables = await loadFreelancerPayables();
   const data = rows.map((r) => ({
     code: r.code,
     name: r.name,
     phone: r.phone ?? "",
     spec: r.spec ?? "",
     position: r.position ?? "",
-    earned: Number(r.earned),
-    balance: Number(r.balance),
+    commissions: payables.forFreelancer(r.name).totalCommission,
+    paid: payables.forFreelancer(r.name).paid + Number(r.earned),
+    still_owed: payables.forFreelancer(r.name).owed,
     rating: Number(r.rating),
   }));
   const ws = XLSX.utils.json_to_sheet(data);
@@ -297,8 +301,6 @@ router.post("/freelancers", async (req, res): Promise<void> => {
       phone: body.phone ? String(body.phone) : null,
       spec: body.spec ? String(body.spec) : null,
       position: body.position ? String(body.position) : null,
-      earned: String(Number(body.earned ?? 0)),
-      balance: String(Number(body.balance ?? 0)),
       rating: String(Math.max(1, Math.min(5, Number(body.rating ?? 5) || 5))),
       bio: body.bio ?? null,
       portfolioUrl: body.portfolioUrl ?? null,
@@ -323,8 +325,6 @@ router.patch("/freelancers/:code", async (req, res): Promise<void> => {
   if (body.phone !== undefined) updates.phone = body.phone;
   if (body.spec !== undefined) updates.spec = body.spec;
   if (body.position !== undefined) updates.position = body.position;
-  if (body.earned !== undefined) updates.earned = String(Number(body.earned));
-  if (body.balance !== undefined) updates.balance = String(Number(body.balance));
   if (body.rating !== undefined) updates.rating = String(Number(body.rating));
   if (body.bio !== undefined) updates.bio = body.bio;
   if (body.portfolioUrl !== undefined) updates.portfolioUrl = body.portfolioUrl;

@@ -1,79 +1,92 @@
-import { db, projectsTable, projectPaymentsTable, expensesTable, projectTeamTable, freelancersTable } from "@workspace/db";
+import { db, projectsTable, projectPaymentsTable, expensesTable, projectTeamTable, freelancerPaymentsTable } from "@workspace/db";
 import { and, sql } from "drizzle-orm";
 
 type ProjectRow = typeof projectsTable.$inferSelect;
 type PaymentRow = typeof projectPaymentsTable.$inferSelect;
 type TeamRow = typeof projectTeamTable.$inferSelect;
-type FreelancerRow = typeof freelancersTable.$inferSelect;
+type FreelancerPaymentRow = typeof freelancerPaymentsTable.$inferSelect;
 
-const nameKey = (n: string | null | undefined) => (n ?? "").trim().toLowerCase();
+export const nameKey = (n: string | null | undefined) => (n ?? "").trim().toLowerCase();
+
+/** Each freelancer's commission on a project (lead + team, one entry per name). */
+export function projectCommitments(p: ProjectRow, teamRows: TeamRow[]) {
+  const out: { name: string; displayName: string; commission: number }[] = [];
+  const seen = new Set<string>();
+  if (p.freelancerName) {
+    seen.add(nameKey(p.freelancerName));
+    out.push({ name: nameKey(p.freelancerName), displayName: p.freelancerName, commission: Number(p.freelancerCommission) });
+  }
+  for (const t of teamRows) {
+    if (t.projectId !== p.id || seen.has(nameKey(t.freelancerName))) continue;
+    seen.add(nameKey(t.freelancerName));
+    out.push({ name: nameKey(t.freelancerName), displayName: t.freelancerName, commission: Number(t.commission) });
+  }
+  return out;
+}
 
 /**
- * How much of each project's freelancer cost has actually been paid.
- *
- * A freelancer's "Earned" value in the Freelancers tab is what they have been
- * paid so far (across all projects). It is spread over their projects oldest
- * first, capped at each project's commission. What is left of the commissions
- * is still owed to freelancers. Payments beyond all commissions (e.g. salary)
- * are not project costs and are ignored here. Freelancers not in the directory
- * are treated as fully paid (conservative for cash).
+ * Freelancer money per project, from the payments recorded in the Projects tab.
+ * - costPaid: money actually paid out for the project (freelancer payments + other costs)
+ * - owed: commissions not paid yet
+ * Payments without a project (opening balances such as a salary) are not project costs.
  */
-export function freelancerPayables(allProjects: ProjectRow[], team: TeamRow[], freelancers: FreelancerRow[]) {
-  const commitments: { projectId: number; name: string; commission: number; date: string }[] = [];
-  const teamByProject = new Map<number, TeamRow[]>();
-  for (const t of team) teamByProject.set(t.projectId, [...(teamByProject.get(t.projectId) ?? []), t]);
+export function freelancerPayables(allProjects: ProjectRow[], team: TeamRow[], payments: FreelancerPaymentRow[]) {
+  const paidByProject = new Map<number, number>();
+  const paidByProjectName = new Map<string, number>();
+  const paidByName = new Map<string, number>();
+  for (const pay of payments) {
+    const amount = Number(pay.amount);
+    const name = nameKey(pay.freelancerName);
+    paidByName.set(name, (paidByName.get(name) ?? 0) + amount);
+    if (pay.projectId == null) continue;
+    paidByProject.set(pay.projectId, (paidByProject.get(pay.projectId) ?? 0) + amount);
+    const k = `${pay.projectId}|${name}`;
+    paidByProjectName.set(k, (paidByProjectName.get(k) ?? 0) + amount);
+  }
 
+  const commitmentsByProject = new Map<number, ReturnType<typeof projectCommitments>>();
+  const byFreelancer = new Map<string, { commissions: number; owed: number }>();
   for (const p of allProjects) {
-    const seen = new Set<string>();
-    const date = projectDate(p);
-    if (p.freelancerName && Number(p.freelancerCommission) > 0) {
-      seen.add(nameKey(p.freelancerName));
-      commitments.push({ projectId: p.id, name: nameKey(p.freelancerName), commission: Number(p.freelancerCommission), date });
-    }
-    for (const t of teamByProject.get(p.id) ?? []) {
-      if (seen.has(nameKey(t.freelancerName)) || Number(t.commission) <= 0) continue;
-      seen.add(nameKey(t.freelancerName));
-      commitments.push({ projectId: p.id, name: nameKey(t.freelancerName), commission: Number(t.commission), date });
+    const list = projectCommitments(p, team);
+    commitmentsByProject.set(p.id, list);
+    for (const c of list) {
+      const owed = Math.max(0, c.commission - (paidByProjectName.get(`${p.id}|${c.name}`) ?? 0));
+      const cur = byFreelancer.get(c.name) ?? { commissions: 0, owed: 0 };
+      cur.commissions += c.commission;
+      cur.owed += owed;
+      byFreelancer.set(c.name, cur);
     }
   }
-  commitments.sort((a, b) => a.date.localeCompare(b.date) || a.projectId - b.projectId);
 
-  const paidLeft = new Map<string, number>();
-  for (const f of freelancers) paidLeft.set(nameKey(f.name), (paidLeft.get(nameKey(f.name)) ?? 0) + Number(f.earned));
-
-  const byProject = new Map<number, { commissions: number; paid: number }>();
-  const byFreelancer = new Map<string, { commissions: number; paid: number }>();
-  for (const c of commitments) {
-    const known = paidLeft.has(c.name);
-    const available = known ? paidLeft.get(c.name)! : c.commission;
-    const paid = Math.min(available, c.commission);
-    if (known) paidLeft.set(c.name, available - paid);
-
-    const proj = byProject.get(c.projectId) ?? { commissions: 0, paid: 0 };
-    proj.commissions += c.commission;
-    proj.paid += paid;
-    byProject.set(c.projectId, proj);
-
-    const fr = byFreelancer.get(c.name) ?? { commissions: 0, paid: 0 };
-    fr.commissions += c.commission;
-    fr.paid += paid;
-    byFreelancer.set(c.name, fr);
-  }
-
+  const commissionsFor = (p: ProjectRow) => (commitmentsByProject.get(p.id) ?? []).reduce((s, c) => s + c.commission, 0);
   return {
-    /** Project cost actually paid out: other direct costs + freelancer amounts paid */
+    /** Freelancer commissions on the project */
+    commissions: commissionsFor,
+    /** Non-freelancer project costs (the "Other costs" field) */
+    otherCosts(p: ProjectRow) {
+      return Math.max(0, Number(p.totalCost) - commissionsFor(p));
+    },
+    freelancerPaid(p: ProjectRow) {
+      return paidByProject.get(p.id) ?? 0;
+    },
+    /** Project cost actually paid out: other costs + money given to freelancers */
     costPaid(p: ProjectRow) {
-      const f = byProject.get(p.id) ?? { commissions: 0, paid: 0 };
-      const otherCosts = Math.max(0, Number(p.totalCost) - f.commissions);
-      return otherCosts + f.paid;
+      return this.otherCosts(p) + this.freelancerPaid(p);
     },
     owedForProject(p: ProjectRow) {
-      const f = byProject.get(p.id);
-      return f ? f.commissions - f.paid : 0;
+      return (commitmentsByProject.get(p.id) ?? []).reduce(
+        (s, c) => s + Math.max(0, c.commission - (paidByProjectName.get(`${p.id}|${c.name}`) ?? 0)), 0);
+    },
+    /** Per member of a project: commission, paid, owed */
+    members(p: ProjectRow) {
+      return (commitmentsByProject.get(p.id) ?? []).map((c) => {
+        const paid = paidByProjectName.get(`${p.id}|${c.name}`) ?? 0;
+        return { freelancerName: c.displayName, commission: c.commission, paid, owed: Math.max(0, c.commission - paid) };
+      });
     },
     forFreelancer(name: string) {
-      const f = byFreelancer.get(nameKey(name)) ?? { commissions: 0, paid: 0 };
-      return { totalCommission: f.commissions, owed: f.commissions - f.paid };
+      const f = byFreelancer.get(nameKey(name)) ?? { commissions: 0, owed: 0 };
+      return { totalCommission: f.commissions, paid: paidByName.get(nameKey(name)) ?? 0, owed: f.owed };
     },
   };
 }
@@ -81,8 +94,8 @@ export function freelancerPayables(allProjects: ProjectRow[], team: TeamRow[], f
 export async function loadFreelancerPayables(allProjects?: ProjectRow[]) {
   const projects = allProjects ?? await db.select().from(projectsTable);
   const team = await db.select().from(projectTeamTable);
-  const freelancers = await db.select().from(freelancersTable);
-  return freelancerPayables(projects, team, freelancers);
+  const payments = await db.select().from(freelancerPaymentsTable);
+  return freelancerPayables(projects, team, payments);
 }
 
 /**
@@ -190,6 +203,10 @@ export async function periodFinancials(startDate?: string, endDate?: string) {
   const receipts = cashReceipts(allProjects, payments).filter((r) => inRange(r.date, startDate, endDate));
 
   const payables = await loadFreelancerPayables(allProjects);
+  const freelancerPaymentsInPeriod = (await db.select().from(freelancerPaymentsTable))
+    .filter((f) => f.projectId != null)
+    .map((f) => ({ date: (f.paidAt || f.createdAt.toISOString()).slice(0, 10), amount: Number(f.amount) }))
+    .filter((f) => inRange(f.date, startDate, endDate));
 
   let totalRemaining = 0;
   let totalCost = 0;
@@ -201,12 +218,14 @@ export async function periodFinancials(startDate?: string, endDate?: string) {
     const f = projectFigures(p);
     totalRemaining += f.receivable;
     totalCost += f.cost;
-    totalCostPaid += payables.costPaid(p);
+    totalCostPaid += payables.otherCosts(p);
     freelancerOwed += payables.owedForProject(p);
     totalContractValue += f.contractValue;
     grossMargin += f.expectedProfit;
   }
   const totalPaid = receipts.reduce((s, r) => s + r.amount, 0);
+  // Money given to freelancers counts on the day it was paid (any project)
+  totalCostPaid += freelancerPaymentsInPeriod.reduce((s, f) => s + f.amount, 0);
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
   // Fratelanza estimated profit (until collection) = deals - project costs - expenses
   const expectedNetProfit = grossMargin - totalExpenses;
@@ -221,7 +240,8 @@ export async function periodFinancials(startDate?: string, endDate?: string) {
     return cur;
   };
   for (const r of receipts) bucket(r.date).collected += r.amount;
-  for (const p of projects) bucket(projectDate(p)).cost += payables.costPaid(p);
+  for (const p of projects) bucket(projectDate(p)).cost += payables.otherCosts(p);
+  for (const f of freelancerPaymentsInPeriod) bucket(f.date).cost += f.amount;
   for (const e of expenses) bucket((e.date ?? e.createdAt.toISOString()).slice(0, 10)).expenses += Number(e.amount);
   const monthly = [...months.entries()]
     .filter(([month]) => /^\d{4}-\d{2}$/.test(month))

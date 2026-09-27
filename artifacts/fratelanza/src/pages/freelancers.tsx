@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase, BarChart3, Target, TrendingUp, ExternalLink, FileText, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Star, Upload, History, CheckCircle2, Clock, Briefcase, BarChart3, Target, TrendingUp, ExternalLink, FileText, Download, Info } from "lucide-react";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -134,7 +134,7 @@ export default function Freelancers() {
     const skills = parseSkills(form.skillsText);
     const data = {
       name: form.name.trim(), phone: form.phone, spec: form.spec, position: form.position,
-      earned: Number(form.earned), balance: Number(form.balance), rating: Number(form.rating),
+      rating: Number(form.rating),
       bio: form.bio || null, portfolioUrl: form.portfolioUrl || null,
       skills: skills.length ? skills : null,
     };
@@ -337,7 +337,7 @@ export default function Freelancers() {
           <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {["Code", "Name", "Phone", "Specialization", "Position", "Commissions", "Paid", "Still owed", "Rating", "Profile", "Actions"].map((h) => (
+                {["Code", "Name", "Phone", "Specialization", "Position", "Commissions", t("freelancers.paidAuto"), "Still owed", "Rating", "Profile", "Actions"].map((h) => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -353,7 +353,7 @@ export default function Freelancers() {
                   <td className="px-4 py-3">{fr.spec ? <Badge variant="outline" className="text-primary border-primary/30">{fr.spec}</Badge> : "—"}</td>
                   <td className="px-4 py-3 text-muted-foreground">{fr.position ?? "—"}</td>
                   <td className="px-4 py-3 whitespace-nowrap" title="Total of this freelancer's project commissions"><PrivacyWrapper value={fr.totalCommission ?? 0} /></td>
-                  <td className="px-4 py-3 whitespace-nowrap text-green-400" title="Paid to the freelancer so far"><PrivacyWrapper value={fr.earned} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap text-green-400" title={t("freelancers.paidAutoNote")}><PrivacyWrapper value={fr.earned} /></td>
                   <td className="px-4 py-3 whitespace-nowrap text-orange-400" title="Commissions − paid (automatic)"><PrivacyWrapper value={fr.owed ?? 0} /></td>
                   <td className="px-4 py-3"><Stars rating={fr.rating} /></td>
                   <td className="px-4 py-3">
@@ -416,8 +416,10 @@ export default function Freelancers() {
             </div>
             <div className="space-y-1"><Label>Position</Label><Input value={form.position} onChange={f("position")} /></div>
             <div className="space-y-1"><Label>Rating (1-5)</Label><Input type="number" min={1} max={5} step={0.1} value={form.rating} onChange={f("rating")} /></div>
-            <div className="space-y-1"><Label>Paid to freelancer so far (EGP)</Label><Input type="number" value={form.earned} onChange={f("earned")} /></div>
-            <div className="space-y-1"><Label>Balance (EGP, optional note)</Label><Input type="number" value={form.balance} onChange={f("balance")} /></div>
+            <div className="col-span-2 flex items-start gap-2 rounded-md border border-primary/30 bg-primary/5 p-2 text-xs text-muted-foreground">
+              <Info className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+              <span>{t("freelancers.paidAutoNote")}</span>
+            </div>
 
             <div className="col-span-2 pt-2 border-t border-border">
               <div className="text-sm font-semibold mb-3">{t("freelancers.profileSection")}</div>
