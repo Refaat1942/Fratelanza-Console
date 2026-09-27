@@ -1184,6 +1184,91 @@ export const DeleteExpenseParams = zod.object({
 
 
 /**
+ * @summary Saved contract forms (client / freelancer)
+ */
+export const ListContractsResponseItem = zod.object({
+  "id": zod.number(),
+  "number": zod.string(),
+  "type": zod.string(),
+  "projectId": zod.number().nullish(),
+  "partyName": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListContractsResponse = zod.array(ListContractsResponseItem)
+
+
+/**
+ * @summary Save a filled contract form
+ */
+export const CreateContractBody = zod.object({
+  "type": zod.string().describe('client | freelancer'),
+  "projectId": zod.number().nullish(),
+  "partyName": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown())
+})
+
+
+/**
+ * @summary Get a saved contract
+ */
+export const GetContractParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetContractResponse = zod.object({
+  "id": zod.number(),
+  "number": zod.string(),
+  "type": zod.string(),
+  "projectId": zod.number().nullish(),
+  "partyName": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Update a saved contract
+ */
+export const UpdateContractParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateContractBody = zod.object({
+  "type": zod.string().describe('client | freelancer'),
+  "projectId": zod.number().nullish(),
+  "partyName": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown())
+})
+
+export const UpdateContractResponse = zod.object({
+  "id": zod.number(),
+  "number": zod.string(),
+  "type": zod.string(),
+  "projectId": zod.number().nullish(),
+  "partyName": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a saved contract
+ */
+export const DeleteContractParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary All reports for a date range (Excel export at /reports/export)
  */
 export const GetReportsQueryParams = zod.object({

@@ -1032,6 +1032,82 @@ paths:
         "404":
           description: Not found
 
+  # ── Contracts ─────────────────────────────────────────────────────────
+  /contracts:
+    get:
+      operationId: listContracts
+      tags: [contracts]
+      summary: Saved contract forms (client / freelancer)
+      responses:
+        "200":
+          description: Contracts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Contract"
+    post:
+      operationId: createContract
+      tags: [contracts]
+      summary: Save a filled contract form
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+
+  /contracts/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    get:
+      operationId: getContract
+      tags: [contracts]
+      summary: Get a saved contract
+      responses:
+        "200":
+          description: Contract
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+    patch:
+      operationId: updateContract
+      tags: [contracts]
+      summary: Update a saved contract
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ContractInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Contract"
+    delete:
+      operationId: deleteContract
+      tags: [contracts]
+      summary: Delete a saved contract
+      responses:
+        "204":
+          description: Deleted
+
   # ── Reports ───────────────────────────────────────────────────────────
   /reports:
     get:
@@ -2179,6 +2255,47 @@ components:
         date:
           type: string
         category:
+          type: string
+
+    ContractInput:
+      type: object
+      required: [type, partyName, amount, data]
+      properties:
+        type:
+          type: string
+          description: client | freelancer
+        projectId:
+          type: ["integer", "null"]
+        partyName:
+          type: string
+        amount:
+          type: number
+        data:
+          type: object
+          additionalProperties: true
+
+    Contract:
+      type: object
+      required: [id, number, type, partyName, amount, data, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        number:
+          type: string
+        type:
+          type: string
+        projectId:
+          type: ["integer", "null"]
+        partyName:
+          type: string
+        amount:
+          type: number
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+        updatedAt:
           type: string
 
     ExpenseUpdate:

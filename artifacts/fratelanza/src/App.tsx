@@ -22,14 +22,15 @@ import Expenses from "./pages/expenses";
 import Tasks from "./pages/tasks";
 import Finance from "./pages/finance";
 import Reports from "./pages/reports";
+import Contracts from "./pages/contracts";
 import Settings from "./pages/settings";
 import Users from "./pages/users";
 
 const queryClient = new QueryClient();
 
-const PAGE_ORDER = ["dashboard","projects","freelancers","clients","templates","quotes","expenses","tasks","finance","reports","settings"];
+const PAGE_ORDER = ["dashboard","projects","contracts","freelancers","clients","templates","quotes","expenses","tasks","finance","reports","settings"];
 const PAGE_TO_PATH: Record<string,string> = {
-  dashboard: "/", projects: "/projects", freelancers: "/freelancers",
+  dashboard: "/", projects: "/projects", contracts: "/contracts", freelancers: "/freelancers",
   clients: "/clients", templates: "/templates", quotes: "/quotes", expenses: "/expenses",
   tasks: "/tasks", finance: "/finance", reports: "/reports", settings: "/settings",
 };
@@ -80,6 +81,7 @@ function AnimatedRoutes() {
           <Route path="/tasks"><Guard pageKey="tasks"><Tasks /></Guard></Route>
           <Route path="/finance"><Guard pageKey="finance"><Finance /></Guard></Route>
           <Route path="/reports"><Guard pageKey="reports"><Reports /></Guard></Route>
+          <Route path="/contracts"><Guard pageKey="contracts"><Contracts /></Guard></Route>
           <Route path="/settings"><Guard pageKey="settings"><Settings /></Guard></Route>
           <Route path="/users"><Guard adminOnly><Users /></Guard></Route>
           <Route component={NotFound} />

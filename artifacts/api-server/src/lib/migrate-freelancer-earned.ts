@@ -17,6 +17,17 @@ export async function ensureFinanceTables(): Promise<void> {
       notes text,
       created_at timestamptz NOT NULL DEFAULT now()
     )`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS contracts (
+      id serial PRIMARY KEY,
+      type text NOT NULL,
+      project_id integer,
+      party_name text NOT NULL DEFAULT '',
+      amount numeric(12, 2) NOT NULL DEFAULT 0,
+      data text NOT NULL DEFAULT '{}',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`);
 }
 
 /**

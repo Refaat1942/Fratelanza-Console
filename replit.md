@@ -46,6 +46,7 @@ A full-stack web ERP system for managing software & training projects, freelance
 
 - **Dashboard** — KPI cards (revenue, paid, remaining, net profit, expenses), profit-by-type bar chart, payment alerts
 - **Projects** — Full CRUD for software & training projects. Each row shows the deal (price − freelancers − other costs = project net), collection progress (received / remaining / next due, overdue highlighting) and how money received splits between freelancers and Fratelanza. Filters: All / Outstanding / Overdue (replaces the old Receivables page). One Payments window per project: money received from the client and money given to freelancers (both with history and delete)
+- **Contracts** — Client contract and freelancer contract (annex) from the company templates: fill from a project (client, price, freelancer commission, amounts already paid), complete the blanks, payment stages calculated automatically (amount per stage, rounding on the last stage, % must total 100, optional paid-so-far column), amount in Arabic words, day name from the date, Fratelanza logo; live A4 preview, Print / Save as PDF, Word copy; saved with numbers FRZ-C-YYYY-NNNN / FRZ-F-YYYY-NNNN
 - **Freelancers** — Directory with specialization and rating; Commissions, Paid (auto — summed from freelancer payments recorded on projects) and Still owed
 - **Clients** — CRM with 360° profile (aggregated project history, totals)
 - **Templates** — Reusable service pricing templates (Software & Training categories)

@@ -87,6 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Receivables were merged into Projects; Reports extend Finance
     if (pageKey === "projects" && perms.includes("receivables")) return true;
     if (pageKey === "reports" && perms.includes("finance")) return true;
+    if (pageKey === "contracts" && perms.includes("projects")) return true;
     return perms.includes(pageKey);
   };
 
