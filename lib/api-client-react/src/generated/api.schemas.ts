@@ -602,6 +602,33 @@ export interface ExpenseInput {
   category?: string;
 }
 
+export type ContractInputData = { [key: string]: unknown };
+
+export interface ContractInput {
+  /** client | freelancer */
+  type: string;
+  /** @nullable */
+  projectId?: number | null;
+  partyName: string;
+  amount: number;
+  data: ContractInputData;
+}
+
+export type ContractData = { [key: string]: unknown };
+
+export interface Contract {
+  id: number;
+  number: string;
+  type: string;
+  /** @nullable */
+  projectId?: number | null;
+  partyName: string;
+  amount: number;
+  data: ContractData;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ExpenseUpdate {
   description?: string;
   amount?: number;

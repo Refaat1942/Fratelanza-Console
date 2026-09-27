@@ -88,3 +88,15 @@ CREATE TABLE IF NOT EXISTS freelancer_payments (
   notes text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Filled contract forms (Contracts tab)
+CREATE TABLE IF NOT EXISTS contracts (
+  id serial PRIMARY KEY,
+  type text NOT NULL,
+  project_id integer,
+  party_name text NOT NULL DEFAULT '',
+  amount numeric(12, 2) NOT NULL DEFAULT 0,
+  data text NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
