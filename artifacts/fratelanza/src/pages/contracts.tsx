@@ -64,6 +64,7 @@ export default function Contracts() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [mobileView, setMobileView] = useState<"form" | "preview">("form");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListContractsQueryKey() });
   const projectList = projects as unknown as ProjectLite[];
@@ -104,7 +105,6 @@ export default function Contracts() {
       const clientContract = (contracts as Contract[]).find((c) => c.type === "client" && c.projectId === p.id);
       setFreelancer({
         projectName: p.projectName,
-        originalContractNumber: clientContract?.number ?? editing.freelancer.originalContractNumber,
         originalContractDate: String((clientContract?.data as Record<string, unknown> | undefined)?.contractDate ?? editing.freelancer.originalContractDate),
       });
     }
@@ -117,7 +117,7 @@ export default function Contracts() {
 
   const html = useMemo(() => {
     if (!editing) return "";
-    const opts = { logoDataUrl: branding.logoDataUrl, number: editing.number };
+    const opts = { logoDataUrl: branding.logoDataUrl };
     return editing.type === "client" ? buildClientContractHtml(editing.client, opts) : buildFreelancerContractHtml(editing.freelancer, opts);
   }, [editing, branding.logoDataUrl]);
 
@@ -144,7 +144,7 @@ export default function Contracts() {
       invalidate();
       const next = { ...editing, id: saved.id, number: saved.number };
       setEditing(next);
-      toast({ title: t("contracts.saved", { number: saved.number }) });
+      toast({ title: t("contracts.saved") });
       return next;
     } catch {
       toast({ title: t("common.error"), variant: "destructive" });
@@ -155,7 +155,7 @@ export default function Contracts() {
   const print = async () => {
     const saved = await save();
     if (!saved) return;
-    const opts = { logoDataUrl: branding.logoDataUrl, number: saved.number };
+    const opts = { logoDataUrl: branding.logoDataUrl };
     const out = saved.type === "client" ? buildClientContractHtml(saved.client, opts) : buildFreelancerContractHtml(saved.freelancer, opts);
     if (!printContractHtml(out)) toast({ title: t("contracts.popupBlocked"), variant: "destructive" });
   };
@@ -163,12 +163,12 @@ export default function Contracts() {
   const word = () => {
     if (!editing) return;
     const name = editing.type === "client" ? editing.client.clientName : editing.freelancer.freelancerName;
-    downloadContractWord(html, `${editing.number ?? "contract"}-${name || editing.type}`.replace(/\s+/g, "-"));
+    downloadContractWord(html, `contract-${name || editing.type}`.replace(/\s+/g, "-"));
   };
 
   const printSaved = (c: Contract) => {
     const e = fromSaved(c);
-    const opts = { logoDataUrl: branding.logoDataUrl, number: c.number };
+    const opts = { logoDataUrl: branding.logoDataUrl };
     printContractHtml(e.type === "client" ? buildClientContractHtml(e.client, opts) : buildFreelancerContractHtml(e.freelancer, opts));
   };
 
@@ -181,7 +181,7 @@ export default function Contracts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><FileSignature className="h-6 w-6 text-primary" />{t("contracts.title")}</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={() => startNew("client")} data-testid="button-new-client-contract"><Plus className="h-4 w-4 me-1" />{t("contracts.newClient")}</Button>
           <Button variant="outline" onClick={() => startNew("freelancer")} data-testid="button-new-freelancer-contract"><Plus className="h-4 w-4 me-1" />{t("contracts.newFreelancer")}</Button>
         </div>
@@ -191,17 +191,16 @@ export default function Contracts() {
         <table className="w-full text-sm">
           <thead className="bg-card">
             <tr className="border-b border-border">
-              {[t("contracts.number"), t("contracts.type"), t("contracts.party"), t("contracts.project"), t("contracts.amount"), t("contracts.date"), ""].map((h, i) => (
+              {[t("contracts.type"), t("contracts.party"), t("contracts.project"), t("contracts.amount"), t("contracts.date"), ""].map((h, i) => (
                 <th key={i} className="px-4 py-3 text-start text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {(contracts as Contract[]).length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">{t("contracts.none")}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">{t("contracts.none")}</td></tr>
             ) : (contracts as Contract[]).map((c) => (
               <tr key={c.id} className="border-b border-border hover:bg-card/50" data-testid={`row-contract-${c.id}`}>
-                <td className="px-4 py-3 font-mono text-xs">{c.number}</td>
                 <td className="px-4 py-3"><Badge variant="outline" className={c.type === "client" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}>{c.type === "client" ? t("contracts.typeClient") : t("contracts.typeFreelancer")}</Badge></td>
                 <td className="px-4 py-3 font-medium">{c.partyName || "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{projectList.find((p) => p.id === c.projectId)?.projectName ?? String((c.data as Record<string, unknown>)?.projectName ?? "—")}</td>
@@ -221,22 +220,28 @@ export default function Contracts() {
       </div>
 
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-[96vw] w-[96vw] h-[94vh] p-0 flex flex-col gap-0">
+        <DialogContent className="max-w-none w-screen h-[100dvh] rounded-none sm:rounded-lg sm:max-w-[96vw] sm:w-[96vw] sm:h-[94vh] p-0 flex flex-col gap-0">
           {editing && (
             <>
-              <DialogHeader className="px-5 py-3 border-b border-border flex-row items-center justify-between space-y-0">
+              <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12">
                 <DialogTitle>
                   {editing.type === "client" ? t("contracts.newClient") : t("contracts.newFreelancer")}
-                  {editing.number && <span className="ms-2 font-mono text-sm text-muted-foreground">{editing.number}</span>}
                 </DialogTitle>
-                <div className="flex gap-2 me-8">
+                <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={save} disabled={create.isPending || update.isPending} data-testid="button-save-contract"><Save className="h-4 w-4 me-1" />{t("common.save")}</Button>
                   <Button variant="outline" size="sm" onClick={word}><FileDown className="h-4 w-4 me-1" />Word</Button>
                   <Button size="sm" onClick={print} disabled={!calc?.valid} data-testid="button-print-contract" className="bg-green-600 hover:bg-green-700 text-white"><Printer className="h-4 w-4 me-1" />{t("contracts.printPdf")}</Button>
                 </div>
               </DialogHeader>
+              <div className="lg:hidden grid grid-cols-2 gap-1 p-2 border-b border-border bg-card/60">
+                {(["form", "preview"] as const).map((v) => (
+                  <Button key={v} size="sm" variant={mobileView === v ? "default" : "ghost"} onClick={() => setMobileView(v)} data-testid={`toggle-${v}`}>
+                    {v === "form" ? t("contracts.viewForm") : t("contracts.viewPreview")}
+                  </Button>
+                ))}
+              </div>
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(380px,460px)_1fr] min-h-0">
-                <div className="overflow-y-auto p-5 space-y-4 border-e border-border">
+                <div className={`overflow-y-auto p-3 sm:p-5 space-y-4 lg:border-e border-border ${mobileView === "preview" ? "hidden lg:block" : ""}`}>
                   <Field label={t("contracts.linkProject")}>
                     <Select value={editing.projectId ? String(editing.projectId) : "none"} onValueChange={pickProject}>
                       <SelectTrigger data-testid="select-contract-project"><SelectValue /></SelectTrigger>
@@ -251,7 +256,7 @@ export default function Contracts() {
                     : <FreelancerForm d={editing.freelancer} set={setFreelancer} members={members} pickFreelancer={pickFreelancer} />}
                   {calc && <MoneySummary calc={calc} paidLabel={editing.type === "client" ? t("contracts.paidByClient") : t("contracts.paidToFreelancer")} />}
                 </div>
-                <div className="bg-muted/40 min-h-0">
+                <div className={`bg-muted/40 min-h-0 ${mobileView === "form" ? "hidden lg:block" : ""}`}>
                   <LivePreview html={html} />
                 </div>
               </div>

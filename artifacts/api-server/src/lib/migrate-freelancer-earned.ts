@@ -28,6 +28,16 @@ export async function ensureFinanceTables(): Promise<void> {
       created_at timestamptz NOT NULL DEFAULT now(),
       updated_at timestamptz NOT NULL DEFAULT now()
     )`);
+  await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS equity_entries (
+      id serial PRIMARY KEY,
+      type text NOT NULL,
+      amount numeric(12, 2) NOT NULL,
+      date text NOT NULL,
+      notes text,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`);
+  await db.execute(sql`CREATE TABLE IF NOT EXISTS app_settings (key text PRIMARY KEY, value text NOT NULL)`);
 }
 
 /**

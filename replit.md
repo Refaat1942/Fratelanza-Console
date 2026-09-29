@@ -36,6 +36,8 @@ A full-stack web ERP system for managing software & training projects, freelance
 
 ## Architecture decisions
 
+- **Mobile-friendly**: responsive viewport (pinch-zoom allowed, safe-area aware, `100dvh`), Add-to-Home-Screen manifest + icons, slide-out menu on phones, Projects shows one card per project below `md`, statements hide comparison columns on small screens, contract editor switches between Fill in / Preview on phones.
+
 - **Contract-first**: OpenAPI spec → Orval codegen → typed React Query hooks + Zod schemas. Never hand-write API client code.
 - **Privacy mode**: All financial values wrapped in `<PrivacyWrapper>` — toggled via sidebar button, stored in React context. Masks values as `***`.
 - **Username+password auth**: Users stored in `users` table with bcrypt password hash. `/api/auth/login` sets a session cookie (`fratelanza.sid`) backed by Postgres (`session` table via `connect-pg-simple`). All `/api/*` routes require auth except `/api/healthz`, `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`. Initial admin user auto-seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` env on first start.
@@ -46,14 +48,14 @@ A full-stack web ERP system for managing software & training projects, freelance
 
 - **Dashboard** — KPI cards (revenue, paid, remaining, net profit, expenses), profit-by-type bar chart, payment alerts
 - **Projects** — Full CRUD for software & training projects. Each row shows the deal (price − freelancers − other costs = project net), collection progress (received / remaining / next due, overdue highlighting) and how money received splits between freelancers and Fratelanza. Filters: All / Outstanding / Overdue (replaces the old Receivables page). One Payments window per project: money received from the client and money given to freelancers (both with history and delete)
-- **Contracts** — Client contract and freelancer contract (annex) from the company templates: fill from a project (client, price, freelancer commission, amounts already paid), complete the blanks, payment stages calculated automatically (amount per stage, rounding on the last stage, % must total 100, optional paid-so-far column), amount in Arabic words, day name from the date, Fratelanza logo; live A4 preview, Print / Save as PDF, Word copy; saved with numbers FRZ-C-YYYY-NNNN / FRZ-F-YYYY-NNNN
+- **Contracts** — (internal serial numbers are stored in the database only, never shown or printed) Client contract and freelancer contract (annex) from the company templates: fill from a project (client, price, freelancer commission, amounts already paid), complete the blanks, payment stages calculated automatically (amount per stage, rounding on the last stage, % must total 100, optional paid-so-far column), amount in Arabic words, day name from the date, Fratelanza logo; live A4 preview, Print / Save as PDF, Word copy; saved with numbers FRZ-C-YYYY-NNNN / FRZ-F-YYYY-NNNN
 - **Freelancers** — Directory with specialization and rating; Commissions, Paid (auto — summed from freelancer payments recorded on projects) and Still owed
 - **Clients** — CRM with 360° profile (aggregated project history, totals)
 - **Templates** — Reusable service pricing templates (Software & Training categories)
 - **Sales Quotes** — Quote builder with line items, payment terms, milestones (English/Arabic)
 - **Expenses** — Company expenses only (freelancer payments live on projects), with categories (rent, salaries, marketing, …), category filter and totals per category
 - **Tasks** — Kanban board (Todo / In Progress / Done) with priority, assignment, due date
-- **Finance / P&L** — Date-filtered P&L report with monthly bar chart, full project breakdown
+- **Finance** — Overview (verdict, KPIs, monthly chart) plus accrual-basis financial statements for any period: Income statement (revenue by type → cost of revenue → gross profit → opex by category → EBITDA → depreciation → EBIT → finance costs → profit before tax → taxes → net income, with margins and previous-period comparison), Balance sheet (cash, receivables, freelancer advances, equipment net of depreciation = freelancer payables, client advances + capital, drawings, retained earnings; balance check), Cash flow (direct method), Ratios & KPIs (profitability, efficiency, liquidity, solvency, each with formula), Capital & policies (owner capital/drawings, equipment useful life, accounting policies). Excel export (EN/AR)
 - **Reports** — Summary, Projects, Money received, Freelancer payments, Expenses (by category), Freelancers, Receivables for any date range, with one-click Excel export (EN/AR)
 
 ## Deployment (Hostinger VPS)

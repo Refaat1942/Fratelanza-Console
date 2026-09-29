@@ -100,3 +100,17 @@ CREATE TABLE IF NOT EXISTS contracts (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Accounting: owner capital / drawings and settings (Finance → statements)
+CREATE TABLE IF NOT EXISTS equity_entries (
+  id serial PRIMARY KEY,
+  type text NOT NULL,
+  amount numeric(12, 2) NOT NULL,
+  date text NOT NULL,
+  notes text,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS app_settings (
+  key text PRIMARY KEY,
+  value text NOT NULL
+);

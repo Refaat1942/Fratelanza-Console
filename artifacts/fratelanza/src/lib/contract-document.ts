@@ -221,13 +221,14 @@ const COMPANY = {
 
 const COMPANY_FOOTER = `${COMPANY.name} – سجل تجاري ${COMPANY.registry} – بطاقة ضريبية ${COMPANY.taxId}`;
 
-export type ContractHtmlOptions = { logoDataUrl?: string | null; number?: string; autoPrint?: boolean };
+/** The internal contract serial is kept in the database only and never printed. */
+export type ContractHtmlOptions = { logoDataUrl?: string | null; autoPrint?: boolean };
 
 function shell(title: string, body: string, opts: ContractHtmlOptions): string {
   const logo = opts.logoDataUrl || defaultLogo;
   return `<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
-<title>${esc(title)}${opts.number ? ` – ${esc(opts.number)}` : ""}</title>
+<title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Naskh+Arabic:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
@@ -275,7 +276,7 @@ function shell(title: string, body: string, opts: ContractHtmlOptions): string {
   <header>
     <img src="${logo}" alt="Fratelanza">
     <div class="co"><b>${COMPANY.line1}</b><span>${COMPANY.line2}</span></div>
-    <div class="ref">${opts.number ? `رقم العقد: <b>${esc(opts.number)}</b><br>` : ""}سجل تجاري: ${COMPANY.registry}<br>بطاقة ضريبية: ${COMPANY.taxId}</div>
+    <div class="ref">سجل تجاري: ${COMPANY.registry}<br>بطاقة ضريبية: ${COMPANY.taxId}</div>
   </header>
   <div class="accent"></div>
   ${body}

@@ -279,7 +279,64 @@ export default function Projects() {
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">{t('projects.loading')}</div>
       ) : (
-        <div className="rounded-lg border border-border overflow-x-auto">
+        <>
+        {/* Phones: one card per project */}
+        <div className="md:hidden space-y-3" data-testid="project-cards">
+          {filtered.length === 0 ? (
+            <div className="rounded-lg border border-border px-4 py-8 text-center text-muted-foreground">{t('projects.noProjects')}</div>
+          ) : filtered.map((p) => {
+            const freelancerNames = (p.teamFreelancers && p.teamFreelancers.length > 0) ? p.teamFreelancers : (p.freelancerName ? [p.freelancerName] : []);
+            const freelancersCost = p.freelancersCost ?? 0;
+            const otherCosts = p.otherCosts ?? Math.max(0, p.totalCost - freelancersCost);
+            const pctPaid = p.clientPrice > 0 ? Math.min(100, Math.round((p.paidAmount / p.clientPrice) * 100)) : 0;
+            const late = isOverdue(p);
+            return (
+              <div key={p.id} className={`rounded-lg border p-3 space-y-3 ${late ? "border-red-500/40 bg-red-500/5" : "border-border bg-card/40"}`} data-testid={`card-project-${p.id}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-semibold flex items-center gap-1.5">{p.projectName}{(p.hasOutlineFile || p.technicalOutline || p.quoteId) && <FileText className="h-3.5 w-3.5 text-primary shrink-0" />}</div>
+                    <div className="text-xs text-muted-foreground">{p.clientName ?? "—"}</div>
+                  </div>
+                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_COLORS[p.status] ?? "bg-gray-500/20 text-gray-400"}`}>{p.status}</span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  <Badge variant="outline" className={`text-[10px] ${p.type === "Software" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}`}>{p.type}</Badge>
+                  {freelancerNames.map((name) => <Badge key={name} variant="outline" className="text-[10px] text-primary border-primary/30">{name}</Badge>)}
+                </div>
+                <div className="grid grid-cols-1 min-[480px]:grid-cols-2 gap-3 text-xs [&_span]:whitespace-nowrap">
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('projects.colDeal')}</div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{t('projects.price')}</span><span className="font-semibold"><PrivacyWrapper value={p.clientPrice} /></span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>− {t('projects.freelancersCost')}</span><PrivacyWrapper value={freelancersCost} /></div>
+                    {otherCosts > 0 && <div className="flex justify-between text-muted-foreground"><span>− {t('projects.otherCostsShort')}</span><PrivacyWrapper value={otherCosts} /></div>}
+                    <div className={`flex justify-between border-t border-border/60 pt-0.5 font-semibold ${p.netProfit < 0 ? "text-red-400" : "text-green-400"}`}><span>= {t('projects.projectNet')}</span><PrivacyWrapper value={p.netProfit} /></div>
+                  </div>
+                  <div className="space-y-0.5">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{t('projects.colSplit')}</div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{t('projects.givenToFreelancers')}</span><PrivacyWrapper value={p.toFreelancers ?? 0} /></div>
+                    {(p.freelancersOwed ?? 0) > 0 && <div className="flex justify-between text-orange-400"><span>{t('projects.stillOwedFreelancers')}</span><PrivacyWrapper value={p.freelancersOwed ?? 0} /></div>}
+                    <div className={`flex justify-between font-semibold ${(p.fratelanzaShare ?? 0) < 0 ? "text-red-400" : "text-green-400"}`}><span>{t('projects.fratelanzaShare')}</span><PrivacyWrapper value={p.fratelanzaShare ?? 0} /></div>
+                  </div>
+                </div>
+                <div className="text-xs space-y-1">
+                  <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden"><div className="h-full bg-blue-500" style={{ width: `${pctPaid}%` }} /></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{t('projects.paid')} ({pctPaid}%)</span><span className="text-blue-400 font-semibold"><PrivacyWrapper value={p.paidAmount} /></span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{t('projects.remaining')}</span><span className={p.remainingAmount > 0 ? "text-orange-400 font-semibold" : "text-muted-foreground"}><PrivacyWrapper value={p.remainingAmount} /></span></div>
+                  {p.remainingAmount > 0 && p.nextPaymentDate && (
+                    <div className={late ? "text-red-400 font-semibold" : "text-muted-foreground"}>{t('projects.nextDue')}: {p.nextPaymentDate}{late ? ` · ${t('projects.overdue')}` : ""}</div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="flex-1 border-green-500/30 text-green-500 hover:bg-green-500/10" onClick={() => openPayments(p, "client")}><DollarSign className="h-3.5 w-3.5 me-1" />{t('projects.receivePayment')}</Button>
+                  {freelancerNames.length > 0 && <Button size="sm" variant="outline" className="flex-1" onClick={() => openPayments(p, "freelancers")}><Users className="h-3.5 w-3.5 me-1" />{t('projects.payFreelancer')}</Button>}
+                  <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => openEdit(p)}><Pencil className="h-4 w-4" /></Button>
+                  <Button size="icon" variant="outline" className="h-9 w-9" onClick={() => setDeleteId(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <div className="hidden md:block rounded-lg border border-border overflow-x-auto">
           <table className="w-full text-sm min-w-[1100px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
@@ -358,6 +415,7 @@ export default function Projects() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       {/* Create / Edit Modal */}

@@ -82,7 +82,7 @@ export default function Tasks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('tasks.title')}</h1>
         <Button onClick={() => openCreate()} data-testid="button-add-task" className="bg-primary text-primary-foreground hover:bg-primary/90">
           <Plus className="h-4 w-4 me-2" /> {t('tasks.new')}

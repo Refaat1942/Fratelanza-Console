@@ -242,7 +242,7 @@ export default function Quotes() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t("quotes.title")}</h1>
         {canWrite && (
           <Button onClick={openCreate} data-testid="button-create-quote" className="bg-primary text-primary-foreground hover:bg-primary/90">

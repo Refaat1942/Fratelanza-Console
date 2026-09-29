@@ -12,6 +12,7 @@ import tasksRouter from "./tasks";
 import usersRouter from "./users";
 import reportsRouter from "./reports";
 import contractsRouter from "./contracts";
+import statementsRouter from "./statements";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(tasksRouter);
 router.use(usersRouter);
 router.use(reportsRouter);
 router.use(contractsRouter);
+router.use(statementsRouter);
 
 export default router;

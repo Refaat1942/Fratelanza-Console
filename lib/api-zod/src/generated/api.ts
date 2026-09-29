@@ -1269,6 +1269,44 @@ export const DeleteContractParams = zod.object({
 
 
 /**
+ * @summary Income statement, balance sheet, cash flow and ratios (accrual basis)
+ */
+export const GetFinanceStatementsQueryParams = zod.object({
+  "startDate": zod.coerce.string().optional(),
+  "endDate": zod.coerce.string().optional()
+})
+
+export const GetFinanceStatementsResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Record owner capital or drawings
+ */
+export const CreateEquityEntryBody = zod.object({
+  "type": zod.string().describe('capital | drawing'),
+  "amount": zod.number(),
+  "date": zod.string(),
+  "notes": zod.string().optional()
+})
+
+
+/**
+ * @summary Delete a capital / drawings entry
+ */
+export const DeleteEquityEntryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Accounting settings (equipment useful life in months)
+ */
+export const UpdateFinanceSettingsBody = zod.object({
+  "usefulLifeMonths": zod.number()
+})
+
+
+/**
  * @summary All reports for a date range (Excel export at /reports/export)
  */
 export const GetReportsQueryParams = zod.object({

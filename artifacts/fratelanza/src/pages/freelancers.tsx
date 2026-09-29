@@ -304,7 +304,7 @@ export default function Freelancers() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t('freelancers.title')}</h1>
         <div className="flex gap-2 flex-wrap">
           <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onImport} data-testid="input-import-file" />

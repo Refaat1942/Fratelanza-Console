@@ -1108,6 +1108,75 @@ paths:
         "204":
           description: Deleted
 
+  # ── Financial statements ──────────────────────────────────────────────
+  /finance/statements:
+    get:
+      operationId: getFinanceStatements
+      tags: [finance]
+      summary: Income statement, balance sheet, cash flow and ratios (accrual basis)
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+        - in: query
+          name: endDate
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Financial statements
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
+  /finance/equity:
+    post:
+      operationId: createEquityEntry
+      tags: [finance]
+      summary: Record owner capital or drawings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EquityEntryInput"
+      responses:
+        "201":
+          description: Created
+
+  /finance/equity/{id}:
+    delete:
+      operationId: deleteEquityEntry
+      tags: [finance]
+      summary: Delete a capital / drawings entry
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /finance/settings:
+    put:
+      operationId: updateFinanceSettings
+      tags: [finance]
+      summary: Accounting settings (equipment useful life in months)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinanceSettings"
+      responses:
+        "200":
+          description: Saved
+
   # ── Reports ───────────────────────────────────────────────────────────
   /reports:
     get:
@@ -2255,6 +2324,27 @@ components:
         date:
           type: string
         category:
+          type: string
+
+    FinanceSettings:
+      type: object
+      required: [usefulLifeMonths]
+      properties:
+        usefulLifeMonths:
+          type: integer
+
+    EquityEntryInput:
+      type: object
+      required: [type, amount, date]
+      properties:
+        type:
+          type: string
+          description: capital | drawing
+        amount:
+          type: number
+        date:
+          type: string
+        notes:
           type: string
 
     ContractInput:
