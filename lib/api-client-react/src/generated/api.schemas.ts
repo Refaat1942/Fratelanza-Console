@@ -602,6 +602,18 @@ export interface ExpenseInput {
   category?: string;
 }
 
+export interface FinanceSettings {
+  usefulLifeMonths: number;
+}
+
+export interface EquityEntryInput {
+  /** capital | drawing */
+  type: string;
+  amount: number;
+  date: string;
+  notes?: string;
+}
+
 export type ContractInputData = { [key: string]: unknown };
 
 export interface ContractInput {
@@ -870,6 +882,13 @@ startDate?: string;
 endDate?: string;
 category?: string;
 };
+
+export type GetFinanceStatementsParams = {
+startDate?: string;
+endDate?: string;
+};
+
+export type GetFinanceStatements200 = { [key: string]: unknown };
 
 export type GetReportsParams = {
 startDate?: string;

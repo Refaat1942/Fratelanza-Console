@@ -28,12 +28,14 @@ import type {
   Contract,
   ContractInput,
   DashboardSummary,
+  EquityEntryInput,
   Expense,
   ExpenseInput,
   ExpenseSummary,
   ExpenseUpdate,
   ExportClientsParams,
   FinanceReport,
+  FinanceSettings,
   Freelancer,
   FreelancerCvUpload,
   FreelancerEvaluation,
@@ -45,6 +47,8 @@ import type {
   GetDashboardSummaryParams,
   GetExpenseSummaryParams,
   GetFinanceReportParams,
+  GetFinanceStatements200,
+  GetFinanceStatementsParams,
   GetProfitByTypeParams,
   GetReportsParams,
   HealthStatus,
@@ -4087,6 +4091,302 @@ export const useDeleteContract = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteContractMutationOptions(options));
+    }
+
+export const getGetFinanceStatementsUrl = (params?: GetFinanceStatementsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/finance/statements?${stringifiedParams}` : `/api/finance/statements`
+}
+
+/**
+ * @summary Income statement, balance sheet, cash flow and ratios (accrual basis)
+ */
+export const getFinanceStatements = async (params?: GetFinanceStatementsParams, options?: RequestInit): Promise<GetFinanceStatements200> => {
+
+  return customFetch<GetFinanceStatements200>(getGetFinanceStatementsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFinanceStatementsQueryKey = (params?: GetFinanceStatementsParams,) => {
+    return [
+    `/api/finance/statements`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetFinanceStatementsQueryOptions = <TData = Awaited<ReturnType<typeof getFinanceStatements>>, TError = ErrorType<unknown>>(params?: GetFinanceStatementsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFinanceStatements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFinanceStatementsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFinanceStatements>>> = ({ signal }) => getFinanceStatements(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFinanceStatements>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFinanceStatementsQueryResult = NonNullable<Awaited<ReturnType<typeof getFinanceStatements>>>
+export type GetFinanceStatementsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Income statement, balance sheet, cash flow and ratios (accrual basis)
+ */
+
+export function useGetFinanceStatements<TData = Awaited<ReturnType<typeof getFinanceStatements>>, TError = ErrorType<unknown>>(
+ params?: GetFinanceStatementsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFinanceStatements>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFinanceStatementsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateEquityEntryUrl = () => {
+
+
+
+
+  return `/api/finance/equity`
+}
+
+/**
+ * @summary Record owner capital or drawings
+ */
+export const createEquityEntry = async (equityEntryInput: EquityEntryInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getCreateEquityEntryUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      equityEntryInput,)
+  }
+);}
+
+
+
+
+export const getCreateEquityEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEquityEntry>>, TError,{data: BodyType<EquityEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createEquityEntry>>, TError,{data: BodyType<EquityEntryInput>}, TContext> => {
+
+const mutationKey = ['createEquityEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createEquityEntry>>, {data: BodyType<EquityEntryInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createEquityEntry(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateEquityEntryMutationResult = NonNullable<Awaited<ReturnType<typeof createEquityEntry>>>
+    export type CreateEquityEntryMutationBody = BodyType<EquityEntryInput>
+    export type CreateEquityEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Record owner capital or drawings
+ */
+export const useCreateEquityEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createEquityEntry>>, TError,{data: BodyType<EquityEntryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createEquityEntry>>,
+        TError,
+        {data: BodyType<EquityEntryInput>},
+        TContext
+      > => {
+      return useMutation(getCreateEquityEntryMutationOptions(options));
+    }
+
+export const getDeleteEquityEntryUrl = (id: number,) => {
+
+
+
+
+  return `/api/finance/equity/${id}`
+}
+
+/**
+ * @summary Delete a capital / drawings entry
+ */
+export const deleteEquityEntry = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteEquityEntryUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteEquityEntryMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEquityEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEquityEntry>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteEquityEntry'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEquityEntry>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteEquityEntry(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteEquityEntryMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEquityEntry>>>
+
+    export type DeleteEquityEntryMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a capital / drawings entry
+ */
+export const useDeleteEquityEntry = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEquityEntry>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteEquityEntry>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteEquityEntryMutationOptions(options));
+    }
+
+export const getUpdateFinanceSettingsUrl = () => {
+
+
+
+
+  return `/api/finance/settings`
+}
+
+/**
+ * @summary Accounting settings (equipment useful life in months)
+ */
+export const updateFinanceSettings = async (financeSettings: FinanceSettings, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getUpdateFinanceSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      financeSettings,)
+  }
+);}
+
+
+
+
+export const getUpdateFinanceSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFinanceSettings>>, TError,{data: BodyType<FinanceSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFinanceSettings>>, TError,{data: BodyType<FinanceSettings>}, TContext> => {
+
+const mutationKey = ['updateFinanceSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFinanceSettings>>, {data: BodyType<FinanceSettings>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateFinanceSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFinanceSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateFinanceSettings>>>
+    export type UpdateFinanceSettingsMutationBody = BodyType<FinanceSettings>
+    export type UpdateFinanceSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Accounting settings (equipment useful life in months)
+ */
+export const useUpdateFinanceSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFinanceSettings>>, TError,{data: BodyType<FinanceSettings>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFinanceSettings>>,
+        TError,
+        {data: BodyType<FinanceSettings>},
+        TContext
+      > => {
+      return useMutation(getUpdateFinanceSettingsMutationOptions(options));
     }
 
 export const getGetReportsUrl = (params?: GetReportsParams,) => {

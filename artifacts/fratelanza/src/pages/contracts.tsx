@@ -104,7 +104,6 @@ export default function Contracts() {
       const clientContract = (contracts as Contract[]).find((c) => c.type === "client" && c.projectId === p.id);
       setFreelancer({
         projectName: p.projectName,
-        originalContractNumber: clientContract?.number ?? editing.freelancer.originalContractNumber,
         originalContractDate: String((clientContract?.data as Record<string, unknown> | undefined)?.contractDate ?? editing.freelancer.originalContractDate),
       });
     }
@@ -117,7 +116,7 @@ export default function Contracts() {
 
   const html = useMemo(() => {
     if (!editing) return "";
-    const opts = { logoDataUrl: branding.logoDataUrl, number: editing.number };
+    const opts = { logoDataUrl: branding.logoDataUrl };
     return editing.type === "client" ? buildClientContractHtml(editing.client, opts) : buildFreelancerContractHtml(editing.freelancer, opts);
   }, [editing, branding.logoDataUrl]);
 
@@ -144,7 +143,7 @@ export default function Contracts() {
       invalidate();
       const next = { ...editing, id: saved.id, number: saved.number };
       setEditing(next);
-      toast({ title: t("contracts.saved", { number: saved.number }) });
+      toast({ title: t("contracts.saved") });
       return next;
     } catch {
       toast({ title: t("common.error"), variant: "destructive" });
@@ -155,7 +154,7 @@ export default function Contracts() {
   const print = async () => {
     const saved = await save();
     if (!saved) return;
-    const opts = { logoDataUrl: branding.logoDataUrl, number: saved.number };
+    const opts = { logoDataUrl: branding.logoDataUrl };
     const out = saved.type === "client" ? buildClientContractHtml(saved.client, opts) : buildFreelancerContractHtml(saved.freelancer, opts);
     if (!printContractHtml(out)) toast({ title: t("contracts.popupBlocked"), variant: "destructive" });
   };
@@ -163,12 +162,12 @@ export default function Contracts() {
   const word = () => {
     if (!editing) return;
     const name = editing.type === "client" ? editing.client.clientName : editing.freelancer.freelancerName;
-    downloadContractWord(html, `${editing.number ?? "contract"}-${name || editing.type}`.replace(/\s+/g, "-"));
+    downloadContractWord(html, `contract-${name || editing.type}`.replace(/\s+/g, "-"));
   };
 
   const printSaved = (c: Contract) => {
     const e = fromSaved(c);
-    const opts = { logoDataUrl: branding.logoDataUrl, number: c.number };
+    const opts = { logoDataUrl: branding.logoDataUrl };
     printContractHtml(e.type === "client" ? buildClientContractHtml(e.client, opts) : buildFreelancerContractHtml(e.freelancer, opts));
   };
 
@@ -191,17 +190,16 @@ export default function Contracts() {
         <table className="w-full text-sm">
           <thead className="bg-card">
             <tr className="border-b border-border">
-              {[t("contracts.number"), t("contracts.type"), t("contracts.party"), t("contracts.project"), t("contracts.amount"), t("contracts.date"), ""].map((h, i) => (
+              {[t("contracts.type"), t("contracts.party"), t("contracts.project"), t("contracts.amount"), t("contracts.date"), ""].map((h, i) => (
                 <th key={i} className="px-4 py-3 text-start text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {(contracts as Contract[]).length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">{t("contracts.none")}</td></tr>
+              <tr><td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">{t("contracts.none")}</td></tr>
             ) : (contracts as Contract[]).map((c) => (
               <tr key={c.id} className="border-b border-border hover:bg-card/50" data-testid={`row-contract-${c.id}`}>
-                <td className="px-4 py-3 font-mono text-xs">{c.number}</td>
                 <td className="px-4 py-3"><Badge variant="outline" className={c.type === "client" ? "text-blue-400 border-blue-500/30" : "text-yellow-400 border-yellow-500/30"}>{c.type === "client" ? t("contracts.typeClient") : t("contracts.typeFreelancer")}</Badge></td>
                 <td className="px-4 py-3 font-medium">{c.partyName || "—"}</td>
                 <td className="px-4 py-3 text-muted-foreground">{projectList.find((p) => p.id === c.projectId)?.projectName ?? String((c.data as Record<string, unknown>)?.projectName ?? "—")}</td>
@@ -227,7 +225,6 @@ export default function Contracts() {
               <DialogHeader className="px-5 py-3 border-b border-border flex-row items-center justify-between space-y-0">
                 <DialogTitle>
                   {editing.type === "client" ? t("contracts.newClient") : t("contracts.newFreelancer")}
-                  {editing.number && <span className="ms-2 font-mono text-sm text-muted-foreground">{editing.number}</span>}
                 </DialogTitle>
                 <div className="flex gap-2 me-8">
                   <Button variant="outline" size="sm" onClick={save} disabled={create.isPending || update.isPending} data-testid="button-save-contract"><Save className="h-4 w-4 me-1" />{t("common.save")}</Button>

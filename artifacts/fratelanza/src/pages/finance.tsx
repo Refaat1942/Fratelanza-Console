@@ -1,4 +1,9 @@
-import { useGetFinanceReport, getGetFinanceReportQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import { useGetFinanceReport, getGetFinanceReportQueryKey, useGetFinanceStatements, getGetFinanceStatementsQueryKey } from "@workspace/api-client-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { Download } from "lucide-react";
+import { IncomeStatementView, BalanceSheetView, CashFlowView, RatiosView, CapitalAndPoliciesView, type Statements } from "@/components/financial-statements";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,6 +25,27 @@ export default function Finance() {
   const { period, setPeriod, params } = usePeriod();
   const periodLabel = usePeriodLabel(period);
   const { data: report, isLoading } = useGetFinanceReport(params, { query: { queryKey: getGetFinanceReportQueryKey(params) } });
+  const { data: statementsRaw } = useGetFinanceStatements(params, { query: { queryKey: getGetFinanceStatementsQueryKey(params) } });
+  const statements = statementsRaw as unknown as Statements | undefined;
+  const { i18n } = useTranslation();
+  const [exporting, setExporting] = useState(false);
+  const exportStatements = async () => {
+    setExporting(true);
+    try {
+      const qs = new URLSearchParams({ lang: i18n.language?.startsWith("ar") ? "ar" : "en" });
+      if (params.startDate) qs.set("startDate", params.startDate);
+      if (params.endDate) qs.set("endDate", params.endDate);
+      const res = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/finance/statements/export?${qs}`, { credentials: "include" });
+      if (!res.ok) throw new Error("export failed");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(await res.blob());
+      a.download = `fratelanza-financial-statements_${params.startDate ?? "start"}_${params.endDate ?? "today"}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   type FinanceKpi = {
     label: string;
@@ -64,9 +90,37 @@ export default function Finance() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t("finance.title")}</h1>
-        <PeriodPicker period={period} onChange={setPeriod} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <PeriodPicker period={period} onChange={setPeriod} />
+          <Button variant="outline" onClick={exportStatements} disabled={exporting} data-testid="button-export-statements">
+            <Download className="h-4 w-4 me-2" />{t("acct.exportExcel")}
+          </Button>
+        </div>
       </div>
 
+      <Tabs defaultValue="overview">
+        <TabsList className="flex flex-wrap h-auto">
+          <TabsTrigger value="overview">{t("acct.tabs.overview")}</TabsTrigger>
+          <TabsTrigger value="income" data-testid="tab-income">{t("acct.tabs.income")}</TabsTrigger>
+          <TabsTrigger value="balance" data-testid="tab-balance">{t("acct.tabs.balance")}</TabsTrigger>
+          <TabsTrigger value="cash" data-testid="tab-cash">{t("acct.tabs.cash")}</TabsTrigger>
+          <TabsTrigger value="ratios" data-testid="tab-ratios">{t("acct.tabs.ratios")}</TabsTrigger>
+          <TabsTrigger value="capital" data-testid="tab-capital">{t("acct.tabs.capital")}</TabsTrigger>
+        </TabsList>
+
+        {(["income", "balance", "cash", "ratios", "capital"] as const).map((tab) => (
+          <TabsContent key={tab} value={tab} className="pt-3">
+            {!statements ? (
+              <div className="text-center py-12 text-muted-foreground">{t("common.loading")}</div>
+            ) : tab === "income" ? <IncomeStatementView s={statements} />
+              : tab === "balance" ? <BalanceSheetView s={statements} />
+              : tab === "cash" ? <CashFlowView s={statements} />
+              : tab === "ratios" ? <RatiosView s={statements} />
+              : <CapitalAndPoliciesView s={statements} params={params} />}
+          </TabsContent>
+        ))}
+
+        <TabsContent value="overview" className="pt-3 space-y-6">
       {isLoading ? (
         <div className="text-center py-12 text-muted-foreground">Loading report...</div>
       ) : (
@@ -184,6 +238,8 @@ export default function Finance() {
           )}
         </>
       )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
