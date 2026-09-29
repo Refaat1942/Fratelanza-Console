@@ -125,6 +125,8 @@ export const ar: Translations = {
     },
   },
   contracts: {
+    viewForm: "تعبئة البيانات",
+    viewPreview: "معاينة",
     title: "العقود",
     newClient: "عقد عميل جديد",
     newFreelancer: "عقد فريلانسر جديد",

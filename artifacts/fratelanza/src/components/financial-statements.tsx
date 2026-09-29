@@ -69,15 +69,15 @@ function StatementTable({ rows, revenue, showPrev, title, subtitle }: { rows: Ro
         <CardTitle className="text-base">{title}</CardTitle>
         <div className="text-xs text-muted-foreground">{subtitle} · {t("acct.egp")}</div>
       </CardHeader>
-      <CardContent className="overflow-x-auto">
-        <table className="w-full text-sm min-w-[520px]">
+      <CardContent className="overflow-x-auto px-3 sm:px-6">
+        <table className="w-full text-sm sm:min-w-[520px]">
           <thead>
             <tr className="border-b border-border text-xs text-muted-foreground">
               <th className="py-2 text-start font-medium" />
-              <th className="py-2 text-end font-medium w-36">{t("acct.current")}</th>
-              {revenue !== undefined && <th className="py-2 text-end font-medium w-24">{t("acct.pctRevenue")}</th>}
-              {showPrev && <th className="py-2 text-end font-medium w-36">{t("acct.previous")}</th>}
-              {showPrev && <th className="py-2 text-end font-medium w-24">{t("acct.change")}</th>}
+              <th className="py-2 text-end font-medium w-28 sm:w-36">{t("acct.current")}</th>
+              {revenue !== undefined && <th className="hidden sm:table-cell py-2 text-end font-medium w-24">{t("acct.pctRevenue")}</th>}
+              {showPrev && <th className="hidden md:table-cell py-2 text-end font-medium w-36">{t("acct.previous")}</th>}
+              {showPrev && <th className="hidden md:table-cell py-2 text-end font-medium w-24">{t("acct.change")}</th>}
             </tr>
           </thead>
           <tbody>
@@ -90,11 +90,11 @@ function StatementTable({ rows, revenue, showPrev, title, subtitle }: { rows: Ro
               const color = bold && (r.value ?? 0) < 0 ? "text-red-400" : bold && r.kind !== "sub" ? "text-green-400" : "";
               return (
                 <tr key={i} className={`${border} ${r.kind === "grand" ? "bg-card" : ""}`} title={r.hint}>
-                  <td className={`py-1.5 ${r.indent ? "ps-5 text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}>{r.label}</td>
-                  <td className={`py-1.5 text-end tabular-nums ${bold ? "font-bold" : ""} ${color}`}>{r.value === undefined ? "" : money(r.value)}</td>
-                  {revenue !== undefined && <td className="py-1.5 text-end tabular-nums text-xs text-muted-foreground">{r.value !== undefined && revenue ? `${Math.round((r.value / revenue) * 1000) / 10}%` : ""}</td>}
-                  {showPrev && <td className="py-1.5 text-end tabular-nums text-muted-foreground">{r.prev === undefined || r.prev === null ? "" : money(r.prev)}</td>}
-                  {showPrev && <td className="py-1.5 text-end tabular-nums text-xs text-muted-foreground">{r.value !== undefined && r.prev !== undefined && r.prev !== null ? change(r.value, r.prev) : ""}</td>}
+                  <td className={`py-1.5 ${r.indent ? "ps-3 sm:ps-5 text-muted-foreground" : ""} ${bold ? "font-semibold" : ""}`}>{r.label}</td>
+                  <td className={`py-1.5 ps-2 text-end tabular-nums whitespace-nowrap ${bold ? "font-bold" : ""} ${color}`}>{r.value === undefined ? "" : money(r.value)}</td>
+                  {revenue !== undefined && <td className="hidden sm:table-cell py-1.5 text-end tabular-nums text-xs text-muted-foreground">{r.value !== undefined && revenue ? `${Math.round((r.value / revenue) * 1000) / 10}%` : ""}</td>}
+                  {showPrev && <td className="hidden md:table-cell py-1.5 text-end tabular-nums text-muted-foreground">{r.prev === undefined || r.prev === null ? "" : money(r.prev)}</td>}
+                  {showPrev && <td className="hidden md:table-cell py-1.5 text-end tabular-nums text-xs text-muted-foreground">{r.value !== undefined && r.prev !== undefined && r.prev !== null ? change(r.value, r.prev) : ""}</td>}
                 </tr>
               );
             })}

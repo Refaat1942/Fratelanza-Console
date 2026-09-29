@@ -122,6 +122,8 @@ export const en = {
     },
   },
   contracts: {
+    viewForm: "Fill in",
+    viewPreview: "Preview",
     title: "Contracts",
     newClient: "New client contract",
     newFreelancer: "New freelancer contract",

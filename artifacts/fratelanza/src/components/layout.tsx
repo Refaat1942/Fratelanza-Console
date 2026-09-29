@@ -247,7 +247,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
     : 'dashboard';
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-foreground" dir={isRtl ? 'rtl' : 'ltr'}>
+    <div className="flex h-screen h-[100dvh] overflow-hidden bg-background text-foreground [padding-top:env(safe-area-inset-top)] [padding-bottom:env(safe-area-inset-bottom)] [padding-left:env(safe-area-inset-left)] [padding-right:env(safe-area-inset-right)]" dir={isRtl ? 'rtl' : 'ltr'}>
       <aside className={`hidden md:flex w-64 ${isRtl ? 'border-l' : 'border-r'} border-border bg-card flex-col`}>
         <SidebarContent />
       </aside>

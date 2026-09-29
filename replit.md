@@ -36,6 +36,8 @@ A full-stack web ERP system for managing software & training projects, freelance
 
 ## Architecture decisions
 
+- **Mobile-friendly**: responsive viewport (pinch-zoom allowed, safe-area aware, `100dvh`), Add-to-Home-Screen manifest + icons, slide-out menu on phones, Projects shows one card per project below `md`, statements hide comparison columns on small screens, contract editor switches between Fill in / Preview on phones.
+
 - **Contract-first**: OpenAPI spec → Orval codegen → typed React Query hooks + Zod schemas. Never hand-write API client code.
 - **Privacy mode**: All financial values wrapped in `<PrivacyWrapper>` — toggled via sidebar button, stored in React context. Masks values as `***`.
 - **Username+password auth**: Users stored in `users` table with bcrypt password hash. `/api/auth/login` sets a session cookie (`fratelanza.sid`) backed by Postgres (`session` table via `connect-pg-simple`). All `/api/*` routes require auth except `/api/healthz`, `/api/auth/login`, `/api/auth/me`, `/api/auth/logout`. Initial admin user auto-seeded from `ADMIN_USERNAME`/`ADMIN_PASSWORD` env on first start.

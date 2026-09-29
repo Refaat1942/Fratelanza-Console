@@ -64,6 +64,7 @@ export default function Contracts() {
   const [editing, setEditing] = useState<Editing | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
+  const [mobileView, setMobileView] = useState<"form" | "preview">("form");
 
   const invalidate = () => qc.invalidateQueries({ queryKey: getListContractsQueryKey() });
   const projectList = projects as unknown as ProjectLite[];
@@ -180,7 +181,7 @@ export default function Contracts() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><FileSignature className="h-6 w-6 text-primary" />{t("contracts.title")}</h1>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button onClick={() => startNew("client")} data-testid="button-new-client-contract"><Plus className="h-4 w-4 me-1" />{t("contracts.newClient")}</Button>
           <Button variant="outline" onClick={() => startNew("freelancer")} data-testid="button-new-freelancer-contract"><Plus className="h-4 w-4 me-1" />{t("contracts.newFreelancer")}</Button>
         </div>
@@ -219,21 +220,28 @@ export default function Contracts() {
       </div>
 
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-[96vw] w-[96vw] h-[94vh] p-0 flex flex-col gap-0">
+        <DialogContent className="max-w-none w-screen h-[100dvh] rounded-none sm:rounded-lg sm:max-w-[96vw] sm:w-[96vw] sm:h-[94vh] p-0 flex flex-col gap-0">
           {editing && (
             <>
-              <DialogHeader className="px-5 py-3 border-b border-border flex-row items-center justify-between space-y-0">
+              <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12">
                 <DialogTitle>
                   {editing.type === "client" ? t("contracts.newClient") : t("contracts.newFreelancer")}
                 </DialogTitle>
-                <div className="flex gap-2 me-8">
+                <div className="flex gap-2 flex-wrap">
                   <Button variant="outline" size="sm" onClick={save} disabled={create.isPending || update.isPending} data-testid="button-save-contract"><Save className="h-4 w-4 me-1" />{t("common.save")}</Button>
                   <Button variant="outline" size="sm" onClick={word}><FileDown className="h-4 w-4 me-1" />Word</Button>
                   <Button size="sm" onClick={print} disabled={!calc?.valid} data-testid="button-print-contract" className="bg-green-600 hover:bg-green-700 text-white"><Printer className="h-4 w-4 me-1" />{t("contracts.printPdf")}</Button>
                 </div>
               </DialogHeader>
+              <div className="lg:hidden grid grid-cols-2 gap-1 p-2 border-b border-border bg-card/60">
+                {(["form", "preview"] as const).map((v) => (
+                  <Button key={v} size="sm" variant={mobileView === v ? "default" : "ghost"} onClick={() => setMobileView(v)} data-testid={`toggle-${v}`}>
+                    {v === "form" ? t("contracts.viewForm") : t("contracts.viewPreview")}
+                  </Button>
+                ))}
+              </div>
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(380px,460px)_1fr] min-h-0">
-                <div className="overflow-y-auto p-5 space-y-4 border-e border-border">
+                <div className={`overflow-y-auto p-3 sm:p-5 space-y-4 lg:border-e border-border ${mobileView === "preview" ? "hidden lg:block" : ""}`}>
                   <Field label={t("contracts.linkProject")}>
                     <Select value={editing.projectId ? String(editing.projectId) : "none"} onValueChange={pickProject}>
                       <SelectTrigger data-testid="select-contract-project"><SelectValue /></SelectTrigger>
@@ -248,7 +256,7 @@ export default function Contracts() {
                     : <FreelancerForm d={editing.freelancer} set={setFreelancer} members={members} pickFreelancer={pickFreelancer} />}
                   {calc && <MoneySummary calc={calc} paidLabel={editing.type === "client" ? t("contracts.paidByClient") : t("contracts.paidToFreelancer")} />}
                 </div>
-                <div className="bg-muted/40 min-h-0">
+                <div className={`bg-muted/40 min-h-0 ${mobileView === "form" ? "hidden lg:block" : ""}`}>
                   <LivePreview html={html} />
                 </div>
               </div>
