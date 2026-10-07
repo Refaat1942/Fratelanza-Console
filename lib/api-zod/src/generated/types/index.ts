@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './acquisitionMetrics';
 export * from './authResult';
 export * from './client';
 export * from './clientInput';

@@ -5,6 +5,7 @@
  * Fratelanza Management Console API
  * OpenAPI spec version: 0.1.0
  */
+import type { AcquisitionMetrics } from './acquisitionMetrics';
 import type { RemainingItem } from './remainingItem';
 
 export interface DashboardSummary {
@@ -36,4 +37,5 @@ export interface DashboardSummary {
   totalClients: number;
   totalFreelancers: number;
   remainingBreakdown: RemainingItem[];
+  acquisition?: AcquisitionMetrics;
 }
