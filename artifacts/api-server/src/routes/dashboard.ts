@@ -13,7 +13,7 @@ function periodParams(req: { query: unknown }) {
 
 router.get("/dashboard/summary", async (req, res): Promise<void> => {
   const { startDate, endDate } = periodParams(req);
-  const { projects, totals, remainingBreakdown } = await periodFinancials(startDate, endDate);
+  const { projects, totals, remainingBreakdown, acquisition } = await periodFinancials(startDate, endDate);
 
   const [clientCount] = await db
     .select({ count: sql<number>`count(*)` })
@@ -42,6 +42,7 @@ router.get("/dashboard/summary", async (req, res): Promise<void> => {
     totalClients: Number(clientCount?.count ?? 0),
     totalFreelancers: Number(freelancerCount?.count ?? 0),
     remainingBreakdown,
+    acquisition,
   });
 });
 

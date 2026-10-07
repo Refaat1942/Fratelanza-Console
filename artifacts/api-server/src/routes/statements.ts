@@ -61,7 +61,7 @@ const L: Record<string, [string, string]> = {
   revenue: ["Revenue", "الإيرادات"], Software: ["Software projects", "مشاريع البرمجيات"], Training: ["Training", "التدريب"],
   costOfRevenue: ["Cost of revenue", "تكلفة الإيرادات"], freelancers: ["Freelancer commissions", "عمولات الفريلانسرز"], other: ["Other project costs", "تكاليف أخرى للمشاريع"],
   grossProfit: ["Gross profit", "مجمل الربح"], operatingExpenses: ["Operating expenses", "المصروفات التشغيلية"],
-  rent: ["Rent", "إيجار"], salaries: ["Salaries", "رواتب"], marketing: ["Marketing & ads", "تسويق وإعلانات"], software: ["Software & subscriptions", "برمجيات واشتراكات"],
+  rent: ["Rent", "إيجار"], salaries: ["Salaries", "رواتب"], marketing: ["Marketing & ads", "تسويق وإعلانات"], sales: ["Sales & client acquisition", "مبيعات واكتساب عملاء"], software: ["Software & subscriptions", "برمجيات واشتراكات"],
   utilities: ["Utilities & internet", "مرافق وإنترنت"], transport: ["Transport", "مواصلات"], office: ["Office supplies", "مستلزمات مكتبية"], other_expense: ["Other", "أخرى"],
   unlinked_freelancer_payments: ["Freelancer payments not linked to a project", "مدفوعات فريلانسرز غير مرتبطة بمشروع"],
   ebitda: ["EBITDA", "الأرباح قبل الفوائد والضرائب والإهلاك (EBITDA)"], depreciation: ["Depreciation", "الإهلاك"], ebit: ["Operating profit (EBIT)", "الربح التشغيلي (EBIT)"],
@@ -78,6 +78,12 @@ const L: Record<string, [string, string]> = {
 };
 
 const RATIO_NAMES: Record<string, [[string, string], [string, string]]> = {
+  acquisitionSpend: [["Client acquisition spend", "marketing & ads + sales expenses"], ["تكلفة اكتساب العملاء الإجمالية", "مصروفات التسويق والإعلانات + المبيعات"]],
+  newClients: [["New clients", "clients whose first project starts in the period"], ["العملاء الجدد", "عملاء بدأ أول مشروع لهم في الفترة"]],
+  cac: [["Customer acquisition cost (CAC)", "acquisition spend ÷ new clients"], ["تكلفة اكتساب العميل (CAC)", "تكلفة الاكتساب ÷ العملاء الجدد"]],
+  avgDealPerNewClient: [["Average deal per new client", "new clients' deals ÷ new clients"], ["متوسط تعاقد العميل الجديد", "تعاقدات العملاء الجدد ÷ عددهم"]],
+  profitToCac: [["Profit to CAC", "gross profit per new client ÷ CAC"], ["الربح إلى CAC", "مجمل ربح العميل الجديد ÷ CAC"]],
+  cacPctOfDeal: [["CAC % of deal", "CAC ÷ average deal per new client"], ["CAC كنسبة من التعاقد", "CAC ÷ متوسط تعاقد العميل الجديد"]],
   grossMargin: [["Gross margin", "gross profit ÷ revenue"], ["هامش مجمل الربح", "مجمل الربح ÷ الإيرادات"]],
   ebitdaMargin: [["EBITDA margin", "EBITDA ÷ revenue"], ["هامش EBITDA", "EBITDA ÷ الإيرادات"]],
   ebitMargin: [["Operating (EBIT) margin", "EBIT ÷ revenue"], ["هامش الربح التشغيلي", "EBIT ÷ الإيرادات"]],
@@ -142,7 +148,7 @@ router.get("/finance/statements/export", async (req, res): Promise<void> => {
   ];
   const ratioRows = s.ratios.map((r) => {
     const [name, formula] = RATIO_NAMES[r.key]?.[ar ? 1 : 0] ?? [r.key, ""];
-    const unit = ar ? { pct: "%", x: "مرة", days: "يوم", months: "شهر", egp: "ج.م" }[r.unit] : { pct: "%", x: "×", days: "days", months: "months", egp: "EGP" }[r.unit];
+    const unit = ar ? { pct: "%", x: "مرة", days: "يوم", months: "شهر", egp: "ج.م", n: "عميل" }[r.unit] : { pct: "%", x: "×", days: "days", months: "months", egp: "EGP", n: "clients" }[r.unit];
     return { [H.item]: name, [ar ? "القيمة" : "Value"]: r.value, [ar ? "الوحدة" : "Unit"]: unit, [ar ? "طريقة الحساب" : "Formula"]: formula };
   });
 

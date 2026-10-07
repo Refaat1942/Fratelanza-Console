@@ -123,6 +123,70 @@ export function projectFigures(p: Pick<ProjectRow, "clientPrice" | "totalCost" |
   };
 }
 
+/** Expense categories that count as the cost of winning clients. */
+export const ACQUISITION_CATEGORIES = ["marketing", "sales"] as const;
+
+/**
+ * Customer acquisition cost (CAC) for a period.
+ * - Acquisition spend: company expenses in Marketing & ads or Sales, dated in the period.
+ * - New clients: clients whose first ever (non-cancelled) project starts in the period.
+ * - CAC = acquisition spend ÷ new clients.
+ */
+export function acquisitionMetrics(
+  allProjects: ProjectRow[],
+  expenses: { category: string; amount: number; date: string }[],
+  startDate?: string,
+  endDate?: string,
+) {
+  const firstDeal = new Map<string, string>();
+  for (const p of allProjects) {
+    const key = nameKey(p.clientName);
+    if (!key || p.status === "Cancelled") continue;
+    const date = projectDate(p);
+    const cur = firstDeal.get(key);
+    if (!cur || date < cur) firstDeal.set(key, date);
+  }
+  const newClientKeys = new Set([...firstDeal].filter(([, date]) => inRange(date, startDate, endDate)).map(([key]) => key));
+
+  let marketingSpend = 0;
+  let salesSpend = 0;
+  for (const e of expenses) {
+    if (!inRange(e.date, startDate, endDate)) continue;
+    if (e.category === "marketing") marketingSpend += e.amount;
+    else if (e.category === "sales") salesSpend += e.amount;
+  }
+
+  let newClientDeals = 0;
+  let newClientGrossProfit = 0;
+  for (const p of allProjects) {
+    if (p.status === "Cancelled" || !newClientKeys.has(nameKey(p.clientName)) || !inRange(projectDate(p), startDate, endDate)) continue;
+    const f = projectFigures(p);
+    newClientDeals += f.contractValue;
+    newClientGrossProfit += f.expectedProfit;
+  }
+
+  const newClients = newClientKeys.size;
+  const acquisitionSpend = marketingSpend + salesSpend;
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const cac = newClients ? acquisitionSpend / newClients : 0;
+  const avgDealPerNewClient = newClients ? newClientDeals / newClients : 0;
+  const avgProfitPerNewClient = newClients ? newClientGrossProfit / newClients : 0;
+  return {
+    marketingSpend: r2(marketingSpend),
+    salesSpend: r2(salesSpend),
+    acquisitionSpend: r2(acquisitionSpend),
+    newClients,
+    cac: r2(cac),
+    newClientDeals: r2(newClientDeals),
+    avgDealPerNewClient: r2(avgDealPerNewClient),
+    avgProfitPerNewClient: r2(avgProfitPerNewClient),
+    /** Gross profit a new client brings for every pound spent winning them (0 when nothing was spent). */
+    profitToCac: cac > 0 ? r2(avgProfitPerNewClient / cac) : 0,
+    /** CAC as a share of the average first-period deal value. */
+    cacPctOfDeal: pct(cac, avgDealPerNewClient),
+  };
+}
+
 export function isReceivable(p: Pick<ProjectRow, "clientPrice" | "totalCost" | "paidAmount" | "status">) {
   return projectFigures(p).receivable > 0;
 }
@@ -227,6 +291,12 @@ export async function periodFinancials(startDate?: string, endDate?: string) {
   // Money given to freelancers counts on the day it was paid (any project)
   totalCostPaid += freelancerPaymentsInPeriod.reduce((s, f) => s + f.amount, 0);
   const totalExpenses = expenses.reduce((s, e) => s + Number(e.amount), 0);
+  const acquisition = acquisitionMetrics(
+    allProjects,
+    expenses.map((e) => ({ category: e.category, amount: Number(e.amount), date: (e.date || e.createdAt.toISOString()).slice(0, 10) })),
+    startDate,
+    endDate,
+  );
   // Fratelanza estimated profit (until collection) = deals - project costs - expenses
   const expectedNetProfit = grossMargin - totalExpenses;
   // Cash result = cash received - project costs actually paid out - expenses
@@ -279,5 +349,6 @@ export async function periodFinancials(startDate?: string, endDate?: string) {
     },
     monthly,
     remainingBreakdown,
+    acquisition,
   };
 }

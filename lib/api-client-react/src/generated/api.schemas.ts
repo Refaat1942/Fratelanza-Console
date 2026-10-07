@@ -52,6 +52,31 @@ export interface RemainingItem {
   remaining: number;
 }
 
+/**
+ * Customer acquisition cost (CAC) for the period
+ */
+export interface AcquisitionMetrics {
+  /** Company expenses in "Marketing & ads" dated in the period */
+  marketingSpend: number;
+  /** Company expenses in "Sales & client acquisition" dated in the period */
+  salesSpend: number;
+  /** marketingSpend + salesSpend */
+  acquisitionSpend: number;
+  /** Clients whose first (non-cancelled) project starts in the period */
+  newClients: number;
+  /** acquisitionSpend / newClients (0 when there are no new clients) */
+  cac: number;
+  /** Contract value of new clients' projects in the period */
+  newClientDeals: number;
+  avgDealPerNewClient: number;
+  /** Gross profit (deal - project costs) per new client */
+  avgProfitPerNewClient: number;
+  /** avgProfitPerNewClient / cac (0 when nothing was spent) */
+  profitToCac: number;
+  /** cac / avgDealPerNewClient, in percent */
+  cacPctOfDeal: number;
+}
+
 export interface DashboardSummary {
   /** Gross revenue = total paid amounts only */
   totalRevenue: number;
@@ -81,6 +106,7 @@ export interface DashboardSummary {
   totalClients: number;
   totalFreelancers: number;
   remainingBreakdown: RemainingItem[];
+  acquisition?: AcquisitionMetrics;
 }
 
 export type FreelancerHistoryTotals = {
@@ -591,7 +617,7 @@ export interface Expense {
   description: string;
   amount: number;
   date: string;
-  /** rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other */
+  /** rent | salaries | marketing | sales | software | utilities | transport | office | equipment | taxes | bank_fees | other */
   category?: string;
 }
 

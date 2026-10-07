@@ -2,7 +2,7 @@ import {
   db, projectsTable, projectPaymentsTable, projectTeamTable, freelancerPaymentsTable,
   expensesTable, equityEntriesTable, appSettingsTable,
 } from "@workspace/db";
-import { cashReceipts, freelancerPayables, nameKey, projectCommitments, projectDate } from "./financials.js";
+import { acquisitionMetrics, cashReceipts, freelancerPayables, nameKey, projectCommitments, projectDate } from "./financials.js";
 
 /**
  * Financial statements on the accrual basis.
@@ -272,7 +272,14 @@ function ratios(d: Data, is: IncomeStatement, bs: ReturnType<typeof balanceSheet
   const lifetimeValue = d.projects.filter((p) => upTo(projectDate(p), end)).reduce((s, p) => s + contractValue(d, p, end), 0);
   const lifetimeReceived = d.receipts.filter((r) => upTo(r.date, end)).reduce((s, r) => s + r.amount, 0);
   const x = (v: number) => Math.round(v * 100) / 100;
+  const acq = acquisitionMetrics(d.projects, d.exps, start, end);
   return [
+    { key: "acquisitionSpend", value: acq.acquisitionSpend, unit: "egp", group: "acquisition" },
+    { key: "newClients", value: acq.newClients, unit: "n", group: "acquisition" },
+    { key: "cac", value: acq.cac, unit: "egp", group: "acquisition" },
+    { key: "avgDealPerNewClient", value: acq.avgDealPerNewClient, unit: "egp", group: "acquisition" },
+    { key: "profitToCac", value: acq.profitToCac, unit: "x", group: "acquisition" },
+    { key: "cacPctOfDeal", value: acq.cacPctOfDeal, unit: "pct", group: "acquisition" },
     { key: "grossMargin", value: is.margins.gross, unit: "pct", group: "profitability" },
     { key: "ebitdaMargin", value: is.margins.ebitda, unit: "pct", group: "profitability" },
     { key: "ebitMargin", value: is.margins.ebit, unit: "pct", group: "profitability" },

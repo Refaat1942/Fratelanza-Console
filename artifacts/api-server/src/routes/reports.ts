@@ -10,6 +10,7 @@ const CATEGORY_LABELS: Record<string, { en: string; ar: string }> = {
   rent: { en: "Rent", ar: "إيجار" },
   salaries: { en: "Salaries", ar: "رواتب" },
   marketing: { en: "Marketing & ads", ar: "تسويق وإعلانات" },
+  sales: { en: "Sales & client acquisition", ar: "مبيعات واكتساب عملاء" },
   software: { en: "Software & subscriptions", ar: "برمجيات واشتراكات" },
   utilities: { en: "Utilities & internet", ar: "مرافق وإنترنت" },
   transport: { en: "Transport", ar: "مواصلات" },
