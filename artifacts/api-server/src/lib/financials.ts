@@ -1,5 +1,5 @@
 import { db, projectsTable, projectPaymentsTable, expensesTable, projectTeamTable, freelancerPaymentsTable } from "@workspace/db";
-import { and, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 type ProjectRow = typeof projectsTable.$inferSelect;
 type PaymentRow = typeof projectPaymentsTable.$inferSelect;
@@ -133,6 +133,34 @@ export function derivedProjectColumns(price: number, cost: number, paid: number)
     netProfit: String(price - cost),
     remainingAmount: String(Math.max(0, price - paid)),
   };
+}
+
+/** Sum of the client payments recorded for a project. */
+export async function recordedPaid(projectId: number): Promise<number> {
+  const [row] = await db
+    .select({ total: sql<string>`coalesce(sum(${projectPaymentsTable.amount}), 0)` })
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, projectId));
+  return Number(row?.total ?? 0);
+}
+
+/**
+ * Received / remaining always equal the payment history, so the project row,
+ * the payments dialog, clients, dashboard and reports can never disagree.
+ */
+export async function syncPaidFromHistory(projectId: number): Promise<ProjectRow | undefined> {
+  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
+  if (!project) return undefined;
+  const paid = await recordedPaid(projectId);
+  const [updated] = await db
+    .update(projectsTable)
+    .set({
+      paidAmount: String(paid),
+      ...derivedProjectColumns(Number(project.clientPrice), Number(project.totalCost), paid),
+    })
+    .where(eq(projectsTable.id, projectId))
+    .returning();
+  return updated;
 }
 
 export function pct(part: number, whole: number) {

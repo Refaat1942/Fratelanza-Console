@@ -22,7 +22,10 @@ export type ProjectPaymentRow = {
 
 type FreelancerPaymentRow = ProjectPaymentRow & { freelancerName: string };
 type Member = { freelancerName: string; commission: number; paid: number; owed: number };
-type FreelancerSummary = { members: Member[]; totalPaid: number; totalOwed: number; payments: FreelancerPaymentRow[] };
+type FreelancerSummary = {
+  members: Member[]; totalPaid: number; totalOwed: number; payments: FreelancerPaymentRow[];
+  otherCosts?: number; costPaid?: number;
+};
 
 type ProjectSummary = {
   id: number;
@@ -175,7 +178,8 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
   };
 
   const selectedMember = fr?.members.find((m) => m.freelancerName === frName);
-  const toFreelancers = fr?.totalPaid ?? 0;
+  const otherCosts = fr?.otherCosts ?? 0;
+  const toFreelancers = fr?.costPaid ?? (fr?.totalPaid ?? 0) + otherCosts;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -196,6 +200,9 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
           <div className="rounded border border-border p-2">
             <div className="text-muted-foreground text-xs">{t("payments.givenToFreelancers")}</div>
             <div className="font-semibold"><PrivacyWrapper value={toFreelancers} /></div>
+            {otherCosts > 0 && (
+              <div className="text-[11px] text-muted-foreground">{t("payments.inclOtherCosts")}: <PrivacyWrapper value={otherCosts} /></div>
+            )}
           </div>
           <div className="rounded border border-green-500/30 bg-green-500/5 p-2">
             <div className="text-muted-foreground text-xs">{t("payments.fratelanzaShare")}</div>
