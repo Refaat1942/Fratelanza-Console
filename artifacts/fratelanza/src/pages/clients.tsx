@@ -53,9 +53,9 @@ function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
                 { label: t("clients.totalPaid"), value: profile.totalPaid ?? 0, format: "currency" as const },
                 { label: t("clients.totalRemaining"), value: profile.totalRemaining ?? 0, format: "currency" as const },
               ].map((kpi) => (
-                <div key={kpi.label} className="rounded-lg bg-card p-4 border border-border text-center">
+                <div key={kpi.label} className="@container rounded-lg bg-card p-4 border border-border text-center min-w-0">
                   <div className="text-xs text-muted-foreground mb-1">{kpi.label}</div>
-                  <div className="text-xl font-bold text-foreground"><PrivacyWrapper value={kpi.value} format={kpi.format} /></div>
+                  <div className="text-[clamp(0.85rem,11cqi,1.25rem)] leading-tight font-bold tabular-nums whitespace-nowrap text-foreground"><PrivacyWrapper value={kpi.value} format={kpi.format} /></div>
                 </div>
               ))}
             </div>

@@ -35,7 +35,7 @@ export function FinancialHealth({ contractValue, collected, projectCosts, projec
   }[state];
 
   const money = (v: number, sign = false) => (
-    <span className={sign ? (v < 0 ? "text-red-500" : "text-green-500") : ""}>
+    <span className={`whitespace-nowrap shrink-0 tabular-nums ${sign ? (v < 0 ? "text-red-500" : "text-green-500") : ""}`}>
       {v < 0 ? "- " : ""}<PrivacyWrapper value={Math.abs(v)} />
     </span>
   );
