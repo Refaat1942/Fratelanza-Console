@@ -23,10 +23,10 @@ function Kpi({ label, value, icon: Icon, color, delay, negative, valueColor, not
             <Icon className="h-4 w-4" />
           </div>
         </CardHeader>
-        <CardContent>
-          <div className={`text-xl 2xl:text-2xl font-bold whitespace-nowrap ${valueColor ?? "text-foreground"}`}>
+        <CardContent className="@container">
+          <div className={`text-[clamp(0.9rem,12cqi,1.5rem)] leading-tight font-bold tabular-nums whitespace-nowrap ${valueColor ?? "text-foreground"}`}>
             {isPrivate ? <span>***</span> : (
-              <span>{displayValue < 0 ? "- " : ""}EGP <AnimatedNumber value={Math.abs(displayValue)} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 })} /></span>
+              <span>{displayValue < 0 ? "- " : ""}<span className="text-[0.65em] font-semibold">EGP</span> <AnimatedNumber value={Math.abs(displayValue)} format={(n) => n.toLocaleString(undefined, { maximumFractionDigits: 0 })} /></span>
             )}
           </div>
           {note && <p className="text-xs text-muted-foreground mt-1">{note}</p>}

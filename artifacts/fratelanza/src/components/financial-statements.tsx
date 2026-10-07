@@ -159,9 +159,9 @@ function MetricCard({ label, value, sub }: { label: string; value: string; sub?:
   const { isPrivate } = usePrivacy();
   return (
     <Card className="bg-card/50">
-      <CardContent className="p-3">
+      <CardContent className="@container p-3">
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-xl font-bold">{isPrivate ? "***" : value}</div>
+        <div className="text-[clamp(0.85rem,11cqi,1.25rem)] leading-tight font-bold tabular-nums whitespace-nowrap">{isPrivate ? "***" : value}</div>
         {sub !== undefined && <div className={`text-xs ${sub < 0 ? "text-red-400" : "text-muted-foreground"}`}>EGP {money(sub)}</div>}
       </CardContent>
     </Card>
