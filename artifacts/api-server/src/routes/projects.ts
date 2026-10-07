@@ -25,6 +25,9 @@ function toPaymentShape(r: typeof projectPaymentsTable.$inferSelect) {
 
 type Payables = Awaited<ReturnType<typeof loadFreelancerPayables>>;
 
+// Newest payment date first; rows without a date fall back to the day they were entered.
+const newestPaymentFirst = sql`coalesce(nullif(paid_at, ''), to_char(created_at, 'YYYY-MM-DD')) desc, created_at desc, id desc`;
+
 /**
  * Project money at a glance: price − freelancers − other costs = project net,
  * and how the money received so far splits between freelancers and Fratelanza.
@@ -213,7 +216,7 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
     .select()
     .from(projectPaymentsTable)
     .where(eq(projectPaymentsTable.projectId, id))
-    .orderBy(sql`created_at desc`);
+    .orderBy(newestPaymentFirst);
   const teamMap = await teamMapForProjects([id]);
   const linkedQuotes = await quotesForClient(project.clientName);
   let linkedQuote = null;
@@ -315,7 +318,7 @@ router.get("/projects/:id/payments", async (req, res): Promise<void> => {
     .select()
     .from(projectPaymentsTable)
     .where(eq(projectPaymentsTable.projectId, id))
-    .orderBy(sql`created_at desc`);
+    .orderBy(newestPaymentFirst);
   res.json(payments.map(toPaymentShape));
 });
 
@@ -352,7 +355,7 @@ router.post("/projects/:id/payment", async (req, res): Promise<void> => {
     .select()
     .from(projectPaymentsTable)
     .where(eq(projectPaymentsTable.projectId, id))
-    .orderBy(sql`created_at desc`);
+    .orderBy(newestPaymentFirst);
   const teamMap = await teamMapForProjects([id]);
   res.json({
     project: toProjectShape(updated, teamMap.get(id) ?? []),
@@ -507,7 +510,7 @@ async function freelancerPaymentsSummary(id: number) {
     .select()
     .from(freelancerPaymentsTable)
     .where(eq(freelancerPaymentsTable.projectId, id))
-    .orderBy(desc(freelancerPaymentsTable.createdAt));
+    .orderBy(newestPaymentFirst);
   return {
     members: payables.members(project),
     totalPaid: payables.freelancerPaid(project),
@@ -594,7 +597,7 @@ router.delete("/projects/:id/payments/:paymentId", async (req, res): Promise<voi
     .select()
     .from(projectPaymentsTable)
     .where(eq(projectPaymentsTable.projectId, id))
-    .orderBy(sql`created_at desc`);
+    .orderBy(newestPaymentFirst);
   const teamMap = await teamMapForProjects([id]);
   res.json({
     project: toProjectShape(updated!, teamMap.get(id) ?? []),
