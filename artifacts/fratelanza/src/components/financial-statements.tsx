@@ -40,7 +40,7 @@ export type Statements = {
     financing: { capital: number; drawings: number; net: number };
     netChange: number; openingCash: number; closingCash: number;
   };
-  ratios: { key: string; value: number; unit: "pct" | "x" | "days" | "months" | "egp"; group: string }[];
+  ratios: { key: string; value: number; unit: "pct" | "x" | "days" | "months" | "egp" | "n"; group: string }[];
   settings: { usefulLifeMonths: number };
   equityEntries: { id: number; type: string; amount: number; date: string; notes: string }[];
 };
@@ -257,9 +257,10 @@ export function RatiosView({ s }: { s: Statements }) {
     if (unit === "x") return `${v}×`;
     if (unit === "days") return t("acct.days", { n: v });
     if (unit === "months") return t("acct.months", { n: v });
+    if (unit === "n") return v.toLocaleString();
     return `EGP ${money(v)}`;
   };
-  const groups = ["profitability", "efficiency", "liquidity", "solvency"];
+  const groups = ["profitability", "efficiency", "acquisition", "liquidity", "solvency"];
   return (
     <div className="space-y-4">
       {groups.map((g) => (
