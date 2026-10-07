@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable, freelancerPaymentsTable } from "@workspace/db";
 import { eq, sql, and, ilike, inArray, desc, ne } from "drizzle-orm";
 import { extractTextFromUpload } from "../lib/document-parser.js";
-import { derivedProjectColumns, loadFreelancerPayables } from "../lib/financials.js";
+import { derivedProjectColumns, loadFreelancerPayables, recordedPaid, syncPaidFromHistory } from "../lib/financials.js";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -240,11 +240,12 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Money fields: take what was sent, fall back to stored values, then always
-  // re-derive net profit and remaining so they can never drift out of sync.
+  // Price / cost come from the form; paid always comes from the payment history
+  // (add or delete payments in the Payments dialog), then net profit and
+  // remaining are re-derived so they can never drift out of sync.
   const price = body.clientPrice !== undefined ? Number(body.clientPrice) : Number(existing.clientPrice);
   const cost = body.totalCost !== undefined ? Number(body.totalCost) : Number(existing.totalCost);
-  const paid = body.paidAmount !== undefined ? Number(body.paidAmount) : Number(existing.paidAmount);
+  const paid = await recordedPaid(id);
   const updates: Record<string, string | number | null | undefined> = {
     clientPrice: String(price),
     totalCost: String(cost),
@@ -343,15 +344,10 @@ router.post("/projects/:id/payment", async (req, res): Promise<void> => {
     notes: notes ?? null,
   });
 
-  const newPaid = Number(existing.paidAmount) + payAmount;
-  const newRemaining = Math.max(0, Number(existing.clientPrice) - newPaid);
-  const updates: Record<string, string> = {
-    paidAmount: String(newPaid),
-    remainingAmount: String(newRemaining),
-  };
-  if (nextPaymentDate) updates.nextPaymentDate = nextPaymentDate;
-
-  const [updated] = await db.update(projectsTable).set(updates).where(eq(projectsTable.id, id)).returning();
+  if (nextPaymentDate) {
+    await db.update(projectsTable).set({ nextPaymentDate }).where(eq(projectsTable.id, id));
+  }
+  const updated = (await syncPaidFromHistory(id))!;
   const payments = await db
     .select()
     .from(projectPaymentsTable)
@@ -516,6 +512,8 @@ async function freelancerPaymentsSummary(id: number) {
     members: payables.members(project),
     totalPaid: payables.freelancerPaid(project),
     totalOwed: payables.owedForProject(project),
+    otherCosts: payables.otherCosts(project),
+    costPaid: payables.costPaid(project),
     payments: payments.map(toFreelancerPaymentShape),
   };
 }
@@ -591,12 +589,7 @@ router.delete("/projects/:id/payments/:paymentId", async (req, res): Promise<voi
     res.status(404).json({ error: "Payment not found" });
     return;
   }
-  const price = Number(existing.clientPrice);
-  const paid = Math.max(0, Number(existing.paidAmount) - Number(deleted.amount));
-  const [updated] = await db.update(projectsTable).set({
-    paidAmount: String(paid),
-    ...derivedProjectColumns(price, Number(existing.totalCost), paid),
-  }).where(eq(projectsTable.id, id)).returning();
+  const updated = await syncPaidFromHistory(id);
   const payments = await db
     .select()
     .from(projectPaymentsTable)
