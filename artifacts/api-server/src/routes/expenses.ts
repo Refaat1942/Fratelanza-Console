@@ -8,7 +8,7 @@ const router: IRouter = Router();
 
 /** Company expense categories. Freelancer payments are NOT expenses: they are recorded on projects. */
 export const EXPENSE_CATEGORIES = [
-  "rent", "salaries", "marketing", "software", "utilities", "transport",
+  "rent", "salaries", "marketing", "sales", "software", "utilities", "transport",
   "office", "equipment", "taxes", "bank_fees", "other",
 ] as const;
 const CATEGORY_SET = new Set<string>(EXPENSE_CATEGORIES);

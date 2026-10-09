@@ -3,6 +3,7 @@ export const EXPENSE_CATEGORIES = [
   { value: "rent", labelEn: "Rent", labelAr: "إيجار" },
   { value: "salaries", labelEn: "Salaries", labelAr: "رواتب" },
   { value: "marketing", labelEn: "Marketing & ads", labelAr: "تسويق وإعلانات" },
+  { value: "sales", labelEn: "Sales & client acquisition", labelAr: "مبيعات واكتساب عملاء" },
   { value: "software", labelEn: "Software & subscriptions", labelAr: "برمجيات واشتراكات" },
   { value: "utilities", labelEn: "Utilities & internet", labelAr: "مرافق وإنترنت" },
   { value: "transport", labelEn: "Transport", labelAr: "مواصلات" },

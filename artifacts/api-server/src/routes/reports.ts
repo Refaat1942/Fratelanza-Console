@@ -10,6 +10,7 @@ const CATEGORY_LABELS: Record<string, { en: string; ar: string }> = {
   rent: { en: "Rent", ar: "إيجار" },
   salaries: { en: "Salaries", ar: "رواتب" },
   marketing: { en: "Marketing & ads", ar: "تسويق وإعلانات" },
+  sales: { en: "Sales & client acquisition", ar: "مبيعات واكتساب عملاء" },
   software: { en: "Software & subscriptions", ar: "برمجيات واشتراكات" },
   utilities: { en: "Utilities & internet", ar: "مرافق وإنترنت" },
   transport: { en: "Transport", ar: "مواصلات" },
@@ -67,7 +68,7 @@ export async function buildReport(startDate?: string, endDate?: string) {
       collections.push({ date, projectName: p.projectName, clientName: p.clientName ?? "", amount: unlogged, method: "", notes: "Paid amount entered on the project (no payment record)" });
     }
   }
-  collections.sort((a, b) => a.date.localeCompare(b.date));
+  collections.sort((a, b) => b.date.localeCompare(a.date));
 
   // Money given to freelancers in the period
   const frPayments = (await db.select().from(freelancerPaymentsTable))
@@ -80,7 +81,7 @@ export async function buildReport(startDate?: string, endDate?: string) {
       notes: f.notes ?? "",
     }))
     .filter((f) => inRange(f.date, startDate, endDate))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   // Company expenses in the period
   const expConditions = [];
@@ -90,7 +91,7 @@ export async function buildReport(startDate?: string, endDate?: string) {
     ? await db.select().from(expensesTable).where(and(...expConditions))
     : await db.select().from(expensesTable))
     .map((e) => ({ date: e.date ?? "", category: e.category, description: e.description, amount: Number(e.amount) }))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    .sort((a, b) => b.date.localeCompare(a.date));
   const catMap = new Map<string, { total: number; count: number }>();
   for (const e of expenseRows) {
     const cur = catMap.get(e.category) ?? { total: 0, count: 0 };

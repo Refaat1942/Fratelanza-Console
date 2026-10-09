@@ -79,7 +79,19 @@ export const GetDashboardSummaryResponse = zod.object({
   "projectName": zod.string(),
   "clientName": zod.string(),
   "remaining": zod.number()
-}))
+})),
+  "acquisition": zod.object({
+  "marketingSpend": zod.number().describe('Company expenses in \"Marketing & ads\" dated in the period'),
+  "salesSpend": zod.number().describe('Company expenses in \"Sales & client acquisition\" dated in the period'),
+  "acquisitionSpend": zod.number().describe('marketingSpend + salesSpend'),
+  "newClients": zod.number().describe('Clients whose first (non-cancelled) project starts in the period'),
+  "cac": zod.number().describe('acquisitionSpend \/ newClients (0 when there are no new clients)'),
+  "newClientDeals": zod.number().describe('Contract value of new clients\' projects in the period'),
+  "avgDealPerNewClient": zod.number(),
+  "avgProfitPerNewClient": zod.number().describe('Gross profit (deal - project costs) per new client'),
+  "profitToCac": zod.number().describe('avgProfitPerNewClient \/ cac (0 when nothing was spent)'),
+  "cacPctOfDeal": zod.number().describe('cac \/ avgDealPerNewClient, in percent')
+}).optional().describe('Customer acquisition cost (CAC) for the period')
 })
 
 
@@ -1116,7 +1128,7 @@ export const ListExpensesResponseItem = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
-  "category": zod.string().optional().describe('rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other')
+  "category": zod.string().optional().describe('rent | salaries | marketing | sales | software | utilities | transport | office | equipment | taxes | bank_fees | other')
 })
 export const ListExpensesResponse = zod.array(ListExpensesResponseItem)
 
@@ -1171,7 +1183,7 @@ export const UpdateExpenseResponse = zod.object({
   "description": zod.string(),
   "amount": zod.number(),
   "date": zod.string(),
-  "category": zod.string().optional().describe('rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other')
+  "category": zod.string().optional().describe('rent | salaries | marketing | sales | software | utilities | transport | office | equipment | taxes | bank_fees | other')
 })
 
 

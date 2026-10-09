@@ -40,7 +40,7 @@ export type Statements = {
     financing: { capital: number; drawings: number; net: number };
     netChange: number; openingCash: number; closingCash: number;
   };
-  ratios: { key: string; value: number; unit: "pct" | "x" | "days" | "months" | "egp"; group: string }[];
+  ratios: { key: string; value: number; unit: "pct" | "x" | "days" | "months" | "egp" | "n"; group: string }[];
   settings: { usefulLifeMonths: number };
   equityEntries: { id: number; type: string; amount: number; date: string; notes: string }[];
 };
@@ -159,9 +159,9 @@ function MetricCard({ label, value, sub }: { label: string; value: string; sub?:
   const { isPrivate } = usePrivacy();
   return (
     <Card className="bg-card/50">
-      <CardContent className="p-3">
+      <CardContent className="@container p-3">
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="text-xl font-bold">{isPrivate ? "***" : value}</div>
+        <div className="text-[clamp(0.85rem,11cqi,1.25rem)] leading-tight font-bold tabular-nums whitespace-nowrap">{isPrivate ? "***" : value}</div>
         {sub !== undefined && <div className={`text-xs ${sub < 0 ? "text-red-400" : "text-muted-foreground"}`}>EGP {money(sub)}</div>}
       </CardContent>
     </Card>
@@ -257,9 +257,10 @@ export function RatiosView({ s }: { s: Statements }) {
     if (unit === "x") return `${v}×`;
     if (unit === "days") return t("acct.days", { n: v });
     if (unit === "months") return t("acct.months", { n: v });
+    if (unit === "n") return v.toLocaleString();
     return `EGP ${money(v)}`;
   };
-  const groups = ["profitability", "efficiency", "liquidity", "solvency"];
+  const groups = ["profitability", "efficiency", "acquisition", "liquidity", "solvency"];
   return (
     <div className="space-y-4">
       {groups.map((g) => (

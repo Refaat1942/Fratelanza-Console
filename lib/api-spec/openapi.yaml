@@ -1535,6 +1535,43 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/RemainingItem"
+        acquisition:
+          $ref: "#/components/schemas/AcquisitionMetrics"
+
+    AcquisitionMetrics:
+      type: object
+      description: Customer acquisition cost (CAC) for the period
+      required: [marketingSpend, salesSpend, acquisitionSpend, newClients, cac, newClientDeals, avgDealPerNewClient, avgProfitPerNewClient, profitToCac, cacPctOfDeal]
+      properties:
+        marketingSpend:
+          type: number
+          description: Company expenses in "Marketing & ads" dated in the period
+        salesSpend:
+          type: number
+          description: Company expenses in "Sales & client acquisition" dated in the period
+        acquisitionSpend:
+          type: number
+          description: marketingSpend + salesSpend
+        newClients:
+          type: integer
+          description: Clients whose first (non-cancelled) project starts in the period
+        cac:
+          type: number
+          description: acquisitionSpend / newClients (0 when there are no new clients)
+        newClientDeals:
+          type: number
+          description: Contract value of new clients' projects in the period
+        avgDealPerNewClient:
+          type: number
+        avgProfitPerNewClient:
+          type: number
+          description: Gross profit (deal - project costs) per new client
+        profitToCac:
+          type: number
+          description: avgProfitPerNewClient / cac (0 when nothing was spent)
+        cacPctOfDeal:
+          type: number
+          description: cac / avgDealPerNewClient, in percent
 
     FreelancerHistory:
       type: object
@@ -2325,7 +2362,7 @@ components:
           type: string
         category:
           type: string
-          description: rent | salaries | marketing | software | utilities | transport | office | equipment | taxes | bank_fees | other
+          description: rent | salaries | marketing | sales | software | utilities | transport | office | equipment | taxes | bank_fees | other
 
     ExpenseInput:
       type: object

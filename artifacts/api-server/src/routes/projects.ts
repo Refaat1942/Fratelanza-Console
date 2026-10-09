@@ -4,7 +4,7 @@ import { db } from "@workspace/db";
 import { projectsTable, projectTeamTable, projectPaymentsTable, quotesTable, freelancerPaymentsTable } from "@workspace/db";
 import { eq, sql, and, ilike, inArray, desc, ne } from "drizzle-orm";
 import { extractTextFromUpload } from "../lib/document-parser.js";
-import { derivedProjectColumns, loadFreelancerPayables } from "../lib/financials.js";
+import { derivedProjectColumns, loadFreelancerPayables, recordedPaid, syncPaidFromHistory } from "../lib/financials.js";
 
 const router: IRouter = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -25,6 +25,9 @@ function toPaymentShape(r: typeof projectPaymentsTable.$inferSelect) {
 
 type Payables = Awaited<ReturnType<typeof loadFreelancerPayables>>;
 
+// Oldest payment date first; rows without a date fall back to the day they were entered.
+const oldestPaymentFirst = sql`coalesce(nullif(paid_at, ''), to_char(created_at, 'YYYY-MM-DD')) asc, created_at asc, id asc`;
+
 /**
  * Project money at a glance: price − freelancers − other costs = project net,
  * and how the money received so far splits between freelancers and Fratelanza.
@@ -39,33 +42,6 @@ function withSplit(shape: ReturnType<typeof toProjectShape>, r: typeof projectsT
     toFreelancers,
     fratelanzaShare: Number(r.paidAmount) - toFreelancers,
   };
-}
-
-
-/** Ordered oldest → newest by payment date (then by entry time). */
-const paymentsOldestFirst = sql`coalesce(paid_at, to_char(created_at, 'YYYY-MM-DD')) asc, created_at asc`;
-
-/**
- * The payment records are the single source of truth: paid = sum of the
- * project's client payments, remaining = price − paid. Called after every
- * change so the stored totals can never drift from the payment list.
- */
-async function syncProjectPaid(projectId: number) {
-  const [project] = await db.select().from(projectsTable).where(eq(projectsTable.id, projectId));
-  if (!project) return null;
-  const rows = await db.select().from(projectPaymentsTable).where(eq(projectPaymentsTable.projectId, projectId));
-  const paid = Math.round(rows.reduce((s, r) => s + Number(r.amount), 0) * 100) / 100;
-  const [updated] = await db.update(projectsTable).set({
-    paidAmount: String(paid),
-    ...derivedProjectColumns(Number(project.clientPrice), Number(project.totalCost), paid),
-  }).where(eq(projectsTable.id, projectId)).returning();
-  return updated!;
-}
-
-async function paymentsOf(projectId: number) {
-  return db.select().from(projectPaymentsTable)
-    .where(eq(projectPaymentsTable.projectId, projectId))
-    .orderBy(paymentsOldestFirst);
 }
 
 function toProjectShape(
@@ -236,7 +212,11 @@ router.get("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
   const team = await db.select().from(projectTeamTable).where(eq(projectTeamTable.projectId, id));
-  const payments = await paymentsOf(id);
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(oldestPaymentFirst);
   const teamMap = await teamMapForProjects([id]);
   const linkedQuotes = await quotesForClient(project.clientName);
   let linkedQuote = null;
@@ -263,12 +243,12 @@ router.patch("/projects/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  // Money fields: take what was sent, fall back to stored values, then always
-  // re-derive net profit and remaining so they can never drift out of sync.
+  // Price / cost come from the form; paid always comes from the payment history
+  // (add or delete payments in the Payments dialog), then net profit and
+  // remaining are re-derived so they can never drift out of sync.
   const price = body.clientPrice !== undefined ? Number(body.clientPrice) : Number(existing.clientPrice);
   const cost = body.totalCost !== undefined ? Number(body.totalCost) : Number(existing.totalCost);
-  // Paid is never typed on an existing project: it is the sum of its payment records
-  const paid = (await paymentsOf(id)).reduce((sum, r) => sum + Number(r.amount), 0);
+  const paid = await recordedPaid(id);
   const updates: Record<string, string | number | null | undefined> = {
     clientPrice: String(price),
     totalCost: String(cost),
@@ -334,7 +314,11 @@ router.delete("/projects/:id", async (req, res): Promise<void> => {
 
 router.get("/projects/:id/payments", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
-  const payments = await paymentsOf(id);
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(oldestPaymentFirst);
   res.json(payments.map(toPaymentShape));
 });
 
@@ -363,12 +347,15 @@ router.post("/projects/:id/payment", async (req, res): Promise<void> => {
     notes: notes ?? null,
   });
 
-  const updated = (await syncProjectPaid(id))!;
   if (nextPaymentDate) {
     await db.update(projectsTable).set({ nextPaymentDate }).where(eq(projectsTable.id, id));
-    updated.nextPaymentDate = nextPaymentDate;
   }
-  const payments = await paymentsOf(id);
+  const updated = (await syncPaidFromHistory(id))!;
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(oldestPaymentFirst);
   const teamMap = await teamMapForProjects([id]);
   res.json({
     project: toProjectShape(updated, teamMap.get(id) ?? []),
@@ -523,11 +510,13 @@ async function freelancerPaymentsSummary(id: number) {
     .select()
     .from(freelancerPaymentsTable)
     .where(eq(freelancerPaymentsTable.projectId, id))
-    .orderBy(paymentsOldestFirst);
+    .orderBy(oldestPaymentFirst);
   return {
     members: payables.members(project),
     totalPaid: payables.freelancerPaid(project),
     totalOwed: payables.owedForProject(project),
+    otherCosts: payables.otherCosts(project),
+    costPaid: payables.costPaid(project),
     payments: payments.map(toFreelancerPaymentShape),
   };
 }
@@ -603,8 +592,12 @@ router.delete("/projects/:id/payments/:paymentId", async (req, res): Promise<voi
     res.status(404).json({ error: "Payment not found" });
     return;
   }
-  const updated = await syncProjectPaid(id);
-  const payments = await paymentsOf(id);
+  const updated = await syncPaidFromHistory(id);
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(oldestPaymentFirst);
   const teamMap = await teamMapForProjects([id]);
   res.json({
     project: toProjectShape(updated!, teamMap.get(id) ?? []),
