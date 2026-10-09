@@ -1132,6 +1132,20 @@ paths:
                 type: object
                 additionalProperties: true
 
+  /finance/checks:
+    get:
+      operationId: getFinanceChecks
+      tags: [finance]
+      summary: Data checks that affect the statements, plus automatic corrections made to old data
+      responses:
+        "200":
+          description: Data checks
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+
   /finance/equity:
     post:
       operationId: createEquityEntry

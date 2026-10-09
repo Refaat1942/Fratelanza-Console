@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import * as XLSX from "xlsx";
 import { db, equityEntriesTable, appSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { buildStatements } from "../lib/statements.js";
+import { buildChecks, buildStatements } from "../lib/statements.js";
 
 const router: IRouter = Router();
 
@@ -14,6 +14,10 @@ function period(req: { query: unknown }) {
 router.get("/finance/statements", async (req, res): Promise<void> => {
   const { startDate, endDate } = period(req);
   res.json(await buildStatements(startDate, endDate));
+});
+
+router.get("/finance/checks", async (_req, res): Promise<void> => {
+  res.json(await buildChecks());
 });
 
 /* ── Owner capital / drawings ── */

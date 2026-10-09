@@ -916,6 +916,8 @@ endDate?: string;
 
 export type GetFinanceStatements200 = { [key: string]: unknown };
 
+export type GetFinanceChecks200 = { [key: string]: unknown };
+
 export type GetReportsParams = {
 startDate?: string;
 endDate?: string;
