@@ -46,6 +46,7 @@ import type {
   GenerateQuoteFromOutlineResult,
   GetDashboardSummaryParams,
   GetExpenseSummaryParams,
+  GetFinanceChecks200,
   GetFinanceReportParams,
   GetFinanceStatements200,
   GetFinanceStatementsParams,
@@ -4165,6 +4166,83 @@ export function useGetFinanceStatements<TData = Awaited<ReturnType<typeof getFin
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetFinanceStatementsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetFinanceChecksUrl = () => {
+
+
+
+
+  return `/api/finance/checks`
+}
+
+/**
+ * @summary Data checks that affect the statements, plus automatic corrections made to old data
+ */
+export const getFinanceChecks = async ( options?: RequestInit): Promise<GetFinanceChecks200> => {
+
+  return customFetch<GetFinanceChecks200>(getGetFinanceChecksUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFinanceChecksQueryKey = () => {
+    return [
+    `/api/finance/checks`
+    ] as const;
+    }
+
+
+export const getGetFinanceChecksQueryOptions = <TData = Awaited<ReturnType<typeof getFinanceChecks>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFinanceChecks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFinanceChecksQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFinanceChecks>>> = ({ signal }) => getFinanceChecks({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFinanceChecks>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFinanceChecksQueryResult = NonNullable<Awaited<ReturnType<typeof getFinanceChecks>>>
+export type GetFinanceChecksQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Data checks that affect the statements, plus automatic corrections made to old data
+ */
+
+export function useGetFinanceChecks<TData = Awaited<ReturnType<typeof getFinanceChecks>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFinanceChecks>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFinanceChecksQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

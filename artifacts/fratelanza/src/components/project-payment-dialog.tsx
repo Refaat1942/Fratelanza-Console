@@ -241,6 +241,13 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot className="bg-card/80 sticky bottom-0">
+                    <tr className="border-t border-border font-semibold">
+                      <td className="px-2 py-1.5" colSpan={3}>{t("payments.total")}</td>
+                      <td className="px-2 py-1.5 text-end text-blue-400" data-testid="client-payments-total"><PrivacyWrapper value={payments.reduce((s, p) => s + Number(p.amount), 0)} /></td>
+                      <td />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}

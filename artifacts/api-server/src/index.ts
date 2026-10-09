@@ -1,7 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { ensureAdminUser, ensureSessionTable } from "./lib/seed-admin";
-import { ensureFinanceTables, migrateLegacyFreelancerEarned } from "./lib/migrate-freelancer-earned";
+import { ensureFinanceTables, migrateLegacyFreelancerEarned, reconcileProjectPayments } from "./lib/migrate-freelancer-earned";
 
 const rawPort = process.env["PORT"];
 
@@ -18,6 +18,7 @@ if (Number.isNaN(port) || port <= 0) {
 void ensureSessionTable().then(() => ensureAdminUser());
 void ensureFinanceTables()
   .then(() => migrateLegacyFreelancerEarned())
+  .then(() => reconcileProjectPayments())
   .catch((err) => logger.error({ err }, "Finance data migration failed"));
 
 app.listen(port, (err) => {

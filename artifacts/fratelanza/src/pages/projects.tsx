@@ -506,7 +506,8 @@ export default function Projects() {
             </div>
             <div className="space-y-1">
               <Label>Down Payment / Paid (EGP)</Label>
-              <Input type="number" value={form.paidAmount} onChange={f("paidAmount")} data-testid="input-down-payment" />
+              <Input type="number" value={form.paidAmount} onChange={f("paidAmount")} readOnly={!!editing} className={editing ? "bg-muted/40" : undefined} data-testid="input-down-payment" />
+              {editing && <p className="text-[11px] text-muted-foreground">{t('projects.paidFromPayments')}</p>}
             </div>
             <div className="space-y-1">
               <Label>Remaining (auto)</Label>

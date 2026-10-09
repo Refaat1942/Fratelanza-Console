@@ -1,7 +1,7 @@
-import { db, freelancersTable, projectsTable, projectTeamTable, freelancerPaymentsTable } from "@workspace/db";
+import { db, freelancersTable, projectsTable, projectTeamTable, freelancerPaymentsTable, projectPaymentsTable, appSettingsTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { logger } from "./logger";
-import { nameKey, projectCommitments, projectDate } from "./financials";
+import { derivedProjectColumns, nameKey, projectCommitments, projectDate } from "./financials";
 
 /** Tables/columns this version needs (safe to re-run; mirrors scripts/vps-migrate.sql). */
 export async function ensureFinanceTables(): Promise<void> {
@@ -88,4 +88,69 @@ export async function migrateLegacyFreelancerEarned(): Promise<void> {
     });
     logger.info({ freelancer: fr.name, amount: Number(fr.earned), rows: rows.length }, "Moved legacy freelancer Earned to payments");
   }
+}
+
+export type PaymentCorrection = {
+  projectId: number;
+  projectName: string;
+  before: number;
+  after: number;
+  action: "removed_double_count" | "logged_unrecorded_payment" | "matched_records";
+  at: string;
+};
+
+export const RECONCILIATION_KEY = "payments_reconciliation";
+
+/**
+ * Client payment records are the single source of truth for what a project has
+ * received. Older versions also kept a running "paid" total that could drift
+ * (edited by hand, or a down payment typed on the project and then logged again
+ * as a payment). This brings every project back in line and keeps a log of what
+ * changed so it can be shown in Finance → Data checks.
+ */
+export async function reconcileProjectPayments(): Promise<void> {
+  const projects = await db.select().from(projectsTable);
+  const payments = await db.select().from(projectPaymentsTable);
+  const corrections: PaymentCorrection[] = [];
+  const now = new Date().toISOString();
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+
+  for (const p of projects) {
+    const rows = payments.filter((x) => x.projectId === p.id);
+    const logged = r2(rows.reduce((s, x) => s + Number(x.amount), 0));
+    const paid = r2(Number(p.paidAmount));
+    const diff = r2(paid - logged);
+    if (Math.abs(diff) < 0.01) continue;
+
+    // Same amount typed on the project AND logged as a payment → counted twice.
+    const doubleCounted = diff > 0 && rows.some((x) => Math.abs(Number(x.amount) - diff) < 0.01);
+    let after = logged;
+    let action: PaymentCorrection["action"] = diff > 0 ? "removed_double_count" : "matched_records";
+
+    await db.transaction(async (tx) => {
+      if (diff > 0 && !doubleCounted) {
+        // Received but never logged as a payment: keep it, as a dated record.
+        await tx.insert(projectPaymentsTable).values({
+          projectId: p.id, amount: String(diff),
+          paidAt: projectDate(p), notes: "Paid amount entered on the project (moved into payment records)",
+        });
+        after = paid;
+        action = "logged_unrecorded_payment";
+      }
+      await tx.update(projectsTable).set({
+        paidAmount: String(after),
+        ...derivedProjectColumns(Number(p.clientPrice), Number(p.totalCost), after),
+      }).where(eq(projectsTable.id, p.id));
+    });
+    corrections.push({ projectId: p.id, projectName: p.projectName, before: paid, after, action, at: now });
+    logger.info({ project: p.projectName, before: paid, after, action }, "Reconciled project paid amount with payment records");
+  }
+
+  if (corrections.length === 0) return;
+  const [prev] = await db.select().from(appSettingsTable).where(eq(appSettingsTable.key, RECONCILIATION_KEY));
+  let log: PaymentCorrection[] = [];
+  try { log = prev ? JSON.parse(prev.value) : []; } catch { log = []; }
+  const value = JSON.stringify([...log, ...corrections]);
+  await db.insert(appSettingsTable).values({ key: RECONCILIATION_KEY, value })
+    .onConflictDoUpdate({ target: appSettingsTable.key, set: { value } });
 }

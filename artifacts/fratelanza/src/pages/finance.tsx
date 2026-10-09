@@ -3,7 +3,7 @@ import { useGetFinanceReport, getGetFinanceReportQueryKey, useGetFinanceStatemen
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Download } from "lucide-react";
-import { IncomeStatementView, BalanceSheetView, CashFlowView, RatiosView, CapitalAndPoliciesView, type Statements } from "@/components/financial-statements";
+import { IncomeStatementView, BalanceSheetView, CashFlowView, RatiosView, CapitalAndPoliciesView, DataChecksView, type Statements } from "@/components/financial-statements";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -106,6 +106,7 @@ export default function Finance() {
           <TabsTrigger value="cash" data-testid="tab-cash">{t("acct.tabs.cash")}</TabsTrigger>
           <TabsTrigger value="ratios" data-testid="tab-ratios">{t("acct.tabs.ratios")}</TabsTrigger>
           <TabsTrigger value="capital" data-testid="tab-capital">{t("acct.tabs.capital")}</TabsTrigger>
+          <TabsTrigger value="checks" data-testid="tab-checks">{t("acct.tabs.checks")}</TabsTrigger>
         </TabsList>
 
         {(["income", "balance", "cash", "ratios", "capital"] as const).map((tab) => (
@@ -119,6 +120,8 @@ export default function Finance() {
               : <CapitalAndPoliciesView s={statements} params={params} />}
           </TabsContent>
         ))}
+
+        <TabsContent value="checks" className="pt-3"><DataChecksView /></TabsContent>
 
         <TabsContent value="overview" className="pt-3 space-y-6">
       {isLoading ? (

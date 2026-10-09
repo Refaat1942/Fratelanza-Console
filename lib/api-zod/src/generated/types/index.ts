@@ -39,6 +39,7 @@ export * from './generateQuoteFromOutlineResult';
 export * from './generateQuoteFromOutlineResultRecommendedTier';
 export * from './getDashboardSummaryParams';
 export * from './getExpenseSummaryParams';
+export * from './getFinanceChecks200';
 export * from './getFinanceReportParams';
 export * from './getFinanceStatements200';
 export * from './getFinanceStatementsParams';

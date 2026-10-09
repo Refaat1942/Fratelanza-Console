@@ -315,3 +315,68 @@ export async function buildStatements(startDate?: string, endDate?: string) {
     equityEntries: d.eq.sort((a, b) => b.date.localeCompare(a.date)),
   };
 }
+
+export type DataIssue = {
+  key: "paid_mismatch" | "client_overpaid" | "freelancer_overpaid" | "freelancer_payment_orphan" | "future_date" | "no_price" | "negative_cash" | "not_balanced";
+  severity: "error" | "warning" | "info";
+  projectId: number | null;
+  label: string;
+  amount: number;
+  date: string;
+};
+
+/**
+ * Data checks: anything in the records that would make the statements wrong or
+ * misleading, plus the automatic corrections already made to old data.
+ */
+export async function buildChecks() {
+  const d = await loadAll();
+  const [payments, settings] = await Promise.all([
+    db.select().from(projectPaymentsTable),
+    db.select().from(appSettingsTable),
+  ]);
+  const issues: DataIssue[] = [];
+  const projectIds = new Set(d.projects.map((p) => p.id));
+
+  for (const p of d.projects) {
+    const logged = payments.filter((x) => x.projectId === p.id).reduce((s, x) => s + Number(x.amount), 0);
+    const paid = Number(p.paidAmount);
+    if (Math.abs(paid - logged) >= 0.01) {
+      issues.push({ key: "paid_mismatch", severity: "error", projectId: p.id, label: p.projectName, amount: r2(paid - logged), date: projectDate(p) });
+    }
+    if (p.status !== "Cancelled" && logged - Number(p.clientPrice) >= 0.01) {
+      issues.push({ key: "client_overpaid", severity: "warning", projectId: p.id, label: p.projectName, amount: r2(logged - Number(p.clientPrice)), date: projectDate(p) });
+    }
+    if (p.status !== "Cancelled" && Number(p.clientPrice) <= 0) {
+      issues.push({ key: "no_price", severity: "warning", projectId: p.id, label: p.projectName, amount: 0, date: projectDate(p) });
+    }
+    for (const m of d.payables.members(p)) {
+      if (m.paid - m.commission >= 0.01) {
+        issues.push({ key: "freelancer_overpaid", severity: "warning", projectId: p.id, label: `${m.freelancerName} — ${p.projectName}`, amount: r2(m.paid - m.commission), date: projectDate(p) });
+      }
+    }
+  }
+  for (const f of d.frPays) {
+    if (f.projectId != null && !projectIds.has(f.projectId)) {
+      issues.push({ key: "freelancer_payment_orphan", severity: "warning", projectId: null, label: f.name, amount: r2(f.amount), date: f.date });
+    }
+  }
+  const future = [
+    ...payments.filter((x) => projectIds.has(x.projectId)).map((x) => ({ date: (x.paidAt || x.createdAt.toISOString()).slice(0, 10), amount: Number(x.amount), projectId: x.projectId as number | null, label: d.projects.find((p) => p.id === x.projectId)?.projectName ?? "" })),
+    ...d.frPays.map((f) => ({ date: f.date, amount: f.amount, projectId: f.projectId, label: f.name })),
+    ...d.exps.map((e) => ({ date: e.date, amount: e.amount, projectId: null, label: e.category })),
+  ].filter((x) => x.date > d.today);
+  for (const x of future) issues.push({ key: "future_date", severity: "info", projectId: x.projectId, label: x.label, amount: r2(x.amount), date: x.date });
+
+  const bs = balanceSheet(d, d.today);
+  if (bs.assets.cash < -0.005) {
+    issues.push({ key: "negative_cash", severity: "warning", projectId: null, label: "", amount: bs.assets.cash, date: d.today });
+  }
+  if (Math.abs(bs.difference) >= 0.01) {
+    issues.push({ key: "not_balanced", severity: "error", projectId: null, label: "", amount: bs.difference, date: d.today });
+  }
+
+  let corrections: unknown[] = [];
+  try { corrections = JSON.parse(settings.find((s) => s.key === "payments_reconciliation")?.value ?? "[]"); } catch { corrections = []; }
+  return { checkedAt: new Date().toISOString(), issues, corrections };
+}

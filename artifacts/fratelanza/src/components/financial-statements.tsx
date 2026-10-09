@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCreateEquityEntry, useDeleteEquityEntry, useUpdateFinanceSettings, getGetFinanceStatementsQueryKey } from "@workspace/api-client-react";
+import { useCreateEquityEntry, useDeleteEquityEntry, useUpdateFinanceSettings, useGetFinanceChecks, getGetFinanceStatementsQueryKey } from "@workspace/api-client-react";
 import { usePrivacy } from "@/lib/privacy-context";
 import { expenseCategoryLabel } from "@/lib/expense-categories";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, CheckCircle2, Trash2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, Trash2, Wrench } from "lucide-react";
 
 /* ───────── Data shape returned by GET /finance/statements ───────── */
 
@@ -363,6 +363,83 @@ export function CapitalAndPoliciesView({ s, params }: { s: Statements; params: {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+/* ───────── Data checks ───────── */
+
+type DataIssue = { key: string; severity: "error" | "warning" | "info"; projectId: number | null; label: string; amount: number; date: string };
+type Correction = { projectId: number; projectName: string; before: number; after: number; action: string; at: string };
+type Checks = { checkedAt: string; issues: DataIssue[]; corrections: Correction[] };
+
+export function DataChecksView() {
+  const { t, i18n } = useTranslation();
+  const money = useMoney();
+  const { data, isLoading } = useGetFinanceChecks();
+  const checks = data as unknown as Checks | undefined;
+  if (isLoading || !checks) return <div className="text-center py-12 text-muted-foreground">{t("common.loading")}</div>;
+
+  const tone = { error: "text-red-400", warning: "text-orange-400", info: "text-muted-foreground" } as const;
+  const Icon = { error: AlertTriangle, warning: AlertTriangle, info: Info } as const;
+  const order = { error: 0, warning: 1, info: 2 } as const;
+  const issues = [...checks.issues].sort((a, b) => order[a.severity] - order[b.severity] || a.date.localeCompare(b.date));
+
+  return (
+    <div className="space-y-4" data-testid="data-checks">
+      <Card className="bg-card/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">{t("dataChecks.title")}</CardTitle>
+          <div className="text-xs text-muted-foreground">{t("dataChecks.subtitle")}</div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {issues.length === 0 ? (
+            <div className="flex items-start gap-2 text-sm text-green-400"><CheckCircle2 className="h-4 w-4 mt-0.5 shrink-0" />{t("dataChecks.allGood")}</div>
+          ) : issues.map((i, n) => {
+            const I = Icon[i.severity];
+            return (
+              <div key={n} className="flex items-start gap-2 text-sm border-b border-border/40 pb-2 last:border-0" data-testid={`issue-${i.key}`}>
+                <I className={`h-4 w-4 mt-0.5 shrink-0 ${tone[i.severity]}`} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-baseline gap-x-2">
+                    <span className={`text-xs font-semibold ${tone[i.severity]}`}>{t(`dataChecks.severity.${i.severity}`)}</span>
+                    {i.label && <span className="font-medium break-words">{i.key === "future_date" && !i.projectId ? expenseCategoryLabel(i.label, i18n.language ?? "en") : i.label}</span>}
+                    <span className="text-xs text-muted-foreground tabular-nums">{i.date}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">{t(`dataChecks.issue.${i.key}`)}</div>
+                </div>
+                {i.amount !== 0 && <span className="tabular-nums text-sm shrink-0">{money(i.amount)}</span>}
+              </div>
+            );
+          })}
+          <div className="text-[11px] text-muted-foreground pt-1">{t("dataChecks.checkedAt", { when: new Date(checks.checkedAt).toLocaleString() })}</div>
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card/50">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2"><Wrench className="h-4 w-4" />{t("dataChecks.correctionsTitle")}</CardTitle>
+          <div className="text-xs text-muted-foreground">{t("dataChecks.correctionsHint")}</div>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          {checks.corrections.length === 0 ? (
+            <div className="text-sm text-muted-foreground">{t("dataChecks.noCorrections")}</div>
+          ) : checks.corrections.map((c, n) => (
+            <div key={n} className="text-sm border-b border-border/40 pb-2 last:border-0" data-testid="correction">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium">{c.projectName}</span>
+                {c.before === c.after ? (
+                  <span className="tabular-nums text-xs font-semibold text-green-400">{money(c.after)}</span>
+                ) : <span className="tabular-nums text-xs">
+                  {t("dataChecks.before")} <span className="line-through text-muted-foreground">{money(c.before)}</span>
+                  {" → "}{t("dataChecks.after")} <span className="font-semibold text-green-400">{money(c.after)}</span>
+                </span>}
+              </div>
+              <div className="text-xs text-muted-foreground">{t(`dataChecks.action.${c.action}`)} · {c.at.slice(0, 10)}</div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

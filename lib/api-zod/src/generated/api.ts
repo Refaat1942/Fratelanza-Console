@@ -1280,6 +1280,12 @@ export const GetFinanceStatementsResponse = zod.record(zod.string(), zod.unknown
 
 
 /**
+ * @summary Data checks that affect the statements, plus automatic corrections made to old data
+ */
+export const GetFinanceChecksResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
  * @summary Record owner capital or drawings
  */
 export const CreateEquityEntryBody = zod.object({
