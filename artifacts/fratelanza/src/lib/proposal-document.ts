@@ -28,14 +28,19 @@ export type ProposalData = {
   language: Lang;
   customer: ProposalCustomer;
   serviceKey: string;
-  /** Recommended package ("" = present all packages without recommending one) */
+  /** Package the customer chose ("" = offer the packages without choosing one) */
   tier: Tier | "";
-  /** Show all three packages (otherwise only the recommended one) */
-  showAllPackages: boolean;
+  /** Which packages appear in the documents */
+  included: Record<Tier, boolean>;
+  /** @deprecated older saves; replaced by `included` */
+  showAllPackages?: boolean;
   /** Package prices for this client (start from the guide prices) */
   prices: Record<Tier, number>;
-  /** Agreed price for the recommended package (0 = package price) */
-  finalPrice: number;
+  /** @deprecated older saves: agreed price of the chosen package (now edited in `prices`) */
+  finalPrice?: number;
+  /** Discount on the chosen package */
+  discountType: "none" | "percent" | "amount";
+  discountValue: number;
   /** Extra notes printed on both documents */
   notes: string;
 };
@@ -48,9 +53,10 @@ export function defaultProposal(serviceKey = "websites"): ProposalData {
     customer: { company: "", contactName: "", contactTitle: "", phone: "", email: "", address: "", business: "", needs: "" },
     serviceKey,
     tier: "business",
-    showAllPackages: true,
+    included: { starter: true, business: true, enterprise: true },
     prices: guidePrices(serviceKey),
-    finalPrice: 0,
+    discountType: "none",
+    discountValue: 0,
     notes: "",
   };
 }
@@ -60,10 +66,36 @@ export function guidePrices(serviceKey: string): Record<Tier, number> {
   return Object.fromEntries(TIERS.map((t) => [t, s.packages.find((p) => p.tier === t)?.price ?? 0])) as Record<Tier, number>;
 }
 
-/** Price of the recommended package for this client. */
+/** Bring an older saved proposal up to the current shape. */
+export function normalizeProposal(d: ProposalData): ProposalData {
+  const out = { ...d, prices: { ...d.prices } };
+  if (!out.included) {
+    out.included = out.showAllPackages === false && out.tier
+      ? { starter: out.tier === "starter", business: out.tier === "business", enterprise: out.tier === "enterprise" }
+      : { starter: true, business: true, enterprise: true };
+  }
+  if (out.tier && Number(out.finalPrice) > 0) out.prices[out.tier] = Number(out.finalPrice);
+  delete out.finalPrice;
+  delete out.showAllPackages;
+  out.discountType ??= "none";
+  out.discountValue = Number(out.discountValue) || 0;
+  return out;
+}
+
+const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/** Price → discount → total for the chosen package. */
+export function proposalTotals(d: ProposalData) {
+  const subtotal = d.tier ? Math.max(0, Number(d.prices[d.tier] ?? 0)) : 0;
+  const v = Math.max(0, Number(d.discountValue) || 0);
+  const discount = d.discountType === "percent" ? r2((subtotal * Math.min(v, 100)) / 100)
+    : d.discountType === "amount" ? Math.min(v, subtotal) : 0;
+  return { subtotal, discount, discountPct: subtotal ? r2((discount / subtotal) * 100) : 0, total: r2(subtotal - discount) };
+}
+
+/** What the customer pays for the chosen package (after discount). */
 export function proposalAmount(d: ProposalData): number {
-  if (!d.tier) return 0;
-  return Number(d.finalPrice) > 0 ? Number(d.finalPrice) : Number(d.prices[d.tier] ?? 0);
+  return proposalTotals(d).total;
 }
 
 /* ───────────────────────── Text ───────────────────────── */
@@ -75,8 +107,9 @@ const T = {
     phone: "الهاتف", email: "البريد الإلكتروني", address: "العنوان",
     dear: (n: string) => `السادة / ${n} المحترمين،`, greeting: "تحية طيبة وبعد،",
     benefitsTitle: "كيف يخدم الحل نشاطكم", packagesTitle: "الباقات والأسعار", packageCol: "الباقة", includesCol: "المحتويات", priceCol: "السعر",
-    recommended: "الباقة المقترحة", egp: "ج.م",
+    recommended: "الباقة المختارة", egp: "ج.م",
     totalTitle: "قيمة العرض", totalFor: (p: string) => `إجمالي قيمة باقة ${p}`, words: "فقط",
+    priceOf: (p: string) => `سعر باقة ${p}`, discount: "الخصم", totalAfter: "الإجمالي بعد الخصم",
     milestonesTitle: "مراحل الدفع", stageCol: "المرحلة", pctCol: "النسبة", amountCol: "المبلغ", total: "الإجمالي",
     providesTitle: "المزايا التي تقدمها الشركة", notesTitle: "ملاحظات مهمة",
     validity: (d: number) => `هذا العرض صالح لمدة ${d} يوماً من تاريخه.`,
@@ -99,8 +132,9 @@ const T = {
     phone: "Phone", email: "Email", address: "Address",
     dear: (n: string) => `Dear ${n},`, greeting: "",
     benefitsTitle: "How this solution serves your business", packagesTitle: "Packages & prices", packageCol: "Package", includesCol: "Includes", priceCol: "Price",
-    recommended: "Recommended", egp: "EGP",
+    recommended: "Selected", egp: "EGP",
     totalTitle: "Quotation value", totalFor: (p: string) => `Total for the ${p} package`, words: "",
+    priceOf: (p: string) => `${p} package price`, discount: "Discount", totalAfter: "Total after discount",
     milestonesTitle: "Payment milestones", stageCol: "Milestone", pctCol: "Share", amountCol: "Amount", total: "Total",
     providesTitle: "What we provide", notesTitle: "Important notes",
     validity: (d: number) => `This quotation is valid for ${d} days from its date.`,
@@ -197,6 +231,10 @@ function shell(lang: Lang, title: string, body: string, opts: ProposalHtmlOption
   td.num { text-align: center; white-space: nowrap; }
   tr.rec td { background: #ecfeff; }
   tr.total td { background: #f1f5f9; font-weight: 700; }
+  table.sum { width: 60%; margin-${start}: auto; margin-${end}: 0; }
+  table.sum td { border: 0; border-bottom: 1px solid #e5e7eb; padding: 4px 8px; }
+  table.sum td.num { text-align: ${end}; }
+  table.sum tr.disc td { color: #b91c1c; font-weight: 600; }
   .pkg { font-weight: 700; color: #0a192f; white-space: nowrap; }
   .badge { display: inline-block; background: #00bfff; color: #fff; font-size: 8pt; border-radius: 10px; padding: 0 8px; margin-top: 3px; font-weight: 600; }
   td ul { margin: 0; padding-${start}: 16px; }
@@ -300,7 +338,8 @@ function approval(d: ProposalData) {
 }
 
 function shownTiers(d: ProposalData): Tier[] {
-  return d.showAllPackages || !d.tier ? TIERS : [d.tier];
+  const list = TIERS.filter((tier) => d.included?.[tier] !== false || tier === d.tier);
+  return list.length ? list : TIERS;
 }
 
 /* ───────────────────────── Sales quotation ───────────────────────── */
@@ -309,12 +348,13 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   const t = T[d.language];
   const lang = d.language;
   const svc = serviceByKey(d.serviceKey);
-  const amount = proposalAmount(d);
+  const tot = proposalTotals(d);
+  const amount = tot.total;
 
   const rows = shownTiers(d).map((tier) => {
     const pkg = svc.packages.find((p) => p.tier === tier)!;
     const rec = tier === d.tier;
-    const price = rec && amount > 0 ? amount : Number(d.prices[tier] ?? pkg.price);
+    const price = Number(d.prices[tier] ?? pkg.price);
     return `<tr class="${rec ? "rec" : ""}">
       <td class="pkg">${TIER_NAME[tier]}${rec ? `<br><span class="badge">${t.recommended}</span>` : ""}</td>
       <td><ul>${pkg.features.map((x) => `<li>${esc(lang === "ar" ? x.ar : x.en)}</li>`).join("")}</ul></td>
@@ -326,7 +366,11 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   if (d.tier && amount > 0) {
     const calc = computeStages(amount, MILESTONES);
     totals = `<h2>${t.totalTitle}</h2>
-    <div class="totalbox"><span>${esc(t.totalFor(TIER_NAME[d.tier]))}</span><b>${money(amount, lang)}</b>
+    ${tot.discount > 0 ? `<table class="sum"><tbody>
+      <tr><td>${esc(t.priceOf(TIER_NAME[d.tier]))}</td><td class="num">${money(tot.subtotal, lang)}</td></tr>
+      <tr class="disc"><td>${esc(t.discount)}${d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</td><td class="num">− ${money(tot.discount, lang)}</td></tr>
+    </tbody></table>` : ""}
+    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : t.totalFor(TIER_NAME[d.tier]))}</span><b>${money(amount, lang)}</b>
       ${lang === "ar" ? `<span class="w">${t.words} ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير.</span>` : ""}</div>
     <h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th><th>${t.amountCol}</th></tr></thead>

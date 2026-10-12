@@ -128,3 +128,16 @@ CREATE TABLE IF NOT EXISTS proposals (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+-- Documents uploaded on a client's page (any file type)
+CREATE TABLE IF NOT EXISTS client_documents (
+  id serial PRIMARY KEY,
+  client_id integer NOT NULL,
+  name text NOT NULL,
+  file_name text NOT NULL,
+  mime_type text NOT NULL DEFAULT 'application/octet-stream',
+  size integer NOT NULL DEFAULT 0,
+  data bytea NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS client_documents_client_idx ON client_documents (client_id);

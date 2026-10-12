@@ -223,7 +223,7 @@ export default function Contracts() {
         <DialogContent className="max-w-none w-screen h-[100dvh] rounded-none sm:rounded-lg sm:max-w-[96vw] sm:w-[96vw] sm:h-[94vh] p-0 flex flex-col gap-0">
           {editing && (
             <>
-              <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12">
+              <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12 sm:pe-14">
                 <DialogTitle>
                   {editing.type === "client" ? t("contracts.newClient") : t("contracts.newFreelancer")}
                 </DialogTitle>

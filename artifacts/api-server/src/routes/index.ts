@@ -14,6 +14,7 @@ import reportsRouter from "./reports";
 import contractsRouter from "./contracts";
 import statementsRouter from "./statements";
 import proposalsRouter from "./proposals";
+import clientDocumentsRouter from "./client-documents";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(reportsRouter);
 router.use(contractsRouter);
 router.use(statementsRouter);
 router.use(proposalsRouter);
+router.use(clientDocumentsRouter);
 
 export default router;

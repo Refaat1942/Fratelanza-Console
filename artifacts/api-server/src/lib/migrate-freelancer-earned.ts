@@ -42,6 +42,18 @@ export async function ensureFinanceTables(): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     )`);
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS client_documents (
+      id serial PRIMARY KEY,
+      client_id integer NOT NULL,
+      name text NOT NULL,
+      file_name text NOT NULL,
+      mime_type text NOT NULL DEFAULT 'application/octet-stream',
+      size integer NOT NULL DEFAULT 0,
+      data bytea NOT NULL,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`);
+  await db.execute(sql`CREATE INDEX IF NOT EXISTS client_documents_client_idx ON client_documents (client_id)`);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS equity_entries (
       id serial PRIMARY KEY,
       type text NOT NULL,

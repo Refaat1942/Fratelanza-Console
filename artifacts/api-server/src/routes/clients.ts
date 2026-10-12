@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import * as XLSX from "xlsx";
 import { db } from "@workspace/db";
-import { clientsTable, projectsTable, quotesTable } from "@workspace/db";
+import { clientsTable, projectsTable, quotesTable, clientDocumentsTable } from "@workspace/db";
 import { eq, sql, ilike, and, desc, or } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -230,6 +230,7 @@ router.delete("/clients/:id", async (req, res): Promise<void> => {
     res.status(404).json({ error: "Client not found" });
     return;
   }
+  await db.delete(clientDocumentsTable).where(eq(clientDocumentsTable.clientId, id));
   res.sendStatus(204);
 });
 
