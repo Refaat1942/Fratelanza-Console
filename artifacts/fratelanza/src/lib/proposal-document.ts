@@ -1,5 +1,6 @@
 import defaultLogo from "@/assets/fratelanza-logo.png?inline";
 import { COMPANY, amountToArabicWords, computeStages, formatMoney, today } from "@/lib/contract-document";
+import { featureOf, type Requirement } from "@/lib/requirements-match";
 import {
   EXTERNAL_FEES_NOTE, MILESTONES, PRICE_NOTE, PROVIDES, STAGES, TIERS, TIER_NAME,
   serviceByKey, type Tier,
@@ -43,6 +44,10 @@ export type ProposalData = {
   discountValue: number;
   /** Extra notes printed on both documents */
   notes: string;
+  /** Customer requirements as typed (one per line) */
+  requirementsText: string;
+  /** Each requirement with how it is delivered (package feature or additional development) */
+  requirements: Requirement[];
 };
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
@@ -58,6 +63,8 @@ export function defaultProposal(serviceKey = "websites"): ProposalData {
     discountType: "none",
     discountValue: 0,
     notes: "",
+    requirementsText: "",
+    requirements: [],
   };
 }
 
@@ -79,18 +86,27 @@ export function normalizeProposal(d: ProposalData): ProposalData {
   delete out.showAllPackages;
   out.discountType ??= "none";
   out.discountValue = Number(out.discountValue) || 0;
+  out.requirementsText ??= "";
+  out.requirements = Array.isArray(out.requirements) ? out.requirements : [];
   return out;
 }
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** Price → discount → total for the chosen package. */
+/** Requirements outside the packages, priced one by one. */
+export function extraItems(d: ProposalData) {
+  return (d.requirements ?? []).filter((r) => r.match === "extra");
+}
+
+/** Package price + additional requirements → discount → total. */
 export function proposalTotals(d: ProposalData) {
-  const subtotal = d.tier ? Math.max(0, Number(d.prices[d.tier] ?? 0)) : 0;
+  const packagePrice = d.tier ? Math.max(0, Number(d.prices[d.tier] ?? 0)) : 0;
+  const extras = r2(extraItems(d).reduce((s, r) => s + Math.max(0, Number(r.price) || 0), 0));
+  const subtotal = r2(packagePrice + extras);
   const v = Math.max(0, Number(d.discountValue) || 0);
   const discount = d.discountType === "percent" ? r2((subtotal * Math.min(v, 100)) / 100)
     : d.discountType === "amount" ? Math.min(v, subtotal) : 0;
-  return { subtotal, discount, discountPct: subtotal ? r2((discount / subtotal) * 100) : 0, total: r2(subtotal - discount) };
+  return { packagePrice, extras, subtotal, discount, discountPct: subtotal ? r2((discount / subtotal) * 100) : 0, total: r2(subtotal - discount) };
 }
 
 /** What the customer pays for the chosen package (after discount). */
@@ -110,6 +126,10 @@ const T = {
     recommended: "الباقة المختارة", egp: "ج.م",
     totalTitle: "قيمة العرض", totalFor: (p: string) => `إجمالي قيمة باقة ${p}`, words: "فقط",
     priceOf: (p: string) => `سعر باقة ${p}`, discount: "الخصم", totalAfter: "الإجمالي بعد الخصم",
+    extrasTitle: "متطلبات إضافية خارج الباقة", extrasSum: "المتطلبات الإضافية", subtotal: "الإجمالي قبل الخصم", grandTotal: "الإجمالي",
+    reqTitle: "متطلبات العميل والحل المقترح", reqCol: "المتطلب", solutionCol: "الحل المقترح", inCol: "ضمن", extraLabel: "تطوير إضافي",
+    extraDetail: "تطوير خاص لهذا المتطلب ضمن نطاق المشروع، ويُسعّر منفصلاً في العرض المالي.",
+    reqIntro: "تم تحليل متطلبات العميل وربط كل متطلب بالبند الذي يحققه في الباقات، مع تحديد المتطلبات التي تحتاج إلى تطوير إضافي.",
     milestonesTitle: "مراحل الدفع", stageCol: "المرحلة", pctCol: "النسبة", amountCol: "المبلغ", total: "الإجمالي",
     providesTitle: "المزايا التي تقدمها الشركة", notesTitle: "ملاحظات مهمة",
     validity: (d: number) => `هذا العرض صالح لمدة ${d} يوماً من تاريخه.`,
@@ -135,6 +155,10 @@ const T = {
     recommended: "Selected", egp: "EGP",
     totalTitle: "Quotation value", totalFor: (p: string) => `Total for the ${p} package`, words: "",
     priceOf: (p: string) => `${p} package price`, discount: "Discount", totalAfter: "Total after discount",
+    extrasTitle: "Additional requirements (outside the package)", extrasSum: "Additional requirements", subtotal: "Subtotal", grandTotal: "Total",
+    reqTitle: "Customer requirements and proposed solution", reqCol: "Requirement", solutionCol: "Proposed solution", inCol: "In", extraLabel: "Additional development",
+    extraDetail: "Custom development for this requirement within the project scope, priced separately in the financial proposal.",
+    reqIntro: "We analysed the customer's requirements and linked each one to the package item that delivers it, and flagged those that need additional development.",
     milestonesTitle: "Payment milestones", stageCol: "Milestone", pctCol: "Share", amountCol: "Amount", total: "Total",
     providesTitle: "What we provide", notesTitle: "Important notes",
     validity: (d: number) => `This quotation is valid for ${d} days from its date.`,
@@ -365,12 +389,19 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   let totals = "";
   if (d.tier && amount > 0) {
     const calc = computeStages(amount, MILESTONES);
-    totals = `<h2>${t.totalTitle}</h2>
-    ${tot.discount > 0 ? `<table class="sum"><tbody>
-      <tr><td>${esc(t.priceOf(TIER_NAME[d.tier]))}</td><td class="num">${money(tot.subtotal, lang)}</td></tr>
-      <tr class="disc"><td>${esc(t.discount)}${d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</td><td class="num">− ${money(tot.discount, lang)}</td></tr>
+    const extras = extraItems(d);
+    const showSum = tot.discount > 0 || tot.extras > 0;
+    totals = `${extras.length ? `<h2>${t.extrasTitle}</h2>
+    <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
+    <tbody>${extras.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : ""}
+    <h2>${t.totalTitle}</h2>
+    ${showSum ? `<table class="sum"><tbody>
+      <tr><td>${esc(t.priceOf(TIER_NAME[d.tier]))}</td><td class="num">${money(tot.packagePrice, lang)}</td></tr>
+      ${tot.extras > 0 ? `<tr><td>${esc(t.extrasSum)}</td><td class="num">${money(tot.extras, lang)}</td></tr>` : ""}
+      ${tot.extras > 0 && tot.discount > 0 ? `<tr><td><b>${esc(t.subtotal)}</b></td><td class="num"><b>${money(tot.subtotal, lang)}</b></td></tr>` : ""}
+      ${tot.discount > 0 ? `<tr class="disc"><td>${esc(t.discount)}${d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</td><td class="num">− ${money(tot.discount, lang)}</td></tr>` : ""}
     </tbody></table>` : ""}
-    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : t.totalFor(TIER_NAME[d.tier]))}</span><b>${money(amount, lang)}</b>
+    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : tot.extras > 0 ? t.grandTotal : t.totalFor(TIER_NAME[d.tier]))}</span><b>${money(amount, lang)}</b>
       ${lang === "ar" ? `<span class="w">${t.words} ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير.</span>` : ""}</div>
     <h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th><th>${t.amountCol}</th></tr></thead>
@@ -398,6 +429,24 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
 
 /* ───────────────────────── Technical proposal ───────────────────────── */
 
+function requirementsTable(d: ProposalData) {
+  const reqs = d.requirements ?? [];
+  if (!reqs.length) return "";
+  const t = T[d.language];
+  const lang = d.language;
+  const svc = serviceByKey(d.serviceKey);
+  const rows = reqs.map((r, i) => {
+    const f = featureOf(svc, r.match);
+    const solution = f
+      ? `<b>${esc(lang === "ar" ? f.feature.ar : f.feature.en)}</b><br><span class="muted">${esc(lang === "ar" ? f.feature.dAr : f.feature.dEn)}</span>`
+      : `<b>${t.extraLabel}</b><br><span class="muted">${esc(t.extraDetail)}</span>`;
+    return `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td>${solution}</td><td class="num">${f ? TIER_NAME[f.tier] : `<span class="badge">${t.extraLabel}</span>`}</td></tr>`;
+  }).join("");
+  return `<h2>${t.reqTitle}</h2>
+  <p>${esc(t.reqIntro)}</p>
+  <table><thead><tr><th style="width:5%">#</th><th style="width:32%">${t.reqCol}</th><th>${t.solutionCol}</th><th style="width:15%">${t.inCol}</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = {}): string {
   const t = T[d.language];
   const lang = d.language;
@@ -424,6 +473,7 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   <p>${esc(t.techIntro(svc.name[lang], d.customer.company.trim()))}</p>
   ${d.customer.needs.trim() ? `<p><b>${t.needs}:</b> ${esc(d.customer.needs)}</p>` : ""}
   ${benefits(d)}
+  ${requirementsTable(d)}
   <h2>${t.contentsTitle}</h2>
   ${blocks}
   <h2>${t.stagesTitle}</h2>

@@ -16,9 +16,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer } from "lucide-react";
+import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X } from "lucide-react";
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
 import { SERVICES, TIERS, TIER_NAME, serviceByKey, type Tier } from "@/lib/service-catalog";
+import { analyzeRequirements, suggestedTier, type Requirement } from "@/lib/requirements-match";
 import {
   buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal,
   type ProposalData, type ProposalCustomer,
@@ -168,7 +169,28 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     } : e));
   };
 
-  const pickService = (key: string) => setData({ serviceKey: key, prices: guidePrices(key) });
+  const pickService = (key: string) => setEditing((e) => {
+    if (!e) return e;
+    // Re-match the requirements against the new service's packages
+    const reqs = e.data.requirementsText.trim() ? analyzeRequirements(serviceByKey(key), e.data.requirementsText, e.data.requirements) : [];
+    return { ...e, data: { ...e.data, serviceKey: key, prices: guidePrices(key), requirements: reqs } };
+  });
+
+  /** Requirements → technical proposal (match each one) → financial proposal (package + extras). */
+  const analyze = () => {
+    if (!editing) return;
+    const e = editing;
+    const reqs = analyzeRequirements(serviceByKey(e.data.serviceKey), e.data.requirementsText, e.data.requirements);
+    const tier = (suggestedTier(reqs) || e.data.tier || "starter") as Tier;
+    setEditing({ ...e, data: { ...e.data, requirements: reqs, tier, included: { ...e.data.included, [tier]: true } } });
+    toast({ title: t("proposals.analyzed", { count: reqs.length, extras: reqs.filter((r) => r.match === "extra").length, pkg: TIER_NAME[tier] }) });
+  };
+  const setReq = (i: number, patch: Partial<Requirement>) => setEditing((e) => (e ? {
+    ...e, data: { ...e.data, requirements: e.data.requirements.map((r, j) => (j === i ? { ...r, ...patch } : r)) },
+  } : e));
+  const removeReq = (i: number) => setEditing((e) => (e ? {
+    ...e, data: { ...e.data, requirements: e.data.requirements.filter((_, j) => j !== i) },
+  } : e));
   const choosePackage = (tier: Tier) => setEditing((e) => (e ? {
     ...e, data: { ...e.data, tier: e.data.tier === tier ? "" : tier, included: { ...e.data.included, [tier]: true } },
   } : e));
@@ -349,8 +371,45 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                     </Field>
                   </section>
 
+                  <section className="space-y-3" data-testid="requirements-section">
+                    <h3 className="text-sm font-semibold text-primary">3. {t("proposals.requirementsSection")}</h3>
+                    <p className="text-[11px] text-muted-foreground">{t("proposals.requirementsHint")}</p>
+                    <Textarea rows={5} value={d.requirementsText} onChange={(e) => setData({ requirementsText: e.target.value })}
+                      placeholder={ar ? "مثال:\nإدارة المخزون لثلاثة فروع\nقراءة الباركود\nتنبيه قبل انتهاء الصلاحية\nربط مع تطبيق التوصيل" : "e.g.\nStock management for three branches\nBarcode scanning\nAlerts before expiry\nIntegration with a delivery app"}
+                      data-testid="input-requirements" />
+                    <Button size="sm" variant="secondary" onClick={analyze} disabled={!d.requirementsText.trim()} data-testid="button-analyze"><Wand2 className="h-4 w-4 me-1" />{t("proposals.analyze")}</Button>
+                    {d.requirements.length > 0 && (
+                      <div className="rounded border border-border divide-y divide-border">
+                        {d.requirements.map((r, i) => (
+                          <div key={i} className={`p-2 space-y-1.5 ${r.match === "extra" ? "bg-amber-500/5" : ""}`} data-testid={`requirement-${i}`}>
+                            <div className="flex items-start gap-2">
+                              <span className="text-xs text-muted-foreground mt-0.5">{i + 1}.</span>
+                              <span className="flex-1 text-sm">{r.text}</span>
+                              <button type="button" onClick={() => removeReq(i)} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
+                            </div>
+                            <div className="flex gap-2 items-center">
+                              <Select value={r.match} onValueChange={(v) => setReq(i, { match: v })}>
+                                <SelectTrigger className="h-8 text-xs flex-1" data-testid={`select-req-${i}`}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {svc.packages.flatMap((pkg) => pkg.features.map((f, fi) => (
+                                    <SelectItem key={`${pkg.tier}:${fi}`} value={`${pkg.tier}:${fi}`}>{TIER_NAME[pkg.tier]} — {ar ? f.ar : f.en}</SelectItem>
+                                  )))}
+                                  <SelectItem value="extra">{t("proposals.extraDev")}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              {r.match === "extra" && (
+                                <Input type="number" className="w-28 h-8" placeholder={t("proposals.price")} value={r.price || ""} onChange={(e) => setReq(i, { price: Number(e.target.value) || 0 })} data-testid={`input-req-price-${i}`} />
+                              )}
+                            </div>
+                            {r.match === "extra" && !r.price && <p className="text-[11px] text-amber-500">{t("proposals.extraNeedsPrice")}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </section>
+
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-primary">3. {t("proposals.packagesSection")}</h3>
+                    <h3 className="text-sm font-semibold text-primary">4. {t("proposals.packagesSection")}</h3>
                     <p className="text-[11px] text-muted-foreground">{t("proposals.packagesHint")}</p>
                     <div className="rounded border border-border divide-y divide-border">
                       {svc.packages.map((pkg) => {
@@ -398,7 +457,8 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                             )}
                           </div>
                           <div className="rounded border border-primary/30 bg-primary/5 px-3 py-2 text-sm space-y-1" data-testid="proposal-totals">
-                            <div className="flex justify-between"><span className="text-muted-foreground">{t("proposals.packagePrice", { pkg: TIER_NAME[d.tier as Tier] })}</span><PrivacyWrapper value={tot.subtotal} /></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">{t("proposals.packagePrice", { pkg: TIER_NAME[d.tier as Tier] })}</span><PrivacyWrapper value={tot.packagePrice} /></div>
+                            {tot.extras > 0 && <div className="flex justify-between"><span className="text-muted-foreground">+ {t("proposals.extrasTotal")}</span><PrivacyWrapper value={tot.extras} /></div>}
                             {tot.discount > 0 && <div className="flex justify-between text-red-400"><span>{t("proposals.discount")}{d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</span><span>− <PrivacyWrapper value={tot.discount} /></span></div>}
                             <div className="flex justify-between font-semibold border-t border-border pt-1"><span>{t("proposals.value")}</span><PrivacyWrapper value={tot.total} /></div>
                           </div>
@@ -408,7 +468,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                   </section>
 
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-primary">4. {t("proposals.termsSection")}</h3>
+                    <h3 className="text-sm font-semibold text-primary">5. {t("proposals.termsSection")}</h3>
                     <Field label={t("proposals.validDays")}><Input type="number" value={d.validDays} onChange={(e) => setData({ validDays: Number(e.target.value) || 0 })} /></Field>
                     <Field label={t("proposals.notes")} hint={t("proposals.notesHint")}><Textarea rows={3} value={d.notes} onChange={(e) => setData({ notes: e.target.value })} /></Field>
                   </section>
