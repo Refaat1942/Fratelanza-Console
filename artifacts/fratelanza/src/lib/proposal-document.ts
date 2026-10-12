@@ -408,7 +408,12 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     <tbody>${calc.rows.map((r) => `<tr><td>${esc(lang === "ar" ? r.ar : r.en)}</td><td class="num">${r.pct}%</td><td class="num">${money(r.amount, lang)}</td></tr>`).join("")}
     <tr class="total"><td>${t.total}</td><td class="num">100%</td><td class="num">${money(calc.totalAllocated, lang)}</td></tr></tbody></table>`;
   } else {
-    totals = `<h2>${t.milestonesTitle}</h2><ul class="check">${MILESTONES.map((m) => `<li>${esc(`${lang === "ar" ? m.ar : m.en} (${m.pct}%)`)}</li>`).join("")}</ul>`;
+    // No package chosen yet: show each offered package's amount per milestone
+    const cols = shownTiers(d).map((tier) => ({ tier, calc: computeStages(Math.max(0, Number(d.prices[tier]) || 0), MILESTONES) }));
+    totals = `<h2>${t.milestonesTitle}</h2>
+    <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th>${cols.map((c) => `<th>${TIER_NAME[c.tier]}</th>`).join("")}</tr></thead>
+    <tbody>${MILESTONES.map((m, i) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td>${cols.map((c) => `<td class="num">${money(c.calc.rows[i]!.amount, lang)}</td>`).join("")}</tr>`).join("")}
+    <tr class="total"><td>${t.total}</td><td class="num">100%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>`;
   }
 
   const body = `
