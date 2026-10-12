@@ -208,7 +208,7 @@ function dateFill(date: string): string {
   return formatDateAr(date) ? fill(formatDateAr(date)) : `<span class="blank">.... / .... / ........</span>`;
 }
 
-const COMPANY = {
+export const COMPANY = {
   name: "شركة فراتيلانزا للتدريب والبرمجة وحلول الذكاء الاصطناعي",
   line1: "شركة فراتيلانزا للتدريب والبرمجة",
   line2: "وحلول الذكاء الاصطناعي",

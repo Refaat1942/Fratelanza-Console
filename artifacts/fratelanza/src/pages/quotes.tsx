@@ -21,6 +21,8 @@ import { displayProjectName, packProjectName, resolveQuoteLineItems, type QuoteL
 import { useBranding } from "@/lib/branding-context";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/lib/auth-context";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProposalsPanel } from "@/components/proposals-panel";
 
 type Quote = {
   id: number;
@@ -241,9 +243,19 @@ export default function Quotes() {
   ];
 
   return (
-    <div className="space-y-6">
+    <Tabs defaultValue="packages" className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-2xl font-bold tracking-tight">{t("quotes.title")}</h1>
+        <TabsList>
+          <TabsTrigger value="packages" data-testid="tab-proposals">{t("proposals.tab")}</TabsTrigger>
+          <TabsTrigger value="custom" data-testid="tab-custom-quotes">{t("proposals.customTab")}</TabsTrigger>
+        </TabsList>
+      </div>
+      <TabsContent value="packages"><ProposalsPanel canWrite={canWrite} /></TabsContent>
+      <TabsContent value="custom">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div />
         {canWrite && (
           <Button onClick={openCreate} data-testid="button-create-quote" className="bg-primary text-primary-foreground hover:bg-primary/90">
             <Plus className="h-4 w-4 me-2" /> {t("quotes.new")}
@@ -500,5 +512,7 @@ export default function Quotes() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+      </TabsContent>
+    </Tabs>
   );
 }

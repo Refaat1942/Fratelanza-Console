@@ -13,6 +13,7 @@ import usersRouter from "./users";
 import reportsRouter from "./reports";
 import contractsRouter from "./contracts";
 import statementsRouter from "./statements";
+import proposalsRouter from "./proposals";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(usersRouter);
 router.use(reportsRouter);
 router.use(contractsRouter);
 router.use(statementsRouter);
+router.use(proposalsRouter);
 
 export default router;

@@ -29,6 +29,19 @@ export async function ensureFinanceTables(): Promise<void> {
       updated_at timestamptz NOT NULL DEFAULT now()
     )`);
   await db.execute(sql`
+    CREATE TABLE IF NOT EXISTS proposals (
+      id serial PRIMARY KEY,
+      client_id integer,
+      client_name text NOT NULL DEFAULT '',
+      service_key text NOT NULL,
+      tier text NOT NULL DEFAULT '',
+      language text NOT NULL DEFAULT 'ar',
+      amount numeric(12, 2) NOT NULL DEFAULT 0,
+      data text NOT NULL DEFAULT '{}',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`);
+  await db.execute(sql`
     CREATE TABLE IF NOT EXISTS equity_entries (
       id serial PRIMARY KEY,
       type text NOT NULL,

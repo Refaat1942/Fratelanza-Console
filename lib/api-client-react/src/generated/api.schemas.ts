@@ -652,6 +652,35 @@ export interface ContractInput {
   data: ContractInputData;
 }
 
+export type ProposalData = { [key: string]: unknown };
+
+export interface Proposal {
+  id: number;
+  /** @nullable */
+  clientId?: number | null;
+  clientName: string;
+  serviceKey: string;
+  tier: string;
+  language: string;
+  amount: number;
+  data: ProposalData;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ProposalInputData = { [key: string]: unknown };
+
+export interface ProposalInput {
+  /** @nullable */
+  clientId?: number | null;
+  clientName: string;
+  serviceKey: string;
+  tier?: string;
+  language?: string;
+  amount?: number;
+  data: ProposalInputData;
+}
+
 export type ContractData = { [key: string]: unknown };
 
 export interface Contract {
@@ -907,6 +936,10 @@ export type GetExpenseSummaryParams = {
 startDate?: string;
 endDate?: string;
 category?: string;
+};
+
+export type ListProposalsParams = {
+clientId?: number;
 };
 
 export type GetFinanceStatementsParams = {

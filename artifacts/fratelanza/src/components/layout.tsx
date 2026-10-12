@@ -3,7 +3,7 @@ import { Link, useLocation } from 'wouter';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, Briefcase, FileSpreadsheet, FileSignature, Users, Building2, FileText, FileEdit,
-  Receipt, KanbanSquare, PieChart, Lock, Unlock, LogOut, Menu, Sun, Moon,
+  Receipt, PieChart, Lock, Unlock, LogOut, Menu, Sun, Moon,
   KeyRound, Settings as SettingsIcon, Languages, UserCog,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -33,7 +33,6 @@ function NavBody({ onNav }: { onNav?: () => void }) {
     { name: t('nav.templates'), href: '/templates', icon: FileText, key: 'templates' },
     { name: t('nav.quotes'), href: '/quotes', icon: FileEdit, key: 'quotes' },
     { name: t('nav.expenses'), href: '/expenses', icon: Receipt, key: 'expenses' },
-    { name: t('nav.tasks'), href: '/tasks', icon: KanbanSquare, key: 'tasks' },
     { name: t('nav.finance'), href: '/finance', icon: PieChart, key: 'finance' },
     { name: t('nav.reports', { defaultValue: 'Reports' }), href: '/reports', icon: FileSpreadsheet, key: 'reports' },
     { name: t('nav.settings'), href: '/settings', icon: SettingsIcon, key: 'settings' },

@@ -45,7 +45,6 @@ const ALL_PAGES: { key: string; label: string }[] = [
   { key: "templates", label: "Templates" },
   { key: "quotes", label: "Quotes" },
   { key: "expenses", label: "Expenses" },
-  { key: "tasks", label: "Tasks" },
   { key: "finance", label: "Finance" },
   { key: "reports", label: "Reports" },
   { key: "settings", label: "Settings" },
