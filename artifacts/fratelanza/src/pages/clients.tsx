@@ -20,6 +20,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Eye, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { ClientProposals } from "@/components/proposals-panel";
 
 type Client = {
   id: number; name: string; phone?: string | null; address?: string | null;
@@ -96,6 +97,7 @@ function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
                 </div>
               </div>
             )}
+            <ClientProposals clientId={id} />
           </div>
         )}
         <DialogFooter><Button variant="outline" onClick={onClose}>{t("common.close", { defaultValue: "Close" })}</Button></DialogFooter>

@@ -58,6 +58,7 @@ import type {
   ListFreelancersParams,
   ListProjectQuotesByClientParams,
   ListProjectsParams,
+  ListProposalsParams,
   ListQuotesParams,
   ListTasksParams,
   ListTemplatesParams,
@@ -70,6 +71,8 @@ import type {
   ProjectInput,
   ProjectPayment,
   ProjectUpdate,
+  Proposal,
+  ProposalInput,
   Quote,
   QuoteInput,
   QuoteSummary,
@@ -4092,6 +4095,303 @@ export const useDeleteContract = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteContractMutationOptions(options));
+    }
+
+export const getListProposalsUrl = (params?: ListProposalsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/proposals?${stringifiedParams}` : `/api/proposals`
+}
+
+/**
+ * @summary Saved sales quotes / technical proposals built from the service packages
+ */
+export const listProposals = async (params?: ListProposalsParams, options?: RequestInit): Promise<Proposal[]> => {
+
+  return customFetch<Proposal[]>(getListProposalsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProposalsQueryKey = (params?: ListProposalsParams,) => {
+    return [
+    `/api/proposals`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListProposalsQueryOptions = <TData = Awaited<ReturnType<typeof listProposals>>, TError = ErrorType<unknown>>(params?: ListProposalsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProposals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProposalsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProposals>>> = ({ signal }) => listProposals(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProposals>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProposalsQueryResult = NonNullable<Awaited<ReturnType<typeof listProposals>>>
+export type ListProposalsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Saved sales quotes / technical proposals built from the service packages
+ */
+
+export function useListProposals<TData = Awaited<ReturnType<typeof listProposals>>, TError = ErrorType<unknown>>(
+ params?: ListProposalsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProposals>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProposalsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateProposalUrl = () => {
+
+
+
+
+  return `/api/proposals`
+}
+
+/**
+ * @summary Save a proposal (creates the client when it is new)
+ */
+export const createProposal = async (proposalInput: ProposalInput, options?: RequestInit): Promise<Proposal> => {
+
+  return customFetch<Proposal>(getCreateProposalUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      proposalInput,)
+  }
+);}
+
+
+
+
+export const getCreateProposalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProposal>>, TError,{data: BodyType<ProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createProposal>>, TError,{data: BodyType<ProposalInput>}, TContext> => {
+
+const mutationKey = ['createProposal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createProposal>>, {data: BodyType<ProposalInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createProposal(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateProposalMutationResult = NonNullable<Awaited<ReturnType<typeof createProposal>>>
+    export type CreateProposalMutationBody = BodyType<ProposalInput>
+    export type CreateProposalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Save a proposal (creates the client when it is new)
+ */
+export const useCreateProposal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createProposal>>, TError,{data: BodyType<ProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createProposal>>,
+        TError,
+        {data: BodyType<ProposalInput>},
+        TContext
+      > => {
+      return useMutation(getCreateProposalMutationOptions(options));
+    }
+
+export const getUpdateProposalUrl = (id: number,) => {
+
+
+
+
+  return `/api/proposals/${id}`
+}
+
+/**
+ * @summary Update a saved proposal
+ */
+export const updateProposal = async (id: number,
+    proposalInput: ProposalInput, options?: RequestInit): Promise<Proposal> => {
+
+  return customFetch<Proposal>(getUpdateProposalUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      proposalInput,)
+  }
+);}
+
+
+
+
+export const getUpdateProposalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProposal>>, TError,{id: number;data: BodyType<ProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateProposal>>, TError,{id: number;data: BodyType<ProposalInput>}, TContext> => {
+
+const mutationKey = ['updateProposal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateProposal>>, {id: number;data: BodyType<ProposalInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateProposal(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateProposalMutationResult = NonNullable<Awaited<ReturnType<typeof updateProposal>>>
+    export type UpdateProposalMutationBody = BodyType<ProposalInput>
+    export type UpdateProposalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update a saved proposal
+ */
+export const useUpdateProposal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateProposal>>, TError,{id: number;data: BodyType<ProposalInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateProposal>>,
+        TError,
+        {id: number;data: BodyType<ProposalInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateProposalMutationOptions(options));
+    }
+
+export const getDeleteProposalUrl = (id: number,) => {
+
+
+
+
+  return `/api/proposals/${id}`
+}
+
+/**
+ * @summary Delete a saved proposal
+ */
+export const deleteProposal = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteProposalUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteProposalMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProposal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteProposal>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteProposal'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteProposal>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteProposal(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteProposalMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProposal>>>
+
+    export type DeleteProposalMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a saved proposal
+ */
+export const useDeleteProposal = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProposal>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteProposal>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteProposalMutationOptions(options));
     }
 
 export const getGetFinanceStatementsUrl = (params?: GetFinanceStatementsParams,) => {

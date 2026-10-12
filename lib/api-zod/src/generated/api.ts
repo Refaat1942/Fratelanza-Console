@@ -1281,6 +1281,81 @@ export const DeleteContractParams = zod.object({
 
 
 /**
+ * @summary Saved sales quotes / technical proposals built from the service packages
+ */
+export const ListProposalsQueryParams = zod.object({
+  "clientId": zod.coerce.number().optional()
+})
+
+export const ListProposalsResponseItem = zod.object({
+  "id": zod.number(),
+  "clientId": zod.number().nullish(),
+  "clientName": zod.string(),
+  "serviceKey": zod.string(),
+  "tier": zod.string(),
+  "language": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+export const ListProposalsResponse = zod.array(ListProposalsResponseItem)
+
+
+/**
+ * @summary Save a proposal (creates the client when it is new)
+ */
+export const CreateProposalBody = zod.object({
+  "clientId": zod.number().nullish(),
+  "clientName": zod.string(),
+  "serviceKey": zod.string(),
+  "tier": zod.string().optional(),
+  "language": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "data": zod.record(zod.string(), zod.unknown())
+})
+
+
+/**
+ * @summary Update a saved proposal
+ */
+export const UpdateProposalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateProposalBody = zod.object({
+  "clientId": zod.number().nullish(),
+  "clientName": zod.string(),
+  "serviceKey": zod.string(),
+  "tier": zod.string().optional(),
+  "language": zod.string().optional(),
+  "amount": zod.number().optional(),
+  "data": zod.record(zod.string(), zod.unknown())
+})
+
+export const UpdateProposalResponse = zod.object({
+  "id": zod.number(),
+  "clientId": zod.number().nullish(),
+  "clientName": zod.string(),
+  "serviceKey": zod.string(),
+  "tier": zod.string(),
+  "language": zod.string(),
+  "amount": zod.number(),
+  "data": zod.record(zod.string(), zod.unknown()),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+
+/**
+ * @summary Delete a saved proposal
+ */
+export const DeleteProposalParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
  * @summary Income statement, balance sheet, cash flow and ratios (accrual basis)
  */
 export const GetFinanceStatementsQueryParams = zod.object({

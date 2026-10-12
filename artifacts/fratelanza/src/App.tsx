@@ -28,7 +28,7 @@ import Users from "./pages/users";
 
 const queryClient = new QueryClient();
 
-const PAGE_ORDER = ["dashboard","projects","contracts","freelancers","clients","templates","quotes","expenses","tasks","finance","reports","settings"];
+const PAGE_ORDER = ["dashboard","projects","contracts","freelancers","clients","templates","quotes","expenses","finance","reports","settings"];
 const PAGE_TO_PATH: Record<string,string> = {
   dashboard: "/", projects: "/projects", contracts: "/contracts", freelancers: "/freelancers",
   clients: "/clients", templates: "/templates", quotes: "/quotes", expenses: "/expenses",

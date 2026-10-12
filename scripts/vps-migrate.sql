@@ -114,3 +114,17 @@ CREATE TABLE IF NOT EXISTS app_settings (
   key text PRIMARY KEY,
   value text NOT NULL
 );
+
+-- Sales quotes / technical proposals from the service packages (Quotes tab, client page)
+CREATE TABLE IF NOT EXISTS proposals (
+  id serial PRIMARY KEY,
+  client_id integer,
+  client_name text NOT NULL DEFAULT '',
+  service_key text NOT NULL,
+  tier text NOT NULL DEFAULT '',
+  language text NOT NULL DEFAULT 'ar',
+  amount numeric(12, 2) NOT NULL DEFAULT 0,
+  data text NOT NULL DEFAULT '{}',
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);

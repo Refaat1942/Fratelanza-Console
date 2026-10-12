@@ -1108,6 +1108,75 @@ paths:
         "204":
           description: Deleted
 
+  /proposals:
+    get:
+      operationId: listProposals
+      tags: [proposals]
+      summary: Saved sales quotes / technical proposals built from the service packages
+      parameters:
+        - in: query
+          name: clientId
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Proposal"
+    post:
+      operationId: createProposal
+      tags: [proposals]
+      summary: Save a proposal (creates the client when it is new)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+
+  /proposals/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+    patch:
+      operationId: updateProposal
+      tags: [proposals]
+      summary: Update a saved proposal
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProposalInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Proposal"
+    delete:
+      operationId: deleteProposal
+      tags: [proposals]
+      summary: Delete a saved proposal
+      responses:
+        "204":
+          description: Deleted
+
   # ── Financial statements ──────────────────────────────────────────────
   /finance/statements:
     get:
@@ -2408,6 +2477,52 @@ components:
         projectId:
           type: ["integer", "null"]
         partyName:
+          type: string
+        amount:
+          type: number
+        data:
+          type: object
+          additionalProperties: true
+
+    Proposal:
+      type: object
+      required: [id, clientName, serviceKey, tier, language, amount, data, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        clientId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        serviceKey:
+          type: string
+        tier:
+          type: string
+        language:
+          type: string
+        amount:
+          type: number
+        data:
+          type: object
+          additionalProperties: true
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+
+    ProposalInput:
+      type: object
+      required: [clientName, serviceKey, data]
+      properties:
+        clientId:
+          type: ["integer", "null"]
+        clientName:
+          type: string
+        serviceKey:
+          type: string
+        tier:
+          type: string
+        language:
           type: string
         amount:
           type: number
