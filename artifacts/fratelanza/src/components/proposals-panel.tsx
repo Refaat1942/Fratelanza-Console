@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -21,7 +20,7 @@ import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer 
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
 import { SERVICES, TIERS, TIER_NAME, serviceByKey, type Tier } from "@/lib/service-catalog";
 import {
-  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount,
+  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal,
   type ProposalData, type ProposalCustomer,
 } from "@/lib/proposal-document";
 
@@ -35,11 +34,12 @@ function fromSaved(p: Proposal): Editing {
   return {
     id: p.id,
     clientId: p.clientId ?? null,
-    data: {
+    data: normalizeProposal({
       ...base, ...raw,
+      included: raw.included ? { ...base.included, ...raw.included } : (undefined as unknown as ProposalData["included"]),
       customer: { ...base.customer, ...(raw.customer ?? {}) },
       prices: { ...base.prices, ...(raw.prices ?? {}) },
-    },
+    }),
   };
 }
 
@@ -168,7 +168,16 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     } : e));
   };
 
-  const pickService = (key: string) => setData({ serviceKey: key, prices: guidePrices(key), finalPrice: 0 });
+  const pickService = (key: string) => setData({ serviceKey: key, prices: guidePrices(key) });
+  const choosePackage = (tier: Tier) => setEditing((e) => (e ? {
+    ...e, data: { ...e.data, tier: e.data.tier === tier ? "" : tier, included: { ...e.data.included, [tier]: true } },
+  } : e));
+  const toggleIncluded = (tier: Tier, on: boolean) => setEditing((e) => {
+    if (!e) return e;
+    const included = { ...e.data.included, [tier]: on };
+    if (!TIERS.some((x) => included[x])) return e; // keep at least one package
+    return { ...e, data: { ...e.data, included, tier: !on && e.data.tier === tier ? "" : e.data.tier } };
+  });
 
   const save = async (): Promise<Editing | null> => {
     if (!editing) return null;
@@ -269,19 +278,20 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         <DialogContent className="max-w-none w-screen h-[100dvh] rounded-none sm:rounded-lg sm:max-w-[96vw] sm:w-[96vw] sm:h-[94vh] p-0 flex flex-col gap-0">
           {editing && d && svc && (
             <>
-              <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12">
+              <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12 sm:pe-14">
                 <DialogTitle>{editing.id ? t("proposals.edit") : t("proposals.new")}</DialogTitle>
                 <div className="flex gap-2 flex-wrap">
-                  <div className="flex rounded-md border border-border p-0.5">
+                  <div className="flex rounded-md border border-primary/40 p-0.5" title={t("proposals.docSwitchHint")}>
                     {(["quote", "technical"] as const).map((k) => (
-                      <Button key={k} size="sm" variant={kind === k ? "default" : "ghost"} className="h-7" onClick={() => setKind(k)} data-testid={`toggle-doc-${k}`}>
+                      <Button key={k} size="sm" variant={kind === k ? "default" : "ghost"} className="h-8" onClick={() => setKind(k)} data-testid={`toggle-doc-${k}`}>
+                        {k === "quote" ? <FileText className="h-4 w-4 me-1" /> : <ClipboardList className="h-4 w-4 me-1" />}
                         {k === "quote" ? t("proposals.quote") : t("proposals.technical")}
                       </Button>
                     ))}
                   </div>
                   <Button variant="outline" size="sm" onClick={save} disabled={create.isPending || update.isPending} data-testid="button-save-proposal"><Save className="h-4 w-4 me-1" />{t("common.save")}</Button>
                   <Button variant="outline" size="sm" onClick={word}><FileDown className="h-4 w-4 me-1" />Word</Button>
-                  <Button size="sm" onClick={print} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-print-proposal"><Printer className="h-4 w-4 me-1" />{t("contracts.printPdf")}</Button>
+                  <Button size="sm" onClick={print} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-print-proposal"><Printer className="h-4 w-4 me-1" />{kind === "quote" ? t("proposals.printQuote") : t("proposals.printTechnical")}</Button>
                 </div>
               </DialogHeader>
               <div className="lg:hidden grid grid-cols-2 gap-1 p-2 border-b border-border bg-card/60">
@@ -341,42 +351,60 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
 
                   <section className="space-y-3">
                     <h3 className="text-sm font-semibold text-primary">3. {t("proposals.packagesSection")}</h3>
-                    <Field label={t("proposals.recommended")}>
-                      <Select value={d.tier || "none"} onValueChange={(v) => setData({ tier: v === "none" ? "" : (v as Tier), finalPrice: 0 })}>
-                        <SelectTrigger data-testid="select-tier"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {TIERS.map((tier) => <SelectItem key={tier} value={tier}>{TIER_NAME[tier]}</SelectItem>)}
-                          <SelectItem value="none">{t("proposals.noRecommendation")}</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </Field>
-                    <div className="flex items-center justify-between gap-3 rounded border border-border px-3 py-2">
-                      <Label className="text-xs">{t("proposals.showAll")}</Label>
-                      <Switch checked={d.showAllPackages || !d.tier} disabled={!d.tier} onCheckedChange={(v) => setData({ showAllPackages: v })} />
-                    </div>
+                    <p className="text-[11px] text-muted-foreground">{t("proposals.packagesHint")}</p>
                     <div className="rounded border border-border divide-y divide-border">
-                      {svc.packages.map((pkg) => (
-                        <div key={pkg.tier} className={`p-3 space-y-1 ${pkg.tier === d.tier ? "bg-primary/5" : ""}`}>
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-sm">{TIER_NAME[pkg.tier]}</span>
-                            <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />
+                      {svc.packages.map((pkg) => {
+                        const chosen = pkg.tier === d.tier;
+                        const on = d.included[pkg.tier] !== false;
+                        return (
+                          <div key={pkg.tier} className={`p-3 space-y-2 ${chosen ? "bg-primary/10" : ""} ${on ? "" : "opacity-60"}`} data-testid={`package-${pkg.tier}`}>
+                            <div className="flex items-center justify-between gap-2">
+                              <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
+                                <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={on} onChange={(e) => toggleIncluded(pkg.tier, e.target.checked)} data-testid={`include-${pkg.tier}`} />
+                                {TIER_NAME[pkg.tier]}
+                              </label>
+                              <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />
+                            </div>
+                            <div className="text-[11px] text-muted-foreground">{pkg.features.map((x) => (ar ? x.ar : x.en)).join(" · ")}</div>
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[11px] text-muted-foreground">{d.prices[pkg.tier] !== pkg.price ? `${t("proposals.guidePrice")}: ${pkg.price.toLocaleString()}` : ""}</span>
+                              <Button size="sm" variant={chosen ? "default" : "outline"} className="h-7" onClick={() => choosePackage(pkg.tier)} data-testid={`choose-${pkg.tier}`}>
+                                {chosen ? `✓ ${t("proposals.chosen")}` : t("proposals.choose")}
+                              </Button>
+                            </div>
                           </div>
-                          <div className="text-[11px] text-muted-foreground">{pkg.features.map((x) => (ar ? x.ar : x.en)).join(" · ")}</div>
-                          {d.prices[pkg.tier] !== pkg.price && <div className="text-[11px] text-muted-foreground">{t("proposals.guidePrice")}: {pkg.price.toLocaleString()}</div>}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
-                    {d.tier && (
-                      <Field label={t("proposals.finalPrice")} hint={t("proposals.finalPriceHint")}>
-                        <Input type="number" value={d.finalPrice || ""} placeholder={String(d.prices[d.tier] ?? "")} onChange={(e) => setData({ finalPrice: Number(e.target.value) || 0 })} data-testid="input-final-price" />
-                      </Field>
-                    )}
-                    {d.tier && (
-                      <div className="rounded border border-primary/30 bg-primary/5 px-3 py-2 text-sm flex justify-between">
-                        <span className="text-muted-foreground">{t("proposals.value")}</span>
-                        <span className="font-semibold"><PrivacyWrapper value={proposalAmount(d)} /></span>
-                      </div>
-                    )}
+                    {d.tier ? (() => {
+                      const tot = proposalTotals(d);
+                      return (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-2 gap-3">
+                            <Field label={t("proposals.discount")}>
+                              <Select value={d.discountType} onValueChange={(v) => setData({ discountType: v as ProposalData["discountType"] })}>
+                                <SelectTrigger data-testid="select-discount-type"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">{t("proposals.noDiscount")}</SelectItem>
+                                  <SelectItem value="percent">{t("proposals.discountPercent")}</SelectItem>
+                                  <SelectItem value="amount">{t("proposals.discountAmount")}</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </Field>
+                            {d.discountType !== "none" && (
+                              <Field label={d.discountType === "percent" ? "%" : t("proposals.discountAmount")}>
+                                <Input type="number" min={0} max={d.discountType === "percent" ? 100 : undefined} value={d.discountValue || ""} onChange={(e) => setData({ discountValue: Number(e.target.value) || 0 })} data-testid="input-discount" />
+                              </Field>
+                            )}
+                          </div>
+                          <div className="rounded border border-primary/30 bg-primary/5 px-3 py-2 text-sm space-y-1" data-testid="proposal-totals">
+                            <div className="flex justify-between"><span className="text-muted-foreground">{t("proposals.packagePrice", { pkg: TIER_NAME[d.tier as Tier] })}</span><PrivacyWrapper value={tot.subtotal} /></div>
+                            {tot.discount > 0 && <div className="flex justify-between text-red-400"><span>{t("proposals.discount")}{d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</span><span>− <PrivacyWrapper value={tot.discount} /></span></div>}
+                            <div className="flex justify-between font-semibold border-t border-border pt-1"><span>{t("proposals.value")}</span><PrivacyWrapper value={tot.total} /></div>
+                          </div>
+                        </div>
+                      );
+                    })() : <p className="text-xs text-muted-foreground">{t("proposals.noChoiceHint")}</p>}
                   </section>
 
                   <section className="space-y-3">

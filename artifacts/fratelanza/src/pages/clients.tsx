@@ -21,6 +21,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, Eye, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ClientProposals } from "@/components/proposals-panel";
+import { ClientDocuments } from "@/components/client-documents";
+import { useAuth } from "@/lib/auth-context";
 
 type Client = {
   id: number; name: string; phone?: string | null; address?: string | null;
@@ -33,6 +35,8 @@ const emptyForm = { name: "", phone: "", address: "", activity: "", project: "",
 
 function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
   const { t } = useTranslation();
+  const { state } = useAuth();
+  const canWrite = state.status === "auth" && state.role !== "viewer";
   const { data: profile, isLoading } = useGetClient(id, { query: { queryKey: getGetClientQueryKey(id) } });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -98,6 +102,7 @@ function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
               </div>
             )}
             <ClientProposals clientId={id} />
+            <ClientDocuments clientId={id} canWrite={canWrite} />
           </div>
         )}
         <DialogFooter><Button variant="outline" onClick={onClose}>{t("common.close", { defaultValue: "Close" })}</Button></DialogFooter>
