@@ -218,6 +218,9 @@ export const ar: Translations = {
     tooBig: "الملف كبير جداً (الحد الأقصى {{max}})",
   },
   proposals: {
+    linkedTechnical: "الباقات مقروءة من العرض الفني: {{name}} ({{date}})",
+    refreshTechnical: "تحديث من العرض الفني",
+    includesPrevious: "كل محتويات {{pkg}}، بالإضافة إلى:",
     specTiersTitle: "محتويات الباقات من المواصفات",
     specTiersHint: "كل بند في أول باقة تشمله، والباقة الأعلى تشمل كل ما قبلها. غيّر باقة أي بند من هنا.",
     rebuildTiers: "إعادة التوزيع تلقائياً",
