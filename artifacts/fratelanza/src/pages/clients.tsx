@@ -33,20 +33,27 @@ type Client = {
 
 const emptyForm = { name: "", phone: "", address: "", activity: "", project: "", notes: "", active: true };
 
-function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
+function ClientProfile({ id, name, onClose }: { id: number; name?: string; onClose: () => void }) {
   const { t } = useTranslation();
   const { state } = useAuth();
   const canWrite = state.status === "auth" && state.role !== "viewer";
-  const { data: profile, isLoading } = useGetClient(id, { query: { queryKey: getGetClientQueryKey(id) } });
+  const { data: profile, isLoading, error, refetch } = useGetClient(id, { query: { queryKey: getGetClientQueryKey(id), retry: 1 } });
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            360° — {profile?.name}
+            360° — {profile?.name ?? name}
             {profile?.active === false && <Badge variant="outline" className="text-red-400 border-red-500/40">{t("clients.inactive")}</Badge>}
           </DialogTitle>
         </DialogHeader>
+        {error && !profile && (
+          <div className="rounded border border-red-500/40 bg-red-500/10 p-3 text-sm space-y-2" data-testid="client-profile-error">
+            <div className="text-red-400 font-medium">{t("clients.profileLoadError")}</div>
+            <div className="text-xs text-muted-foreground break-all">{(error as { message?: string })?.message ?? String(error)}</div>
+            <Button size="sm" variant="outline" onClick={() => refetch()}>{t("clients.retry")}</Button>
+          </div>
+        )}
         {isLoading ? (
           <div className="py-8 text-center text-muted-foreground">{t("common.loading")}</div>
         ) : profile && (
@@ -101,10 +108,13 @@ function ClientProfile({ id, onClose }: { id: number; onClose: () => void }) {
                 </div>
               </div>
             )}
-            <ClientProposals clientId={id} />
-            <ClientDocuments clientId={id} canWrite={canWrite} />
           </div>
         )}
+        {/* Quotes, technical proposals and documents load on their own, even if the figures above fail */}
+        <div className="space-y-6 pb-2">
+          <ClientProposals clientId={id} />
+          <ClientDocuments clientId={id} canWrite={canWrite} />
+        </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>{t("common.close", { defaultValue: "Close" })}</Button></DialogFooter>
       </DialogContent>
     </Dialog>
@@ -307,7 +317,7 @@ export default function Clients() {
         </div>
       )}
 
-      {profileId !== null && <ClientProfile id={profileId} onClose={() => setProfileId(null)} />}
+      {profileId !== null && <ClientProfile id={profileId} name={(clients as Client[]).find((c) => c.id === profileId)?.name} onClose={() => setProfileId(null)} />}
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent>

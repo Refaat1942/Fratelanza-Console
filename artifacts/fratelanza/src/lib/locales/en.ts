@@ -215,6 +215,10 @@ export const en = {
     tooBig: "The file is too large (max {{max}})",
   },
   proposals: {
+    clear: "Clear & start over",
+    clearHint: "Empty every field and start a new document (the saved copy, if any, is kept)",
+    clearConfirm: "Clear every field and start over? Anything not saved will be lost.",
+    cleared: "Cleared — start a new document",
     scopeMode: "How to present the requirements",
     modeSpec: "Full specification document (as written: sections, tables, examples)",
     modeMatched: "Requirements list matched to the packages",
@@ -746,6 +750,8 @@ export const en = {
     syncConfirmAction: "Sync & replace",
   },
   clients: {
+    profileLoadError: "Couldn't load this client's figures. Quotes and documents are still shown below.",
+    retry: "Retry",
     title: "Clients", new: "Add Client", edit: "Edit Client",
     company: "Company", contact: "Contact Person", phone: "Phone",
     industry: "Industry", projectsCount: "Projects",
