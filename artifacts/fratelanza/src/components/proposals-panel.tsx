@@ -23,7 +23,7 @@ import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectSer
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
 import { autoTierItems, htmlToMarkdown, looksLikeSpec, specItems, specSections, specTitle, type SpecItem } from "@/lib/spec-document";
 import {
-  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, milestonesOf, hasSpecTiers, isSinglePrice, packageContents,
+  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, milestonesOf, suggestedPrices, withSuggestedPrices, hasSpecTiers, isSinglePrice, packageContents,
   type ProposalData, type ProposalCustomer,
 } from "@/lib/proposal-document";
 
@@ -214,7 +214,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     const items = hasSpecTiers(from) ? ownExtras
       : scopeModeOf(from) === "spec" ? specSections(from.requirementsText).map((text) => ({ text, match: "extra", price: 0 }))
       : from.requirements;
-    return {
+    const next: Editing = {
       ...base,
       clientId: base.clientId ?? src.clientId ?? null,
       data: {
@@ -232,6 +232,9 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         customer: base.data.customer.company.trim() ? base.data.customer : from.customer,
       },
     };
+    // Packages with no price yet (e.g. a custom project) get a suggested price to start from
+    next.data = { ...next.data, prices: withSuggestedPrices(next.data) };
+    return next;
   };
   const importedToast = (src: Proposal) => {
     const from = fromSaved(src).data;
@@ -700,6 +703,9 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                       </Field>
                     ) : <>
                     <p className="text-[11px] text-muted-foreground">{kind === "quote" ? t("proposals.packagesHint") : t("proposals.packagesHintTech")}</p>
+                    {kind === "quote" && TIERS.some((tier) => !d.prices[tier]) && (
+                      <Button size="sm" variant="outline" className="h-8 border-amber-500/40 text-amber-500" onClick={() => setData({ prices: withSuggestedPrices(d) })} data-testid="button-suggest-prices"><Wand2 className="h-4 w-4 me-1" />{t("proposals.suggestPrices")}</Button>
+                    )}
                     <div className="rounded border border-border divide-y divide-border">
                       {TIERS.map((tier) => ({ tier, price: svc.packages.find((p) => p.tier === tier)?.price ?? 0, features: packageContents(d, tier).map((x) => x.title) })).map((pkg) => {
                         const chosen = pkg.tier === d.tier;
@@ -720,7 +726,11 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                               </div>
                             ) : <div className="text-[11px] text-muted-foreground">{pkg.features.join(" · ") || "—"}</div>}
                             {kind === "quote" && <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] text-muted-foreground">{pkg.price > 0 && d.prices[pkg.tier] !== pkg.price ? `${t("proposals.guidePrice")}: ${pkg.price.toLocaleString()}` : ""}</span>
+                              <span className="text-[11px] text-muted-foreground">{(() => {
+                                const sug = pkg.price > 0 ? pkg.price : suggestedPrices(d)[pkg.tier];
+                                if (!d.prices[pkg.tier]) return <span className="text-amber-500">{t("proposals.priceMissing")}</span>;
+                                return d.prices[pkg.tier] !== sug ? `${pkg.price > 0 ? t("proposals.guidePrice") : t("proposals.suggestedPrice")}: ${sug.toLocaleString()}` : (pkg.price > 0 ? "" : t("proposals.suggestedPrice"));
+                              })()}</span>
                               <Button size="sm" variant={chosen ? "default" : "outline"} className="h-7" onClick={() => choosePackage(pkg.tier)} data-testid={`choose-${pkg.tier}`}>
                                 {chosen ? `✓ ${t("proposals.chosen")}` : t("proposals.choose")}
                               </Button>

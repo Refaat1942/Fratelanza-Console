@@ -215,6 +215,9 @@ export const en = {
     tooBig: "The file is too large (max {{max}})",
   },
   proposals: {
+    suggestedPrice: "Suggested price",
+    priceMissing: "Enter this package's price",
+    suggestPrices: "Fill suggested prices",
     milestonesSection: "Payment milestones",
     milestonesHint: "Default 30% / 30% / 30% / 10%. Change the wording or percentages for this quotation; amounts are calculated for every package.",
     resetMilestones: "Back to 30 / 30 / 30 / 10",
