@@ -4,7 +4,7 @@ import { featureOf, type Requirement } from "@/lib/requirements-match";
 import { hasOwnPhases, looksLikeSpec, renderSpec, type SpecItem } from "@/lib/spec-document";
 import {
   EXTERNAL_FEES_NOTE, MILESTONES, PRICE_NOTE, PROVIDES, STAGES, TIERS, TIER_NAME,
-  serviceByKey, isCustomService, type Tier,
+  serviceByKey, isCustomService, type Milestone, type Tier,
 } from "@/lib/service-catalog";
 
 /* ───────────────────────── Data ───────────────────────── */
@@ -64,6 +64,8 @@ export type ProposalData = {
   projectTitle?: string;
   /** Package contents taken from the specification (each item's first package) */
   tierItems?: SpecItem[];
+  /** Payment milestones of this quotation (default 30 / 30 / 30 / 10) */
+  milestones?: Milestone[];
   /** Quotation: the technical proposal its packages were read from */
   technicalId?: number | null;
 };
@@ -91,6 +93,11 @@ export function defaultProposal(serviceKey = "websites"): ProposalData {
 export function guidePrices(serviceKey: string): Record<Tier, number> {
   const s = serviceByKey(serviceKey);
   return Object.fromEntries(TIERS.map((t) => [t, s.packages.find((p) => p.tier === t)?.price ?? 0])) as Record<Tier, number>;
+}
+
+/** The quotation's payment milestones (its own, or the default 30 / 30 / 30 / 10). */
+export function milestonesOf(d: Pick<ProposalData, "milestones">): Milestone[] {
+  return d.milestones?.length ? d.milestones : MILESTONES;
 }
 
 /** Packages built from the specification's own items? */
@@ -507,7 +514,7 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
     <tbody>${items.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : "";
   if (custom && amount > 0) {
-    const calc = computeStages(amount, MILESTONES);
+    const calc = computeStages(amount, milestonesOf(d));
     // Breakdown only when there is more than one figure to add up (or a discount)
     const showSum = tot.discount > 0 || (tot.extras > 0 && tot.packagePrice > 0);
     totals = `<h2>${t.totalTitle}</h2>
@@ -522,16 +529,16 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     <h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th><th>${t.amountCol}</th></tr></thead>
     <tbody>${calc.rows.map((r) => `<tr><td>${esc(lang === "ar" ? r.ar : r.en)}</td><td class="num">${r.pct}%</td><td class="num">${money(r.amount, lang)}</td></tr>`).join("")}
-    <tr class="total"><td>${t.total}</td><td class="num">100%</td><td class="num">${money(calc.totalAllocated, lang)}</td></tr></tbody></table>`;
+    <tr class="total"><td>${t.total}</td><td class="num">${milestonesOf(d).reduce((a, m) => a + (Number(m.pct) || 0), 0)}%</td><td class="num">${money(calc.totalAllocated, lang)}</td></tr></tbody></table>`;
   } else if (custom) {
     totals = `<h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th></tr></thead>
-    <tbody>${MILESTONES.map((m) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td></tr>`).join("")}</tbody></table>`;
+    <tbody>${milestonesOf(d).map((m) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td></tr>`).join("")}</tbody></table>`;
   } else {
     // Every offered package side by side: price, additions, discount, total, and each payment in % and amount
     const cols = shownTiers(d).map((tier) => {
       const tt = proposalTotals(d, tier);
-      return { tier, tt, calc: computeStages(tt.total, MILESTONES) };
+      return { tier, tt, calc: computeStages(tt.total, milestonesOf(d)) };
     });
     const anyExtras = cols.some((c) => c.tt.extras > 0);
     const anyDiscount = cols.some((c) => c.tt.discount > 0);
@@ -546,8 +553,8 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     </tbody></table>
     <h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th>${cols.map((c) => `<th class="num">${TIER_NAME[c.tier]}</th>`).join("")}</tr></thead>
-    <tbody>${MILESTONES.map((m, i) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td>${cols.map((c) => `<td class="num">${money(c.calc.rows[i]!.amount, lang)}</td>`).join("")}</tr>`).join("")}
-    <tr class="total"><td>${t.total}</td><td class="num">100%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>
+    <tbody>${milestonesOf(d).map((m, i) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td>${cols.map((c) => `<td class="num">${money(c.calc.rows[i]!.amount, lang)}</td>`).join("")}</tr>`).join("")}
+    <tr class="total"><td>${t.total}</td><td class="num">${milestonesOf(d).reduce((a, m) => a + (Number(m.pct) || 0), 0)}%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>
     <p class="muted">${esc(t.chooseNote)}</p>`;
   }
 
