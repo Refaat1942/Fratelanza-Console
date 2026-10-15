@@ -1,6 +1,7 @@
 import defaultLogo from "@/assets/fratelanza-logo.png?inline";
 import { COMPANY, amountToArabicWords, computeStages, formatMoney, today } from "@/lib/contract-document";
 import { featureOf, type Requirement } from "@/lib/requirements-match";
+import { looksLikeSpec, renderSpec } from "@/lib/spec-document";
 import {
   EXTERNAL_FEES_NOTE, MILESTONES, PRICE_NOTE, PROVIDES, STAGES, TIERS, TIER_NAME,
   serviceByKey, isCustomService, type Tier,
@@ -54,6 +55,13 @@ export type ProposalData = {
   sourceFile: string;
   /** quote = sales quotation, technical = technical proposal (older saves had both in one) */
   kind?: "quote" | "technical";
+  /**
+   * Technical proposal scope: "spec" prints the specification document as written
+   * (headings, paragraphs, lists, tables); "matched" lists requirements against the packages.
+   */
+  scopeMode?: "spec" | "matched";
+  /** Project name from the specification title, shown in the header */
+  projectTitle?: string;
 };
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
@@ -79,6 +87,11 @@ export function defaultProposal(serviceKey = "websites"): ProposalData {
 export function guidePrices(serviceKey: string): Record<Tier, number> {
   const s = serviceByKey(serviceKey);
   return Object.fromEntries(TIERS.map((t) => [t, s.packages.find((p) => p.tier === t)?.price ?? 0])) as Record<Tier, number>;
+}
+
+/** Spec mode unless chosen otherwise: structured documents print as written. */
+export function scopeModeOf(d: Pick<ProposalData, "scopeMode" | "requirementsText">): "spec" | "matched" {
+  return d.scopeMode ?? (looksLikeSpec(d.requirementsText ?? "") ? "spec" : "matched");
 }
 
 /** Bring an older saved proposal up to the current shape. */
@@ -138,6 +151,7 @@ const T = {
     totalTitle: "قيمة العرض", totalFor: (p: string) => `إجمالي قيمة باقة ${p}`, words: "فقط",
     priceOf: (p: string) => `سعر باقة ${p}`, discount: "الخصم", totalAfter: "الإجمالي بعد الخصم",
     scopeTitle: "نطاق العمل والتكلفة", projectValue: "قيمة تنفيذ المشروع", itemsSum: "بنود مسعّرة منفصلة", inProject: "ضمن قيمة المشروع",
+    specTitle: "نطاق العمل والمواصفات الفنية", specIntro: (p: string) => `يوضح هذا العرض الفني المواصفات الفنية ونطاق العمل لمشروع «${p}»، وتفاصيل كل جزء منه، ومراحل التنفيذ والتسليم، ويُعد مكملاً لعرض السعر وللعقد عند التعاقد.`,
     scopeTechTitle: "نطاق العمل التفصيلي", fromDoc: (f: string) => `وفقاً لمستند المتطلبات المقدم من العميل (${f})، يشمل نطاق العمل البنود التالية:`, scopeIntro: "يشمل نطاق العمل البنود التالية حسب متطلبات العميل:",
     general: "متطلبات عامة",
     compareTitle: "قيمة العرض لكل باقة", itemCol: "البند", packagePriceRow: "سعر الباقة",
@@ -174,6 +188,7 @@ const T = {
     totalTitle: "Quotation value", totalFor: (p: string) => `Total for the ${p} package`, words: "",
     priceOf: (p: string) => `${p} package price`, discount: "Discount", totalAfter: "Total after discount",
     scopeTitle: "Scope of work and cost", projectValue: "Project delivery price", itemsSum: "Separately priced items", inProject: "Included in project price",
+    specTitle: "Scope of work and technical specification", specIntro: (p: string) => `This technical proposal sets out the technical specification and scope of work for "${p}", the details of each part, and the delivery stages. It complements the sales quotation and forms part of the contract once signed.`,
     scopeTechTitle: "Detailed scope of work", fromDoc: (f: string) => `Based on the requirements document provided by the client (${f}), the scope of work covers:`, scopeIntro: "The scope of work covers the following, per the client's requirements:",
     general: "General requirements",
     compareTitle: "Quotation value per package", itemCol: "Item", packagePriceRow: "Package price",
@@ -281,6 +296,19 @@ function shell(lang: Lang, title: string, body: string, opts: ProposalHtmlOption
   tr.rec td { background: #ecfeff; }
   tr.total td { background: #f1f5f9; font-weight: 700; }
   tr.disc td { color: #b91c1c; }
+  .spec h3 { color: #0a192f; margin: 14px 0 4px; page-break-after: avoid; break-after: avoid; }
+  .spec h3.spec-h1 { font-size: ${ar ? "12.5pt" : "11.5pt"}; background: #f1f5f9; border-${start}: 4px solid #0a192f; padding: 4px 10px; border-radius: 4px; }
+  .spec h3.spec-h2 { font-size: ${ar ? "11.5pt" : "10.5pt"}; color: #0369a1; }
+  .spec h3.spec-h3 { font-size: ${ar ? "11pt" : "10pt"}; color: #374151; }
+  .spec p { margin: 4px 0 6px; }
+  .spec p.spec-label { color: #0369a1; font-weight: 700; margin-top: 8px; }
+  .spec ul.spec-list, .spec ol.spec-list { margin: 4px 0 8px; padding-${start}: 22px; }
+  .spec ul.spec-list li, .spec ol.spec-list li { margin: 2px 0; }
+  .spec table.spec-table { margin: 6px 0 10px; }
+  .spec table.spec-table th { background: #1e3a5f; }
+  .spec table.spec-table tbody tr:nth-child(even) td { background: #f8fafc; }
+  .spec table.spec-table tbody tr:last-child td b { color: #0a192f; }
+  .spec code { font-family: Consolas, monospace; font-size: 90%; background: #f1f5f9; padding: 0 3px; border-radius: 3px; }
   tr.grp td { background: #e0f2fe; color: #0a192f; font-weight: 700; }
   table.sum { width: 60%; margin-${start}: auto; margin-${end}: 0; }
   table.sum td { border: 0; border-bottom: 1px solid #e5e7eb; padding: 4px 8px; }
@@ -328,7 +356,7 @@ function titleBar(d: ProposalData, title: string, withValidity: boolean) {
   const t = T[d.language];
   const svc = serviceByKey(d.serviceKey);
   return `<div class="titlebar">
-    <div><h1>${esc(title)}</h1><div class="svc">${esc(svc.name[d.language])}</div><div class="tag">${esc(svc.tagline[d.language])}</div></div>
+    <div><h1>${esc(title)}</h1><div class="svc">${esc(d.projectTitle?.trim() || svc.name[d.language])}</div><div class="tag">${esc(d.projectTitle?.trim() ? svc.name[d.language] : svc.tagline[d.language])}</div></div>
     <div class="meta">${t.date}: ${esc(fmtDate(d.date, d.language))}${withValidity ? `<br>${t.validUntil}: ${esc(fmtDate(addDays(d.date, d.validDays), d.language))}` : ""}</div>
   </div>`;
 }
@@ -544,7 +572,8 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   const tiers = shownTiers(d);
 
   const custom = isCustomService(d.serviceKey);
-  const blocks = custom ? "" : tiers.map((tier) => {
+  const spec = scopeModeOf(d) === "spec" && d.requirementsText.trim();
+  const blocks = custom || spec ? "" : tiers.map((tier) => {
     const pkg = svc.packages.find((p) => p.tier === tier)!;
     const idx = TIERS.indexOf(tier);
     const prev = idx > 0 ? TIERS[idx - 1]! : null;
@@ -560,11 +589,11 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   ${titleBar(d, t.technical, false)}
   ${clientBox(d)}
   <h2>${t.overviewTitle}</h2>
-  <p>${esc(custom ? t.techIntroCustom(d.customer.company.trim()) : t.techIntro(svc.name[lang], d.customer.company.trim()))}</p>
+  <p>${esc(spec && d.projectTitle?.trim() ? t.specIntro(d.projectTitle.trim()) : custom ? t.techIntroCustom(d.customer.company.trim()) : t.techIntro(svc.name[lang], d.customer.company.trim()))}</p>
   ${d.customer.needs.trim() ? `<p><b>${t.needs}:</b> ${esc(d.customer.needs)}</p>` : ""}
   ${benefits(d)}
-  ${requirementsTable(d)}
-  ${custom ? "" : `<h2>${t.contentsTitle}</h2>
+  ${spec ? `<h2>${t.specTitle}</h2>${renderSpec(d.requirementsText, { skipTitle: d.projectTitle?.trim() })}` : requirementsTable(d)}
+  ${custom || spec ? "" : `<h2>${t.contentsTitle}</h2>
   ${blocks}`}
   <h2>${t.stagesTitle}</h2>
   <div class="stages">${STAGES.map((s, i) => `<div><b><span class="n">${i + 1}</span>${esc(lang === "ar" ? s.ar : s.en)}</b>${esc(lang === "ar" ? s.dAr : s.dEn)}</div>`).join("")}</div>
