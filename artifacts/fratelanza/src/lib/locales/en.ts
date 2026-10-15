@@ -215,6 +215,9 @@ export const en = {
     tooBig: "The file is too large (max {{max}})",
   },
   proposals: {
+    linkedTechnical: "Packages read from the technical proposal: {{name}} ({{date}})",
+    refreshTechnical: "Update from the technical proposal",
+    includesPrevious: "Everything in {{pkg}}, plus:",
     specTiersTitle: "Package contents from the specification",
     specTiersHint: "Each item is placed in the first package that includes it; higher packages include everything below them. Change any item's package here.",
     rebuildTiers: "Re-split automatically",

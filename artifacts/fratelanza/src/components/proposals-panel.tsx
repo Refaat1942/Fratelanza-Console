@@ -202,22 +202,26 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
 
   /** Quotation: bring the service, packages and additional items over from a technical proposal. */
   const technicalSources = proposals.filter((p) => docKindOf(p) !== "quote" && (!editing?.clientId || p.clientId === editing.clientId));
-  const importTechnical = (id: string) => {
-    const src = proposals.find((p) => p.id === Number(id));
-    if (!src || !editing) return;
+  /**
+   * Read the packages (and project name, service, scope) of a technical proposal
+   * into this quotation. Prices already typed for the same service and the
+   * quotation's own additional items are kept.
+   */
+  const withTechnical = (base: Editing, src: Proposal): Editing => {
     const from = fromSaved(src).data;
-    // A specification document brings its main sections as items to price
-    // Packages built from the specification come over as packages; otherwise its sections become items to price
-    const items = hasSpecTiers(from) ? []
+    const ownExtras = base.data.requirements.filter((r) => r.match === "extra" && r.text.trim());
+    // Packages built from the specification come over as packages; otherwise its sections / requirements become items to price
+    const items = hasSpecTiers(from) ? ownExtras
       : scopeModeOf(from) === "spec" ? specSections(from.requirementsText).map((text) => ({ text, match: "extra", price: 0 }))
       : from.requirements;
-    setEditing({
-      ...editing,
-      clientId: editing.clientId ?? src.clientId ?? null,
+    return {
+      ...base,
+      clientId: base.clientId ?? src.clientId ?? null,
       data: {
-        ...editing.data,
+        ...base.data,
+        technicalId: src.id,
         serviceKey: from.serviceKey,
-        prices: from.serviceKey === editing.data.serviceKey ? editing.data.prices : guidePrices(from.serviceKey),
+        prices: from.serviceKey === base.data.serviceKey ? base.data.prices : guidePrices(from.serviceKey),
         included: from.included,
         requirements: items,
         requirementsText: from.requirementsText,
@@ -225,10 +229,27 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         projectTitle: from.projectTitle,
         tierItems: from.tierItems,
         scopeMode: from.scopeMode,
-        customer: editing.data.customer.company.trim() ? editing.data.customer : from.customer,
+        customer: base.data.customer.company.trim() ? base.data.customer : from.customer,
       },
-    });
-    toast({ title: hasSpecTiers(from) ? t("proposals.importedTiers", { count: from.tierItems!.length }) : t("proposals.imported", { count: items.filter((r) => r.match === "extra").length }) });
+    };
+  };
+  const importedToast = (src: Proposal) => {
+    const from = fromSaved(src).data;
+    toast({ title: hasSpecTiers(from) ? t("proposals.importedTiers", { count: from.tierItems!.length }) : t("proposals.imported", { count: from.requirements.filter((r) => r.match === "extra").length }) });
+  };
+  const importTechnical = (id: string) => {
+    const src = proposals.find((p) => p.id === Number(id));
+    if (!src || !editing) return;
+    setEditing(withTechnical(editing, src));
+    importedToast(src);
+  };
+  /** Latest technical proposal of a client (the list is newest first). */
+  const latestTechnicalOf = (clientId: number) => proposals.find((p) => p.clientId === clientId && docKindOf(p) !== "quote");
+  const linkedTechnical = editing?.data.technicalId ? proposals.find((p) => p.id === editing.data.technicalId) : undefined;
+  const refreshFromTechnical = () => {
+    if (!editing || !linkedTechnical) return;
+    setEditing(withTechnical(editing, linkedTechnical));
+    importedToast(linkedTechnical);
   };
   const rebuildTiers = () => setEditing((e) => {
     if (!e) return e;
@@ -247,11 +268,15 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   const pickClient = (v: string) => {
     if (v === "new") { setEditing((e) => (e ? { ...e, clientId: null } : e)); return; }
     const c = clients.find((x) => x.id === Number(v));
-    if (!c) return;
-    setEditing((e) => (e ? {
-      ...e, clientId: c.id,
-      data: { ...e.data, customer: { ...e.data.customer, company: c.name, phone: c.phone ?? e.data.customer.phone, address: c.address ?? e.data.customer.address, business: c.activity ?? e.data.customer.business } },
-    } : e));
+    if (!c || !editing) return;
+    let next: Editing = {
+      ...editing, clientId: c.id,
+      data: { ...editing.data, customer: { ...editing.data.customer, company: c.name, phone: c.phone ?? editing.data.customer.phone, address: c.address ?? editing.data.customer.address, business: c.activity ?? editing.data.customer.business } },
+    };
+    // A quotation reads its packages from the client's latest technical proposal straight away
+    const tech = kind === "quote" && !editing.data.technicalId ? latestTechnicalOf(c.id) : undefined;
+    if (tech) { next = withTechnical(next, tech); importedToast(tech); }
+    setEditing(next);
   };
 
   const pickService = (key: string) => setEditing((e) => {
@@ -637,6 +662,12 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                   <section className="space-y-3" data-testid="extras-section">
                     <h3 className="text-sm font-semibold text-primary">3. {isSinglePrice(d) ? t("proposals.scopeItems") : t("proposals.extrasSection")}</h3>
                     <p className="text-[11px] text-muted-foreground">{isSinglePrice(d) ? t("proposals.scopeItemsHint") : t("proposals.extrasHint")}</p>
+                    {linkedTechnical && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded border border-sky-600/40 bg-sky-600/10 px-3 py-2 text-xs" data-testid="linked-technical">
+                        <span className="flex items-center gap-1"><ClipboardList className="h-3.5 w-3.5 text-sky-400" />{t("proposals.linkedTechnical", { name: (linkedTechnical.data as Partial<ProposalData>)?.projectTitle || serviceName(linkedTechnical.serviceKey), date: String((linkedTechnical.data as Partial<ProposalData>)?.date ?? linkedTechnical.createdAt.slice(0, 10)) })}</span>
+                        <Button size="sm" variant="outline" className="h-7" onClick={refreshFromTechnical} data-testid="button-refresh-technical"><Wand2 className="h-3.5 w-3.5 me-1" />{t("proposals.refreshTechnical")}</Button>
+                      </div>
+                    )}
                     {technicalSources.length > 0 && (
                       <Select value="" onValueChange={importTechnical}>
                         <SelectTrigger className="h-9" data-testid="select-import-technical"><SelectValue placeholder={t("proposals.importTechnical")} /></SelectTrigger>
@@ -681,7 +712,12 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                               </label>
                               {kind === "quote" && <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />}
                             </div>
-                            <div className="text-[11px] text-muted-foreground">{pkg.tier !== "starter" && hasSpecTiers(d) ? "+ " : ""}{pkg.features.join(" · ") || "—"}</div>
+                            {hasSpecTiers(d) ? (
+                              <div className="text-xs text-muted-foreground space-y-0.5" data-testid={`package-items-${pkg.tier}`}>
+                                {pkg.tier !== "starter" && <div className="text-[11px] italic">{t("proposals.includesPrevious", { pkg: TIER_NAME[TIERS[TIERS.indexOf(pkg.tier) - 1]!] })}</div>}
+                                {pkg.features.length ? <ul className="list-disc ps-4">{pkg.features.map((f, i) => <li key={i}>{f}</li>)}</ul> : <span>—</span>}
+                              </div>
+                            ) : <div className="text-[11px] text-muted-foreground">{pkg.features.join(" · ") || "—"}</div>}
                             {kind === "quote" && <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] text-muted-foreground">{pkg.price > 0 && d.prices[pkg.tier] !== pkg.price ? `${t("proposals.guidePrice")}: ${pkg.price.toLocaleString()}` : ""}</span>
                               <Button size="sm" variant={chosen ? "default" : "outline"} className="h-7" onClick={() => choosePackage(pkg.tier)} data-testid={`choose-${pkg.tier}`}>

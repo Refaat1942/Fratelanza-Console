@@ -64,6 +64,8 @@ export type ProposalData = {
   projectTitle?: string;
   /** Package contents taken from the specification (each item's first package) */
   tierItems?: SpecItem[];
+  /** Quotation: the technical proposal its packages were read from */
+  technicalId?: number | null;
 };
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
