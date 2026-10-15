@@ -295,7 +295,23 @@ export const SERVICES: Service[] = [
   },
 ];
 
-export const serviceByKey = (key: string) => SERVICES.find((s) => s.key === key) ?? SERVICES[0]!;
+/** A project that fits none of the packages: scope comes from the customer's requirements document. */
+export const CUSTOM_SERVICE: Service = {
+  key: "custom",
+  name: { ar: "مشروع برمجي مخصص", en: "Custom Software Project" },
+  tagline: { ar: "حل برمجي مصمم حسب متطلبات العميل", en: "Software built around the client's requirements" },
+  benefits: [
+    { ar: "حل مصمم خصيصاً لطبيعة عمل {biz} واحتياجاته", en: "A solution designed around how {biz} works" },
+    { ar: "تنفيذ كامل نطاق العمل المتفق عليه بجودة عالية", en: "The full agreed scope delivered to a high standard" },
+    { ar: "بنية قابلة للتطوير والتوسع مستقبلاً", en: "Built to be extended and scaled later" },
+  ],
+  scopeNote: { ar: "يُحدد النطاق النهائي وفق مستند المتطلبات المعتمد من العميل.", en: "The final scope follows the requirements document approved by the client." },
+  packages: [],
+};
+
+export const isCustomService = (key: string) => key === CUSTOM_SERVICE.key;
+
+export const serviceByKey = (key: string) => (isCustomService(key) ? CUSTOM_SERVICE : SERVICES.find((s) => s.key === key) ?? SERVICES[0]!);
 
 /** Standard Fratelanza payment milestones (all services). */
 export const MILESTONES: { pct: number; ar: string; en: string }[] = [
