@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2 } from "lucide-react";
+import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2, Eraser } from "lucide-react";
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
 import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, isCustomService, serviceByKey, type Tier } from "@/lib/service-catalog";
 import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
@@ -182,6 +182,16 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     setEditing({ id: null, clientId: null, data });
     setKind(k);
     setMobileView("form");
+  };
+  /** Empty every field and start this document again, without closing the editor. */
+  const clearAll = () => {
+    if (!editing || !window.confirm(t("proposals.clearConfirm"))) return;
+    const data = defaultProposal();
+    data.kind = kind;
+    if (kind === "quote") data.tier = "";
+    setEditing({ id: null, clientId: null, data });
+    if (reqFileRef.current) reqFileRef.current.value = "";
+    toast({ title: t("proposals.cleared") });
   };
   const openSaved = (p: Proposal) => {
     const e = fromSaved(p);
@@ -450,6 +460,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                       </Button>
                     ))}
                   </div>}
+                  <Button variant="outline" size="sm" onClick={clearAll} className="text-amber-500 border-amber-500/40 hover:bg-amber-500/10" data-testid="button-clear-proposal" title={t("proposals.clearHint")}><Eraser className="h-4 w-4 me-1" />{t("proposals.clear")}</Button>
                   <Button variant="outline" size="sm" onClick={save} disabled={create.isPending || update.isPending} data-testid="button-save-proposal"><Save className="h-4 w-4 me-1" />{t("common.save")}</Button>
                   <Button variant="outline" size="sm" onClick={word}><FileDown className="h-4 w-4 me-1" />Word</Button>
                   <Button size="sm" onClick={print} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-print-proposal"><Printer className="h-4 w-4 me-1" />{kind === "quote" ? t("proposals.printQuote") : t("proposals.printTechnical")}</Button>
