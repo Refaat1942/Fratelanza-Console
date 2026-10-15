@@ -95,6 +95,31 @@ export function guidePrices(serviceKey: string): Record<Tier, number> {
   return Object.fromEntries(TIERS.map((t) => [t, s.packages.find((p) => p.tier === t)?.price ?? 0])) as Record<Tier, number>;
 }
 
+/**
+ * Suggested package prices when the service has none (a custom project built
+ * from a specification): the Management & ERP guide prices, scaled by how many
+ * items each package covers (about 15 items ≈ the guide price), rounded to 1,000.
+ */
+export function suggestedPrices(d: Pick<ProposalData, "serviceKey" | "tierItems">): Record<Tier, number> {
+  const guide = guidePrices(d.serviceKey);
+  if (TIERS.some((t) => guide[t] > 0)) return guide;
+  const base = guidePrices("erp");
+  const items = d.tierItems ?? [];
+  const cumulative = (tier: Tier) => items.filter((x) => TIERS.indexOf(x.tier) <= TIERS.indexOf(tier)).length;
+  const scale = (n: number, ref: number) => Math.min(2.5, Math.max(0.75, n / ref));
+  const refs: Record<Tier, number> = { starter: 6, business: 11, enterprise: 15 };
+  return Object.fromEntries(TIERS.map((t) => {
+    const factor = items.length ? scale(cumulative(t), refs[t]) : 1;
+    return [t, Math.round((base[t] * factor) / 1000) * 1000];
+  })) as Record<Tier, number>;
+}
+
+/** Fill in prices that are still 0 with the suggested ones. */
+export function withSuggestedPrices(d: ProposalData): Record<Tier, number> {
+  const s = suggestedPrices(d);
+  return Object.fromEntries(TIERS.map((t) => [t, Number(d.prices[t]) > 0 ? Number(d.prices[t]) : s[t]])) as Record<Tier, number>;
+}
+
 /** The quotation's payment milestones (its own, or the default 30 / 30 / 30 / 10). */
 export function milestonesOf(d: Pick<ProposalData, "milestones">): Milestone[] {
   return d.milestones?.length ? d.milestones : MILESTONES;

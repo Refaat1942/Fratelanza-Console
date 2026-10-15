@@ -218,6 +218,9 @@ export const ar: Translations = {
     tooBig: "الملف كبير جداً (الحد الأقصى {{max}})",
   },
   proposals: {
+    suggestedPrice: "سعر مقترح",
+    priceMissing: "أدخل سعر هذه الباقة",
+    suggestPrices: "ملء الأسعار المقترحة",
     milestonesSection: "مراحل الدفع",
     milestonesHint: "الافتراضي 30% / 30% / 30% / 10%. غيّر الصياغة أو النسب لهذا العرض، والمبالغ تُحسب لكل باقة.",
     resetMilestones: "رجوع إلى 30 / 30 / 30 / 10",
