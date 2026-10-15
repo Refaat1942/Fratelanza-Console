@@ -750,6 +750,10 @@ export const en = {
     syncConfirmAction: "Sync & replace",
   },
   clients: {
+    contractsSection: "Contracts",
+    noContracts: "No contracts for this client yet (create one in the Contracts tab with the same client name).",
+    contract: "Contract",
+    printContract: "Print contract",
     profileLoadError: "Couldn't load this client's figures. Quotes and documents are still shown below.",
     retry: "Retry",
     title: "Clients", new: "Add Client", edit: "Edit Client",
