@@ -3,7 +3,7 @@ import { COMPANY, amountToArabicWords, computeStages, formatMoney, today } from 
 import { featureOf, type Requirement } from "@/lib/requirements-match";
 import {
   EXTERNAL_FEES_NOTE, MILESTONES, PRICE_NOTE, PROVIDES, STAGES, TIERS, TIER_NAME,
-  serviceByKey, type Tier,
+  serviceByKey, isCustomService, type Tier,
 } from "@/lib/service-catalog";
 
 /* ───────────────────────── Data ───────────────────────── */
@@ -48,6 +48,10 @@ export type ProposalData = {
   requirementsText: string;
   /** Each requirement with how it is delivered (package feature or additional development) */
   requirements: Requirement[];
+  /** Custom project: price of the whole scope (requirement prices are added on top) */
+  projectPrice: number;
+  /** Name of the uploaded requirements document, if any */
+  sourceFile: string;
 };
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
@@ -65,6 +69,8 @@ export function defaultProposal(serviceKey = "websites"): ProposalData {
     notes: "",
     requirementsText: "",
     requirements: [],
+    projectPrice: 0,
+    sourceFile: "",
   };
 }
 
@@ -88,6 +94,8 @@ export function normalizeProposal(d: ProposalData): ProposalData {
   out.discountValue = Number(out.discountValue) || 0;
   out.requirementsText ??= "";
   out.requirements = Array.isArray(out.requirements) ? out.requirements : [];
+  out.projectPrice = Number(out.projectPrice) || 0;
+  out.sourceFile ??= "";
   return out;
 }
 
@@ -100,7 +108,8 @@ export function extraItems(d: ProposalData) {
 
 /** Package price + additional requirements → discount → total. */
 export function proposalTotals(d: ProposalData) {
-  const packagePrice = d.tier ? Math.max(0, Number(d.prices[d.tier] ?? 0)) : 0;
+  const packagePrice = isCustomService(d.serviceKey) ? Math.max(0, Number(d.projectPrice) || 0)
+    : d.tier ? Math.max(0, Number(d.prices[d.tier] ?? 0)) : 0;
   const extras = r2(extraItems(d).reduce((s, r) => s + Math.max(0, Number(r.price) || 0), 0));
   const subtotal = r2(packagePrice + extras);
   const v = Math.max(0, Number(d.discountValue) || 0);
@@ -126,6 +135,9 @@ const T = {
     recommended: "الباقة المختارة", egp: "ج.م",
     totalTitle: "قيمة العرض", totalFor: (p: string) => `إجمالي قيمة باقة ${p}`, words: "فقط",
     priceOf: (p: string) => `سعر باقة ${p}`, discount: "الخصم", totalAfter: "الإجمالي بعد الخصم",
+    scopeTitle: "نطاق العمل والتكلفة", projectValue: "قيمة تنفيذ المشروع", itemsSum: "بنود مسعّرة منفصلة", inProject: "ضمن قيمة المشروع",
+    scopeTechTitle: "نطاق العمل التفصيلي", fromDoc: (f: string) => `وفقاً لمستند المتطلبات المقدم من العميل (${f})، يشمل نطاق العمل البنود التالية:`, scopeIntro: "يشمل نطاق العمل البنود التالية حسب متطلبات العميل:",
+    general: "متطلبات عامة",
     extrasTitle: "متطلبات إضافية خارج الباقة", extrasSum: "المتطلبات الإضافية", subtotal: "الإجمالي قبل الخصم", grandTotal: "الإجمالي",
     reqTitle: "متطلبات العميل والحل المقترح", reqCol: "المتطلب", solutionCol: "الحل المقترح", inCol: "ضمن", extraLabel: "تطوير إضافي",
     extraDetail: "تطوير خاص لهذا المتطلب ضمن نطاق المشروع، ويُسعّر منفصلاً في العرض المالي.",
@@ -143,6 +155,8 @@ const T = {
       + (needs ? `، لتنفيذ ${needs}` : "")
       + (business ? `، بما يتناسب مع طبيعة عمل ${company || "شركتكم"} في مجال ${business}` : "")
       + `، مع الالتزام بأعلى معايير الجودة والتسليم في المواعيد المتفق عليها.`,
+    techIntroCustom: (company: string) =>
+      `يوضح هذا العرض الفني نطاق العمل المقترح لتنفيذ المشروع البرمجي الخاص بـ ${company || "العميل"} وتفاصيل بنوده، ومراحل التنفيذ والتسليم، ويُعد مكملاً لعرض السعر وللعقد عند التعاقد.`,
     techIntro: (svc: string, company: string) =>
       `يوضح هذا العرض الفني محتويات باقات خدمة «${svc}» المقدمة إلى ${company || "العميل"}، وتفاصيل كل بند، ومراحل التنفيذ والتسليم، ويُعد مكملاً لعرض السعر وللعقد عند التعاقد.`,
   },
@@ -155,6 +169,9 @@ const T = {
     recommended: "Selected", egp: "EGP",
     totalTitle: "Quotation value", totalFor: (p: string) => `Total for the ${p} package`, words: "",
     priceOf: (p: string) => `${p} package price`, discount: "Discount", totalAfter: "Total after discount",
+    scopeTitle: "Scope of work and cost", projectValue: "Project delivery price", itemsSum: "Separately priced items", inProject: "Included in project price",
+    scopeTechTitle: "Detailed scope of work", fromDoc: (f: string) => `Based on the requirements document provided by the client (${f}), the scope of work covers:`, scopeIntro: "The scope of work covers the following, per the client's requirements:",
+    general: "General requirements",
     extrasTitle: "Additional requirements (outside the package)", extrasSum: "Additional requirements", subtotal: "Subtotal", grandTotal: "Total",
     reqTitle: "Customer requirements and proposed solution", reqCol: "Requirement", solutionCol: "Proposed solution", inCol: "In", extraLabel: "Additional development",
     extraDetail: "Custom development for this requirement within the project scope, priced separately in the financial proposal.",
@@ -172,6 +189,8 @@ const T = {
       + (needs ? ` to deliver ${needs}` : "")
       + (business ? `, tailored to how ${company || "your company"} works in ${business}` : "")
       + `, built to high quality standards and delivered on the agreed schedule.`,
+    techIntroCustom: (company: string) =>
+      `This technical proposal sets out the proposed scope of work for ${company || "the client"}'s software project, the details of each item, and the delivery stages. It complements the sales quotation and forms part of the contract once signed.`,
     techIntro: (svc: string, company: string) =>
       `This technical proposal sets out the contents of each ${svc} package offered to ${company || "the client"}, the details of every item, and the delivery stages. It complements the sales quotation and forms part of the contract once signed.`,
   },
@@ -255,6 +274,7 @@ function shell(lang: Lang, title: string, body: string, opts: ProposalHtmlOption
   td.num { text-align: center; white-space: nowrap; }
   tr.rec td { background: #ecfeff; }
   tr.total td { background: #f1f5f9; font-weight: 700; }
+  tr.grp td { background: #e0f2fe; color: #0a192f; font-weight: 700; }
   table.sum { width: 60%; margin-${start}: auto; margin-${end}: 0; }
   table.sum td { border: 0; border-bottom: 1px solid #e5e7eb; padding: 4px 8px; }
   table.sum td.num { text-align: ${end}; }
@@ -339,7 +359,8 @@ function notesList(d: ProposalData, withValidity: boolean) {
   const t = T[d.language];
   const svc = serviceByKey(d.serviceKey);
   const items = [
-    PRICE_NOTE[d.language], svc.scopeNote[d.language], EXTERNAL_FEES_NOTE[d.language],
+    // Custom projects are priced firmly, so no "guide prices" note
+    ...(isCustomService(d.serviceKey) ? [] : [PRICE_NOTE[d.language]]), svc.scopeNote[d.language], EXTERNAL_FEES_NOTE[d.language],
     ...d.notes.split("\n").map((x) => x.trim()).filter(Boolean),
     ...(withValidity ? [t.validity(d.validDays)] : []),
   ];
@@ -366,6 +387,31 @@ function shownTiers(d: ProposalData): Tier[] {
   return list.length ? list : TIERS;
 }
 
+/** Requirements in document order, grouped under their section headings. */
+function grouped(reqs: Requirement[], fallback: string) {
+  const groups: { title: string; items: { r: Requirement; n: number }[] }[] = [];
+  reqs.forEach((r, i) => {
+    const title = r.group?.trim() || fallback;
+    let g = groups[groups.length - 1];
+    if (!g || g.title !== title) { g = { title, items: [] }; groups.push(g); }
+    g.items.push({ r, n: i + 1 });
+  });
+  return groups;
+}
+
+/** Custom project, financial view: scope items by section with their price. */
+function customScopeTable(d: ProposalData) {
+  const t = T[d.language];
+  const lang = d.language;
+  const groups = grouped(d.requirements ?? [], t.general);
+  if (!groups.length) return "";
+  const many = groups.length > 1 || groups[0]!.title !== t.general;
+  const rows = groups.map((g) => `${many ? `<tr class="grp"><td colspan="3">${esc(g.title)}</td></tr>` : ""}${g.items.map(({ r, n }) =>
+    `<tr><td class="num">${n}</td><td>${esc(r.text)}</td><td class="num">${Number(r.price) > 0 ? money(Number(r.price), lang) : `<span class="muted">${t.inProject}</span>`}</td></tr>`).join("")}`).join("");
+  return `<h2>${t.scopeTitle}</h2>
+  <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:22%">${t.priceCol}</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
 /* ───────────────────────── Sales quotation ───────────────────────── */
 
 export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}): string {
@@ -374,8 +420,9 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   const svc = serviceByKey(d.serviceKey);
   const tot = proposalTotals(d);
   const amount = tot.total;
+  const custom = isCustomService(d.serviceKey);
 
-  const rows = shownTiers(d).map((tier) => {
+  const rows = custom ? "" : shownTiers(d).map((tier) => {
     const pkg = svc.packages.find((p) => p.tier === tier)!;
     const rec = tier === d.tier;
     const price = Number(d.prices[tier] ?? pkg.price);
@@ -387,26 +434,32 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   }).join("");
 
   let totals = "";
-  if (d.tier && amount > 0) {
+  if ((custom || d.tier) && amount > 0) {
     const calc = computeStages(amount, MILESTONES);
-    const extras = extraItems(d);
-    const showSum = tot.discount > 0 || tot.extras > 0;
+    const extras = custom ? [] : extraItems(d);
+    const baseLabel = custom ? t.projectValue : t.priceOf(TIER_NAME[d.tier as Tier]);
+    // Breakdown only when there is more than one figure to add up (or a discount)
+    const showSum = tot.discount > 0 || (tot.extras > 0 && tot.packagePrice > 0);
     totals = `${extras.length ? `<h2>${t.extrasTitle}</h2>
     <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
     <tbody>${extras.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : ""}
     <h2>${t.totalTitle}</h2>
     ${showSum ? `<table class="sum"><tbody>
-      <tr><td>${esc(t.priceOf(TIER_NAME[d.tier]))}</td><td class="num">${money(tot.packagePrice, lang)}</td></tr>
-      ${tot.extras > 0 ? `<tr><td>${esc(t.extrasSum)}</td><td class="num">${money(tot.extras, lang)}</td></tr>` : ""}
+      ${tot.packagePrice > 0 || !custom ? `<tr><td>${esc(baseLabel)}</td><td class="num">${money(tot.packagePrice, lang)}</td></tr>` : ""}
+      ${tot.extras > 0 ? `<tr><td>${esc(custom ? t.itemsSum : t.extrasSum)}</td><td class="num">${money(tot.extras, lang)}</td></tr>` : ""}
       ${tot.extras > 0 && tot.discount > 0 ? `<tr><td><b>${esc(t.subtotal)}</b></td><td class="num"><b>${money(tot.subtotal, lang)}</b></td></tr>` : ""}
       ${tot.discount > 0 ? `<tr class="disc"><td>${esc(t.discount)}${d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</td><td class="num">− ${money(tot.discount, lang)}</td></tr>` : ""}
     </tbody></table>` : ""}
-    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : tot.extras > 0 ? t.grandTotal : t.totalFor(TIER_NAME[d.tier]))}</span><b>${money(amount, lang)}</b>
+    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : tot.extras > 0 || custom ? t.grandTotal : t.totalFor(TIER_NAME[d.tier as Tier]))}</span><b>${money(amount, lang)}</b>
       ${lang === "ar" ? `<span class="w">${t.words} ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير.</span>` : ""}</div>
     <h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th><th>${t.amountCol}</th></tr></thead>
     <tbody>${calc.rows.map((r) => `<tr><td>${esc(lang === "ar" ? r.ar : r.en)}</td><td class="num">${r.pct}%</td><td class="num">${money(r.amount, lang)}</td></tr>`).join("")}
     <tr class="total"><td>${t.total}</td><td class="num">100%</td><td class="num">${money(calc.totalAllocated, lang)}</td></tr></tbody></table>`;
+  } else if (custom) {
+    totals = `<h2>${t.milestonesTitle}</h2>
+    <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th></tr></thead>
+    <tbody>${MILESTONES.map((m) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td></tr>`).join("")}</tbody></table>`;
   } else {
     // No package chosen yet: show each offered package's amount per milestone
     const cols = shownTiers(d).map((tier) => ({ tier, calc: computeStages(Math.max(0, Number(d.prices[tier]) || 0), MILESTONES) }));
@@ -423,8 +476,8 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   ${intro(d)}
   <h2>${t.benefitsTitle}</h2>
   ${benefits(d)}
-  <h2>${t.packagesTitle}</h2>
-  <table><thead><tr><th style="width:18%">${t.packageCol}</th><th>${t.includesCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead><tbody>${rows}</tbody></table>
+  ${custom ? customScopeTable(d) : `<h2>${t.packagesTitle}</h2>
+  <table><thead><tr><th style="width:18%">${t.packageCol}</th><th>${t.includesCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead><tbody>${rows}</tbody></table>`}
   ${totals}
   ${provides(d)}
   ${notesList(d, true)}
@@ -440,15 +493,27 @@ function requirementsTable(d: ProposalData) {
   const t = T[d.language];
   const lang = d.language;
   const svc = serviceByKey(d.serviceKey);
-  const rows = reqs.map((r, i) => {
+  const groups = grouped(reqs, t.general);
+  const many = groups.length > 1 || groups[0]!.title !== t.general;
+  const lead = d.sourceFile ? t.fromDoc(d.sourceFile) : null;
+
+  if (isCustomService(d.serviceKey)) {
+    // Custom project: the scope of work, section by section
+    return `<h2>${t.scopeTechTitle}</h2>
+    <p>${esc(lead ?? t.scopeIntro)}</p>
+    ${groups.map((g) => `<div class="pkgblock">${many ? `<h3>${esc(g.title)}</h3>` : ""}
+      <ul class="check">${g.items.map(({ r }) => `<li>${esc(r.text)}</li>`).join("")}</ul></div>`).join("")}`;
+  }
+
+  const rows = groups.map((g) => `${many ? `<tr class="grp"><td colspan="4">${esc(g.title)}</td></tr>` : ""}${g.items.map(({ r, n }) => {
     const f = featureOf(svc, r.match);
     const solution = f
       ? `<b>${esc(lang === "ar" ? f.feature.ar : f.feature.en)}</b><br><span class="muted">${esc(lang === "ar" ? f.feature.dAr : f.feature.dEn)}</span>`
       : `<b>${t.extraLabel}</b><br><span class="muted">${esc(t.extraDetail)}</span>`;
-    return `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td>${solution}</td><td class="num">${f ? TIER_NAME[f.tier] : `<span class="badge">${t.extraLabel}</span>`}</td></tr>`;
-  }).join("");
+    return `<tr><td class="num">${n}</td><td>${esc(r.text)}</td><td>${solution}</td><td class="num">${f ? TIER_NAME[f.tier] : `<span class="badge">${t.extraLabel}</span>`}</td></tr>`;
+  }).join("")}`).join("");
   return `<h2>${t.reqTitle}</h2>
-  <p>${esc(t.reqIntro)}</p>
+  <p>${esc(lead ?? t.reqIntro)}</p>
   <table><thead><tr><th style="width:5%">#</th><th style="width:32%">${t.reqCol}</th><th>${t.solutionCol}</th><th style="width:15%">${t.inCol}</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -458,7 +523,8 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   const svc = serviceByKey(d.serviceKey);
   const tiers = shownTiers(d);
 
-  const blocks = tiers.map((tier) => {
+  const custom = isCustomService(d.serviceKey);
+  const blocks = custom ? "" : tiers.map((tier) => {
     const pkg = svc.packages.find((p) => p.tier === tier)!;
     const idx = TIERS.indexOf(tier);
     const prev = idx > 0 ? TIERS[idx - 1]! : null;
@@ -475,16 +541,59 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   ${titleBar(d, t.technical, false)}
   ${clientBox(d)}
   <h2>${t.overviewTitle}</h2>
-  <p>${esc(t.techIntro(svc.name[lang], d.customer.company.trim()))}</p>
+  <p>${esc(custom ? t.techIntroCustom(d.customer.company.trim()) : t.techIntro(svc.name[lang], d.customer.company.trim()))}</p>
   ${d.customer.needs.trim() ? `<p><b>${t.needs}:</b> ${esc(d.customer.needs)}</p>` : ""}
   ${benefits(d)}
   ${requirementsTable(d)}
-  <h2>${t.contentsTitle}</h2>
-  ${blocks}
+  ${custom ? "" : `<h2>${t.contentsTitle}</h2>
+  ${blocks}`}
   <h2>${t.stagesTitle}</h2>
   <div class="stages">${STAGES.map((s, i) => `<div><b><span class="n">${i + 1}</span>${esc(lang === "ar" ? s.ar : s.en)}</b>${esc(lang === "ar" ? s.dAr : s.dEn)}</div>`).join("")}</div>
   ${provides(d)}
   ${notesList(d, false)}
   ${approval(d)}`;
   return shell(lang, `${t.technical} – ${d.customer.company || svc.name[lang]}`, body, opts);
+}
+
+/* ───────────── Older "custom quotes" in the corporate design ───────────── */
+
+export type LegacyQuote = {
+  clientName: string;
+  lineItems?: { desc: string; price: number }[] | null;
+  price: number;
+  language?: string | null;
+  date?: string | null;
+  paymentTerms?: string | null;
+  generatedReport?: string | null;
+  technicalOutline?: string | null;
+};
+
+/**
+ * A custom quote from the "Custom quotes" tab as a custom-project proposal, so it
+ * prints with the same corporate quotation / technical proposal layout.
+ * Line items become priced scope items; without line items the report text
+ * becomes the scope and the quote price is the project price.
+ */
+export function proposalFromLegacyQuote(q: LegacyQuote, toLines: (text: string) => string[]): ProposalData {
+  const d = defaultProposal("custom");
+  d.serviceKey = "custom";
+  d.tier = "";
+  d.language = q.language === "English" ? "en" : "ar";
+  d.date = (q.date || d.date).slice(0, 10);
+  d.customer.company = q.clientName || "";
+  const items = (q.lineItems ?? []).filter((i) => i.desc?.trim());
+  if (items.length) {
+    d.requirements = items.map((i) => ({ text: i.desc.trim(), match: "extra", price: Math.max(0, Number(i.price) || 0) }));
+    const itemsSum = d.requirements.reduce((s, r) => s + r.price, 0);
+    d.projectPrice = Math.max(0, Number(q.price) - itemsSum);
+  } else {
+    let group = "";
+    d.requirements = toLines(q.generatedReport || q.technicalOutline || "").flatMap((line) => {
+      if (line.startsWith("# ")) { group = line.slice(2); return []; }
+      return [{ text: line, match: "extra", price: 0, ...(group ? { group } : {}) }];
+    });
+    d.projectPrice = Math.max(0, Number(q.price) || 0);
+  }
+  d.notes = (q.paymentTerms ?? "").trim();
+  return d;
 }

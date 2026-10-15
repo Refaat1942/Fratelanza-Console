@@ -15,7 +15,12 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, Search, X, Download, FileText } from "lucide-react";
-import { exportQuote, type QuoteExportFormat } from "@/lib/quote-pdf";
+import { buildQuoteHtml, buildTechnicalHtml, proposalFromLegacyQuote, type LegacyQuote } from "@/lib/proposal-document";
+import { requirementsFromDocument } from "@/lib/requirements-match";
+import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
+
+/** pdf = sales quotation, word = quotation as Word, technical = technical proposal */
+type QuoteExportFormat = "pdf" | "word" | "technical";
 import { dedupeReportLines } from "@/lib/outline-pages";
 import { displayProjectName, packProjectName, resolveQuoteLineItems, type QuoteLineItem } from "@/lib/quote-line-items";
 import { useBranding } from "@/lib/branding-context";
@@ -206,27 +211,33 @@ export default function Quotes() {
     taxId: branding.taxId,
   };
 
+  /** Same corporate layout as Packages & proposals (logo, client box, scope, totals, milestones). */
+  const exportCorporate = (q: LegacyQuote, format: QuoteExportFormat) => {
+    const d = proposalFromLegacyQuote(q, (text) => requirementsFromDocument(text));
+    const opts = { logoDataUrl: exportOpts.logoDataUrl };
+    const html = format === "technical" ? buildTechnicalHtml(d, opts) : buildQuoteHtml(d, opts);
+    if (format === "word") {
+      downloadContractWord(html, `quotation-${q.clientName || "client"}`.replace(/\s+/g, "-"));
+    } else if (!printContractHtml(html)) {
+      toast({ title: t("contracts.popupBlocked"), variant: "destructive" });
+    }
+  };
+
   const handleExport = (q: Quote, format: QuoteExportFormat) => {
-    const items = resolveQuoteLineItems(q);
-    exportQuote({ ...q, lineItems: items }, exportOpts, format);
+    exportCorporate({ ...q, lineItems: resolveQuoteLineItems(q) }, format);
   };
 
   const handleExportDraft = (format: QuoteExportFormat) => {
-    exportQuote(
-      {
-        clientName: form.clientName || "Client",
-        projectName: lineItems.length > 0 ? packProjectName(lineItems) : form.generatedReport.slice(0, 120),
-        lineItems,
-        price: effectivePrice,
-        language: form.language,
-        date: form.date,
-        paymentTerms: form.paymentTerms,
-        milestones: form.milestones,
-        generatedReport: form.generatedReport,
-      },
-      exportOpts,
-      format,
-    );
+    exportCorporate({
+      clientName: form.clientName || "Client",
+      lineItems,
+      price: effectivePrice,
+      language: form.language,
+      date: form.date,
+      paymentTerms: form.paymentTerms,
+      generatedReport: form.generatedReport,
+      technicalOutline: form.technicalOutline,
+    }, format);
   };
 
   const f = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -317,6 +328,9 @@ export default function Quotes() {
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleExport(q, "word")}>
                             <FileText className="h-4 w-4 mr-2" /> {t("quotes.exportWord")}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleExport(q, "technical")}>
+                            <FileText className="h-4 w-4 mr-2" /> {t("proposals.printTechnical")}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -488,6 +502,7 @@ export default function Quotes() {
                 <DropdownMenuContent align="start">
                   <DropdownMenuItem onClick={() => handleExportDraft("pdf")}>{t("quotes.exportPdf")}</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExportDraft("word")}>{t("quotes.exportWord")}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleExportDraft("technical")}>{t("proposals.printTechnical")}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

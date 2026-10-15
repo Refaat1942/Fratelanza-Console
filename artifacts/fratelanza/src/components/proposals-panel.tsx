@@ -16,10 +16,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X } from "lucide-react";
+import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2 } from "lucide-react";
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
-import { SERVICES, TIERS, TIER_NAME, serviceByKey, type Tier } from "@/lib/service-catalog";
-import { analyzeRequirements, suggestedTier, type Requirement } from "@/lib/requirements-match";
+import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, isCustomService, serviceByKey, type Tier } from "@/lib/service-catalog";
+import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
+import { extractOutlineFromFile } from "@/lib/outline-file-parser";
 import {
   buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal,
   type ProposalData, type ProposalCustomer,
@@ -177,13 +178,52 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   });
 
   /** Requirements → technical proposal (match each one) → financial proposal (package + extras). */
+  const runAnalysis = (data: ProposalData): ProposalData => {
+    const reqs = analyzeRequirements(serviceByKey(data.serviceKey), data.requirementsText, data.requirements);
+    if (isCustomService(data.serviceKey)) return { ...data, requirements: reqs, tier: "" };
+    const tier = (suggestedTier(reqs) || data.tier || "starter") as Tier;
+    return { ...data, requirements: reqs, tier, included: { ...data.included, [tier]: true } };
+  };
   const analyze = () => {
     if (!editing) return;
-    const e = editing;
-    const reqs = analyzeRequirements(serviceByKey(e.data.serviceKey), e.data.requirementsText, e.data.requirements);
-    const tier = (suggestedTier(reqs) || e.data.tier || "starter") as Tier;
-    setEditing({ ...e, data: { ...e.data, requirements: reqs, tier, included: { ...e.data.included, [tier]: true } } });
-    toast({ title: t("proposals.analyzed", { count: reqs.length, extras: reqs.filter((r) => r.match === "extra").length, pkg: TIER_NAME[tier] }) });
+    const data = runAnalysis(editing.data);
+    setEditing({ ...editing, data });
+    toast({
+      title: isCustomService(data.serviceKey)
+        ? t("proposals.analyzedCustom", { count: data.requirements.length })
+        : t("proposals.analyzed", { count: data.requirements.length, extras: data.requirements.filter((r) => r.match === "extra").length, pkg: TIER_NAME[data.tier as Tier] }),
+    });
+  };
+
+  /** Upload a Word / PDF requirements document → requirements → service → analysis. */
+  const reqFileRef = useRef<HTMLInputElement>(null);
+  const [reading, setReading] = useState(false);
+  const uploadRequirements = async (file: File | null) => {
+    if (!file || !editing) return;
+    setReading(true);
+    try {
+      const { text } = await extractOutlineFromFile(file);
+      const lines = requirementsFromDocument(text);
+      if (!lines.some((l) => !l.startsWith("# "))) throw new Error(t("proposals.nothingRead"));
+      const detected = detectService(text);
+      const serviceKey = detected?.key ?? CUSTOM_SERVICE.key;
+      const base = editing.data;
+      const data = runAnalysis({
+        ...base,
+        serviceKey,
+        prices: serviceKey === base.serviceKey ? base.prices : guidePrices(serviceKey),
+        requirementsText: lines.join("\n"),
+        requirements: [],
+        sourceFile: file.name,
+      });
+      setEditing({ ...editing, data });
+      toast({ title: t("proposals.fileRead", { count: data.requirements.length, service: serviceName(serviceKey) }) });
+    } catch (err) {
+      toast({ title: (err as Error).message || t("common.error"), variant: "destructive" });
+    } finally {
+      setReading(false);
+      if (reqFileRef.current) reqFileRef.current.value = "";
+    }
   };
   const setReq = (i: number, patch: Partial<Requirement>) => setEditing((e) => (e ? {
     ...e, data: { ...e.data, requirements: e.data.requirements.map((r, j) => (j === i ? { ...r, ...patch } : r)) },
@@ -330,7 +370,10 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                     <Field label={t("proposals.service")}>
                       <Select value={d.serviceKey} onValueChange={pickService}>
                         <SelectTrigger data-testid="select-service"><SelectValue /></SelectTrigger>
-                        <SelectContent>{SERVICES.map((s) => <SelectItem key={s.key} value={s.key}>{serviceName(s.key)}</SelectItem>)}</SelectContent>
+                        <SelectContent>
+                          {SERVICES.map((s) => <SelectItem key={s.key} value={s.key}>{serviceName(s.key)}</SelectItem>)}
+                          <SelectItem value={CUSTOM_SERVICE.key}>{serviceName(CUSTOM_SERVICE.key)}</SelectItem>
+                        </SelectContent>
                       </Select>
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
@@ -374,42 +417,62 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                   <section className="space-y-3" data-testid="requirements-section">
                     <h3 className="text-sm font-semibold text-primary">3. {t("proposals.requirementsSection")}</h3>
                     <p className="text-[11px] text-muted-foreground">{t("proposals.requirementsHint")}</p>
+                    <div className="rounded border border-dashed border-primary/50 bg-primary/5 p-3 space-y-1">
+                      <input ref={reqFileRef} type="file" accept=".pdf,.docx,.doc,.txt,.md,.xlsx,.xls" className="hidden" onChange={(e) => uploadRequirements(e.target.files?.[0] ?? null)} data-testid="input-requirements-file" />
+                      <Button size="sm" onClick={() => reqFileRef.current?.click()} disabled={reading} data-testid="button-upload-requirements">
+                        {reading ? <Loader2 className="h-4 w-4 me-1 animate-spin" /> : <Upload className="h-4 w-4 me-1" />}{t("proposals.uploadRequirements")}
+                      </Button>
+                      <p className="text-[11px] text-muted-foreground">{d.sourceFile ? t("proposals.readFrom", { file: d.sourceFile }) : t("proposals.uploadHint")}</p>
+                    </div>
                     <Textarea rows={5} value={d.requirementsText} onChange={(e) => setData({ requirementsText: e.target.value })}
                       placeholder={ar ? "مثال:\nإدارة المخزون لثلاثة فروع\nقراءة الباركود\nتنبيه قبل انتهاء الصلاحية\nربط مع تطبيق التوصيل" : "e.g.\nStock management for three branches\nBarcode scanning\nAlerts before expiry\nIntegration with a delivery app"}
                       data-testid="input-requirements" />
                     <Button size="sm" variant="secondary" onClick={analyze} disabled={!d.requirementsText.trim()} data-testid="button-analyze"><Wand2 className="h-4 w-4 me-1" />{t("proposals.analyze")}</Button>
                     {d.requirements.length > 0 && (
                       <div className="rounded border border-border divide-y divide-border">
-                        {d.requirements.map((r, i) => (
-                          <div key={i} className={`p-2 space-y-1.5 ${r.match === "extra" ? "bg-amber-500/5" : ""}`} data-testid={`requirement-${i}`}>
-                            <div className="flex items-start gap-2">
-                              <span className="text-xs text-muted-foreground mt-0.5">{i + 1}.</span>
-                              <span className="flex-1 text-sm">{r.text}</span>
+                        {d.requirements.map((r, i) => {
+                          const custom = isCustomService(d.serviceKey);
+                          const newGroup = r.group && r.group !== d.requirements[i - 1]?.group;
+                          return (
+                          <div key={i} className={`p-2 space-y-1.5 ${!custom && r.match === "extra" ? "bg-amber-500/5" : ""}`} data-testid={`requirement-${i}`}>
+                            {newGroup && <div className="text-xs font-semibold text-primary">{r.group}</div>}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">{i + 1}.</span>
+                              <Input className="flex-1 h-8 text-sm" value={r.text} onChange={(e) => setReq(i, { text: e.target.value })} data-testid={`input-req-text-${i}`} />
                               <button type="button" onClick={() => removeReq(i)} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
                             </div>
                             <div className="flex gap-2 items-center">
-                              <Select value={r.match} onValueChange={(v) => setReq(i, { match: v })}>
-                                <SelectTrigger className="h-8 text-xs flex-1" data-testid={`select-req-${i}`}><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {svc.packages.flatMap((pkg) => pkg.features.map((f, fi) => (
-                                    <SelectItem key={`${pkg.tier}:${fi}`} value={`${pkg.tier}:${fi}`}>{TIER_NAME[pkg.tier]} — {ar ? f.ar : f.en}</SelectItem>
-                                  )))}
-                                  <SelectItem value="extra">{t("proposals.extraDev")}</SelectItem>
-                                </SelectContent>
-                              </Select>
+                              {!custom && (
+                                <Select value={r.match} onValueChange={(v) => setReq(i, { match: v })}>
+                                  <SelectTrigger className="h-8 text-xs flex-1" data-testid={`select-req-${i}`}><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {svc.packages.flatMap((pkg) => pkg.features.map((f, fi) => (
+                                      <SelectItem key={`${pkg.tier}:${fi}`} value={`${pkg.tier}:${fi}`}>{TIER_NAME[pkg.tier]} — {ar ? f.ar : f.en}</SelectItem>
+                                    )))}
+                                    <SelectItem value="extra">{t("proposals.extraDev")}</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              )}
+                              {custom && <span className="flex-1 text-[11px] text-muted-foreground">{t("proposals.itemPriceHint")}</span>}
                               {r.match === "extra" && (
                                 <Input type="number" className="w-28 h-8" placeholder={t("proposals.price")} value={r.price || ""} onChange={(e) => setReq(i, { price: Number(e.target.value) || 0 })} data-testid={`input-req-price-${i}`} />
                               )}
                             </div>
-                            {r.match === "extra" && !r.price && <p className="text-[11px] text-amber-500">{t("proposals.extraNeedsPrice")}</p>}
+                            {!custom && r.match === "extra" && !r.price && <p className="text-[11px] text-amber-500">{t("proposals.extraNeedsPrice")}</p>}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </section>
 
                   <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-primary">4. {t("proposals.packagesSection")}</h3>
+                    <h3 className="text-sm font-semibold text-primary">4. {isCustomService(d.serviceKey) ? t("proposals.priceSection") : t("proposals.packagesSection")}</h3>
+                    {isCustomService(d.serviceKey) ? (
+                      <Field label={t("proposals.projectPrice")} hint={t("proposals.projectPriceHint")}>
+                        <Input type="number" value={d.projectPrice || ""} onChange={(e) => setData({ projectPrice: Number(e.target.value) || 0 })} data-testid="input-project-price" />
+                      </Field>
+                    ) : <>
                     <p className="text-[11px] text-muted-foreground">{t("proposals.packagesHint")}</p>
                     <div className="rounded border border-border divide-y divide-border">
                       {svc.packages.map((pkg) => {
@@ -435,7 +498,8 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                         );
                       })}
                     </div>
-                    {d.tier ? (() => {
+                    </>}
+                    {d.tier || isCustomService(d.serviceKey) ? (() => {
                       const tot = proposalTotals(d);
                       return (
                         <div className="space-y-3">
@@ -457,8 +521,8 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                             )}
                           </div>
                           <div className="rounded border border-primary/30 bg-primary/5 px-3 py-2 text-sm space-y-1" data-testid="proposal-totals">
-                            <div className="flex justify-between"><span className="text-muted-foreground">{t("proposals.packagePrice", { pkg: TIER_NAME[d.tier as Tier] })}</span><PrivacyWrapper value={tot.packagePrice} /></div>
-                            {tot.extras > 0 && <div className="flex justify-between"><span className="text-muted-foreground">+ {t("proposals.extrasTotal")}</span><PrivacyWrapper value={tot.extras} /></div>}
+                            <div className="flex justify-between"><span className="text-muted-foreground">{isCustomService(d.serviceKey) ? t("proposals.projectPrice") : t("proposals.packagePrice", { pkg: TIER_NAME[d.tier as Tier] })}</span><PrivacyWrapper value={tot.packagePrice} /></div>
+                            {tot.extras > 0 && <div className="flex justify-between"><span className="text-muted-foreground">+ {isCustomService(d.serviceKey) ? t("proposals.itemsTotal") : t("proposals.extrasTotal")}</span><PrivacyWrapper value={tot.extras} /></div>}
                             {tot.discount > 0 && <div className="flex justify-between text-red-400"><span>{t("proposals.discount")}{d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</span><span>− <PrivacyWrapper value={tot.discount} /></span></div>}
                             <div className="flex justify-between font-semibold border-t border-border pt-1"><span>{t("proposals.value")}</span><PrivacyWrapper value={tot.total} /></div>
                           </div>
