@@ -230,7 +230,13 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     });
     toast({ title: hasSpecTiers(from) ? t("proposals.importedTiers", { count: from.tierItems!.length }) : t("proposals.imported", { count: items.filter((r) => r.match === "extra").length }) });
   };
-  const rebuildTiers = () => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: autoTierItems(specItems(e.data.requirementsText)) } } : e));
+  const rebuildTiers = () => setEditing((e) => {
+    if (!e) return e;
+    // Also fix a project name that was taken from a section heading ("1. مقدمة")
+    const title = e.data.projectTitle?.trim() ?? "";
+    const projectTitle = !title || /^\d|^(?:مقدمة|مقدمه|introduction)/i.test(title) ? specTitle(e.data.requirementsText) || title : title;
+    return { ...e, data: { ...e.data, projectTitle, tierItems: autoTierItems(specItems(e.data.requirementsText)) } };
+  });
   const setTierItem = (i: number, patch: Partial<SpecItem>) => setEditing((e) => (e ? {
     ...e, data: { ...e.data, tierItems: (e.data.tierItems ?? []).map((x, j) => (j === i ? { ...x, ...patch } : x)) },
   } : e));
