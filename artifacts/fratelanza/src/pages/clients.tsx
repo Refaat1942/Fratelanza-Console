@@ -22,6 +22,7 @@ import { Plus, Pencil, Trash2, Search, Eye, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { ClientProposals } from "@/components/proposals-panel";
 import { ClientDocuments } from "@/components/client-documents";
+import { ClientContracts } from "@/components/client-contracts";
 import { useAuth } from "@/lib/auth-context";
 
 type Client = {
@@ -113,6 +114,7 @@ function ClientProfile({ id, name, onClose }: { id: number; name?: string; onClo
         {/* Quotes, technical proposals and documents load on their own, even if the figures above fail */}
         <div className="space-y-6 pb-2">
           <ClientProposals clientId={id} />
+          <ClientContracts clientName={profile?.name ?? name} />
           <ClientDocuments clientId={id} canWrite={canWrite} />
         </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>{t("common.close", { defaultValue: "Close" })}</Button></DialogFooter>

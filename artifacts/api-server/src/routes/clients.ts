@@ -179,8 +179,12 @@ router.get("/clients/:id", async (req, res): Promise<void> => {
     .from(projectsTable)
     .where(ilike(projectsTable.clientName, `%${client.name}%`));
 
+  // Only the columns shown here (older servers may lack newer quote columns)
   const quotes = await db
-    .select()
+    .select({
+      id: quotesTable.id, clientName: quotesTable.clientName, projectName: quotesTable.projectName,
+      price: quotesTable.price, date: quotesTable.date, language: quotesTable.language, createdAt: quotesTable.createdAt,
+    })
     .from(quotesTable)
     .where(sql`lower(trim(${quotesTable.clientName})) = lower(trim(${client.name}))`)
     .orderBy(desc(quotesTable.createdAt));

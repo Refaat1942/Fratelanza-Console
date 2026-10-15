@@ -753,6 +753,10 @@ export const ar: Translations = {
     syncConfirmAction: "مزامنة واستبدال",
   },
   clients: {
+    contractsSection: "العقود",
+    noContracts: "لا توجد عقود لهذا العميل بعد (أنشئ عقداً من صفحة العقود بنفس اسم العميل).",
+    contract: "عقد",
+    printContract: "طباعة العقد",
     profileLoadError: "تعذّر تحميل أرقام هذا العميل. العروض والمستندات معروضة بالأسفل.",
     retry: "إعادة المحاولة",
     title: "العملاء", new: "إضافة عميل", edit: "تعديل العميل",
