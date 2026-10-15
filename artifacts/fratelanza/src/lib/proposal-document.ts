@@ -1,7 +1,7 @@
 import defaultLogo from "@/assets/fratelanza-logo.png?inline";
 import { COMPANY, amountToArabicWords, computeStages, formatMoney, today } from "@/lib/contract-document";
 import { featureOf, type Requirement } from "@/lib/requirements-match";
-import { looksLikeSpec, renderSpec } from "@/lib/spec-document";
+import { looksLikeSpec, renderSpec, type SpecItem } from "@/lib/spec-document";
 import {
   EXTERNAL_FEES_NOTE, MILESTONES, PRICE_NOTE, PROVIDES, STAGES, TIERS, TIER_NAME,
   serviceByKey, isCustomService, type Tier,
@@ -62,6 +62,8 @@ export type ProposalData = {
   scopeMode?: "spec" | "matched";
   /** Project name from the specification title, shown in the header */
   projectTitle?: string;
+  /** Package contents taken from the specification (each item's first package) */
+  tierItems?: SpecItem[];
 };
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
@@ -87,6 +89,27 @@ export function defaultProposal(serviceKey = "websites"): ProposalData {
 export function guidePrices(serviceKey: string): Record<Tier, number> {
   const s = serviceByKey(serviceKey);
   return Object.fromEntries(TIERS.map((t) => [t, s.packages.find((p) => p.tier === t)?.price ?? 0])) as Record<Tier, number>;
+}
+
+/** Packages built from the specification's own items? */
+export function hasSpecTiers(d: Pick<ProposalData, "tierItems">): boolean {
+  return (d.tierItems?.length ?? 0) > 0;
+}
+
+/** Priced as one custom project (no packages)? */
+export function isSinglePrice(d: Pick<ProposalData, "serviceKey" | "tierItems">): boolean {
+  return isCustomService(d.serviceKey) && !hasSpecTiers(d);
+}
+
+/** What a package adds over the one before it: specification items, or the catalog features. */
+export function packageContents(d: ProposalData, tier: Tier): { title: string; detail: string }[] {
+  const lang = d.language;
+  if (hasSpecTiers(d)) {
+    return (d.tierItems ?? []).filter((x) => x.tier === tier)
+      .map((x) => ({ title: x.text, detail: x.section && x.section !== x.text ? x.section : "" }));
+  }
+  const pkg = serviceByKey(d.serviceKey).packages.find((p) => p.tier === tier);
+  return (pkg?.features ?? []).map((f) => ({ title: lang === "ar" ? f.ar : f.en, detail: lang === "ar" ? f.dAr : f.dEn }));
 }
 
 /** Spec mode unless chosen otherwise: structured documents print as written. */
@@ -123,7 +146,7 @@ export function extraItems(d: ProposalData) {
 
 /** Package price + additional requirements → discount → total. */
 export function proposalTotals(d: ProposalData, tier: Tier | "" = d.tier) {
-  const packagePrice = isCustomService(d.serviceKey) ? Math.max(0, Number(d.projectPrice) || 0)
+  const packagePrice = isSinglePrice(d) ? Math.max(0, Number(d.projectPrice) || 0)
     : tier ? Math.max(0, Number(d.prices[tier] ?? 0)) : 0;
   const extras = r2(extraItems(d).reduce((s, r) => s + Math.max(0, Number(r.price) || 0), 0));
   const subtotal = r2(packagePrice + extras);
@@ -151,6 +174,7 @@ const T = {
     totalTitle: "قيمة العرض", totalFor: (p: string) => `إجمالي قيمة باقة ${p}`, words: "فقط",
     priceOf: (p: string) => `سعر باقة ${p}`, discount: "الخصم", totalAfter: "الإجمالي بعد الخصم",
     scopeTitle: "نطاق العمل والتكلفة", projectValue: "قيمة تنفيذ المشروع", itemsSum: "بنود مسعّرة منفصلة", inProject: "ضمن قيمة المشروع",
+    specPackagesTitle: "الباقات المقترحة ومحتوياتها", specPackagesIntro: "تم تقسيم بنود المواصفات على ثلاث باقات، كل باقة تشمل محتويات الباقة السابقة وتضيف إليها، ليختار العميل ما يناسبه.", sectionCol: "القسم",
     specTitle: "نطاق العمل والمواصفات الفنية", specIntro: (p: string) => `يوضح هذا العرض الفني المواصفات الفنية ونطاق العمل لمشروع «${p}»، وتفاصيل كل جزء منه، ومراحل التنفيذ والتسليم، ويُعد مكملاً لعرض السعر وللعقد عند التعاقد.`,
     scopeTechTitle: "نطاق العمل التفصيلي", fromDoc: (f: string) => `وفقاً لمستند المتطلبات المقدم من العميل (${f})، يشمل نطاق العمل البنود التالية:`, scopeIntro: "يشمل نطاق العمل البنود التالية حسب متطلبات العميل:",
     general: "متطلبات عامة",
@@ -188,6 +212,7 @@ const T = {
     totalTitle: "Quotation value", totalFor: (p: string) => `Total for the ${p} package`, words: "",
     priceOf: (p: string) => `${p} package price`, discount: "Discount", totalAfter: "Total after discount",
     scopeTitle: "Scope of work and cost", projectValue: "Project delivery price", itemsSum: "Separately priced items", inProject: "Included in project price",
+    specPackagesTitle: "Proposed packages and their contents", specPackagesIntro: "The specification items are split into three packages; each one includes the previous package and adds to it, so the client can choose what suits them.", sectionCol: "Section",
     specTitle: "Scope of work and technical specification", specIntro: (p: string) => `This technical proposal sets out the technical specification and scope of work for "${p}", the details of each part, and the delivery stages. It complements the sales quotation and forms part of the contract once signed.`,
     scopeTechTitle: "Detailed scope of work", fromDoc: (f: string) => `Based on the requirements document provided by the client (${f}), the scope of work covers:`, scopeIntro: "The scope of work covers the following, per the client's requirements:",
     general: "General requirements",
@@ -395,7 +420,7 @@ function notesList(d: ProposalData, withValidity: boolean) {
   const svc = serviceByKey(d.serviceKey);
   const items = [
     // Custom projects are priced firmly, so no "guide prices" note
-    ...(isCustomService(d.serviceKey) ? [] : [PRICE_NOTE[d.language]]), svc.scopeNote[d.language], EXTERNAL_FEES_NOTE[d.language],
+    ...(isSinglePrice(d) || hasSpecTiers(d) ? [] : [PRICE_NOTE[d.language]]), svc.scopeNote[d.language], EXTERNAL_FEES_NOTE[d.language],
     ...d.notes.split("\n").map((x) => x.trim()).filter(Boolean),
     ...(withValidity ? [t.validity(d.validDays)] : []),
   ];
@@ -455,15 +480,15 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   const svc = serviceByKey(d.serviceKey);
   const tot = proposalTotals(d);
   const amount = tot.total;
-  const custom = isCustomService(d.serviceKey);
+  const custom = isSinglePrice(d);
 
-  const rows = custom ? "" : shownTiers(d).map((tier) => {
-    const pkg = svc.packages.find((p) => p.tier === tier)!;
+  const rows = custom ? "" : shownTiers(d).map((tier, i, all) => {
     // The client chooses: every package is shown the same way (the chosen one is internal only)
-    const price = Number(d.prices[tier] ?? pkg.price);
+    const price = Number(d.prices[tier] ?? 0);
+    const prev = i > 0 ? all[i - 1]! : null;
     return `<tr>
       <td class="pkg">${TIER_NAME[tier]}</td>
-      <td><ul>${pkg.features.map((x) => `<li>${esc(lang === "ar" ? x.ar : x.en)}</li>`).join("")}</ul></td>
+      <td>${prev ? `<div class="muted">${esc(t.plus(TIER_NAME[prev]))}</div>` : ""}<ul>${packageContents(d, tier).map((x) => `<li>${esc(x.title)}</li>`).join("")}</ul></td>
       <td class="num"><b>${money(price, lang)}</b></td>
     </tr>`;
   }).join("");
@@ -573,15 +598,17 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
 
   const custom = isCustomService(d.serviceKey);
   const spec = scopeModeOf(d) === "spec" && d.requirementsText.trim();
-  const blocks = custom || spec ? "" : tiers.map((tier) => {
-    const pkg = svc.packages.find((p) => p.tier === tier)!;
-    const idx = TIERS.indexOf(tier);
-    const prev = idx > 0 ? TIERS[idx - 1]! : null;
+  const specTiers = hasSpecTiers(d);
+  // Packages from the specification's own items, or the catalog packages (not for a single-price custom project / plain spec)
+  const showBlocks = specTiers || (!custom && !spec);
+  const blocks = !showBlocks ? "" : tiers.map((tier, i) => {
+    const prev = i > 0 ? tiers[i - 1]! : null;
+    const items = packageContents(d, tier);
     return `<div class="pkgblock">
       <h3>${lang === "ar" ? "باقة" : "Package:"} ${TIER_NAME[tier]}</h3>
       ${prev ? `<div class="plus">${esc(t.plus(TIER_NAME[prev]))}</div>` : ""}
-      <table><thead><tr><th style="width:34%">${t.featureCol}</th><th>${t.detailCol}</th></tr></thead>
-      <tbody>${pkg.features.map((x) => `<tr><td><b>${esc(lang === "ar" ? x.ar : x.en)}</b></td><td>${esc(lang === "ar" ? x.dAr : x.dEn)}</td></tr>`).join("")}</tbody></table>
+      <table><thead><tr><th style="width:34%">${t.featureCol}</th><th>${specTiers ? t.sectionCol : t.detailCol}</th></tr></thead>
+      <tbody>${items.map((x) => `<tr><td><b>${esc(x.title)}</b></td><td>${esc(x.detail)}</td></tr>`).join("")}</tbody></table>
     </div>`;
   }).join("");
 
@@ -593,8 +620,9 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   ${d.customer.needs.trim() ? `<p><b>${t.needs}:</b> ${esc(d.customer.needs)}</p>` : ""}
   ${benefits(d)}
   ${spec ? `<h2>${t.specTitle}</h2>${renderSpec(d.requirementsText, { skipTitle: d.projectTitle?.trim() })}` : requirementsTable(d)}
-  ${custom || spec ? "" : `<h2>${t.contentsTitle}</h2>
-  ${blocks}`}
+  ${showBlocks ? `<h2>${specTiers ? t.specPackagesTitle : t.contentsTitle}</h2>
+  ${specTiers ? `<p>${esc(t.specPackagesIntro)}</p>` : ""}
+  ${blocks}` : ""}
   <h2>${t.stagesTitle}</h2>
   <div class="stages">${STAGES.map((s, i) => `<div><b><span class="n">${i + 1}</span>${esc(lang === "ar" ? s.ar : s.en)}</b>${esc(lang === "ar" ? s.dAr : s.dEn)}</div>`).join("")}</div>
   ${provides(d)}

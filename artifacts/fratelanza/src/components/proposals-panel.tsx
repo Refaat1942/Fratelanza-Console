@@ -21,9 +21,9 @@ import { printContractHtml, downloadContractWord } from "@/lib/contract-document
 import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, isCustomService, serviceByKey, type Tier } from "@/lib/service-catalog";
 import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
-import { htmlToMarkdown, looksLikeSpec, specSections, specTitle } from "@/lib/spec-document";
+import { autoTierItems, htmlToMarkdown, looksLikeSpec, specItems, specSections, specTitle, type SpecItem } from "@/lib/spec-document";
 import {
-  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf,
+  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, hasSpecTiers, isSinglePrice, packageContents,
   type ProposalData, type ProposalCustomer,
 } from "@/lib/proposal-document";
 
@@ -207,8 +207,9 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     if (!src || !editing) return;
     const from = fromSaved(src).data;
     // A specification document brings its main sections as items to price
-    const items = scopeModeOf(from) === "spec"
-      ? specSections(from.requirementsText).map((text) => ({ text, match: "extra", price: 0 }))
+    // Packages built from the specification come over as packages; otherwise its sections become items to price
+    const items = hasSpecTiers(from) ? []
+      : scopeModeOf(from) === "spec" ? specSections(from.requirementsText).map((text) => ({ text, match: "extra", price: 0 }))
       : from.requirements;
     setEditing({
       ...editing,
@@ -222,11 +223,19 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         requirementsText: from.requirementsText,
         sourceFile: from.sourceFile,
         projectTitle: from.projectTitle,
+        tierItems: from.tierItems,
+        scopeMode: from.scopeMode,
         customer: editing.data.customer.company.trim() ? editing.data.customer : from.customer,
       },
     });
-    toast({ title: t("proposals.imported", { count: items.filter((r) => r.match === "extra").length }) });
+    toast({ title: hasSpecTiers(from) ? t("proposals.importedTiers", { count: from.tierItems!.length }) : t("proposals.imported", { count: items.filter((r) => r.match === "extra").length }) });
   };
+  const rebuildTiers = () => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: autoTierItems(specItems(e.data.requirementsText)) } } : e));
+  const setTierItem = (i: number, patch: Partial<SpecItem>) => setEditing((e) => (e ? {
+    ...e, data: { ...e.data, tierItems: (e.data.tierItems ?? []).map((x, j) => (j === i ? { ...x, ...patch } : x)) },
+  } : e));
+  const removeTierItem = (i: number) => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: (e.data.tierItems ?? []).filter((_, j) => j !== i) } } : e));
+  const addTierItem = () => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: [...(e.data.tierItems ?? []), { text: "", section: "", tier: "enterprise" as const }] } } : e));
   const addExtra = () => setEditing((e) => (e ? { ...e, data: { ...e.data, requirements: [...e.data.requirements, { text: "", match: "extra", price: 0 }] } } : e));
 
   const pickClient = (v: string) => {
@@ -296,10 +305,11 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
           data: {
             ...base, serviceKey, scopeMode: "spec", requirementsText: text.trim(), requirements: [], sourceFile: file.name,
             projectTitle: specTitle(text) || base.projectTitle,
+            tierItems: autoTierItems(specItems(text)),
             prices: serviceKey === base.serviceKey ? base.prices : guidePrices(serviceKey),
           },
         });
-        toast({ title: t("proposals.specRead", { count: specSections(text).length }) });
+        toast({ title: t("proposals.specRead", { count: specItems(text).length }) });
         return;
       }
 
@@ -555,6 +565,28 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                     <Textarea rows={scopeModeOf(d) === "spec" ? 16 : 5} dir="auto" className="font-mono text-xs leading-relaxed" value={d.requirementsText} onChange={(e) => setData({ requirementsText: e.target.value })}
                       placeholder={ar ? "مثال:\nإدارة المخزون لثلاثة فروع\nقراءة الباركود\nتنبيه قبل انتهاء الصلاحية\nربط مع تطبيق التوصيل" : "e.g.\nStock management for three branches\nBarcode scanning\nAlerts before expiry\nIntegration with a delivery app"}
                       data-testid="input-requirements" />
+                    {scopeModeOf(d) === "spec" && (
+                      <div className="rounded border border-border p-3 space-y-2" data-testid="spec-tiers">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-sm font-semibold">{t("proposals.specTiersTitle")}</div>
+                          <Button size="sm" variant="outline" className="h-8" onClick={rebuildTiers} disabled={!d.requirementsText.trim()} data-testid="button-rebuild-tiers"><Wand2 className="h-4 w-4 me-1" />{t("proposals.rebuildTiers")}</Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{t("proposals.specTiersHint")}</p>
+                        {(d.tierItems ?? []).length === 0 ? (
+                          <p className="text-xs text-muted-foreground">{t("proposals.noSpecTiers")}</p>
+                        ) : (d.tierItems ?? []).map((x, i) => (
+                          <div key={i} className="flex items-center gap-2" data-testid={`spec-tier-${i}`}>
+                            <Input className="flex-1 h-8 text-sm" value={x.text} onChange={(e) => setTierItem(i, { text: e.target.value })} title={x.section} />
+                            <Select value={x.tier} onValueChange={(v) => setTierItem(i, { tier: v as SpecItem["tier"] })}>
+                              <SelectTrigger className="h-8 w-32 text-xs" data-testid={`select-spec-tier-${i}`}><SelectValue /></SelectTrigger>
+                              <SelectContent>{TIERS.map((tier) => <SelectItem key={tier} value={tier}>{TIER_NAME[tier]}</SelectItem>)}</SelectContent>
+                            </Select>
+                            <button type="button" onClick={() => removeTierItem(i)} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
+                          </div>
+                        ))}
+                        <Button size="sm" variant="ghost" className="h-8" onClick={addTierItem}><Plus className="h-4 w-4 me-1" />{t("proposals.addItem")}</Button>
+                      </div>
+                    )}
                     {scopeModeOf(d) === "matched" && <Button size="sm" variant="secondary" onClick={analyze} disabled={!d.requirementsText.trim()} data-testid="button-analyze"><Wand2 className="h-4 w-4 me-1" />{t("proposals.analyze")}</Button>}
                     {scopeModeOf(d) === "matched" && d.requirements.length > 0 && (
                       <div className="rounded border border-border divide-y divide-border">
@@ -597,8 +629,8 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
 
                   {kind === "quote" && (
                   <section className="space-y-3" data-testid="extras-section">
-                    <h3 className="text-sm font-semibold text-primary">3. {isCustomService(d.serviceKey) ? t("proposals.scopeItems") : t("proposals.extrasSection")}</h3>
-                    <p className="text-[11px] text-muted-foreground">{isCustomService(d.serviceKey) ? t("proposals.scopeItemsHint") : t("proposals.extrasHint")}</p>
+                    <h3 className="text-sm font-semibold text-primary">3. {isSinglePrice(d) ? t("proposals.scopeItems") : t("proposals.extrasSection")}</h3>
+                    <p className="text-[11px] text-muted-foreground">{isSinglePrice(d) ? t("proposals.scopeItemsHint") : t("proposals.extrasHint")}</p>
                     {technicalSources.length > 0 && (
                       <Select value="" onValueChange={importTechnical}>
                         <SelectTrigger className="h-9" data-testid="select-import-technical"><SelectValue placeholder={t("proposals.importTechnical")} /></SelectTrigger>
@@ -622,16 +654,16 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                   </section>
                   )}
 
-                  {!(kind === "technical" && isCustomService(d.serviceKey)) && <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-primary">4. {isCustomService(d.serviceKey) ? t("proposals.priceSection") : t("proposals.packagesSection")}</h3>
-                    {isCustomService(d.serviceKey) ? (
+                  {!(kind === "technical" && isSinglePrice(d)) && <section className="space-y-3">
+                    <h3 className="text-sm font-semibold text-primary">4. {isSinglePrice(d) ? t("proposals.priceSection") : t("proposals.packagesSection")}</h3>
+                    {isSinglePrice(d) ? (
                       <Field label={t("proposals.projectPrice")} hint={t("proposals.projectPriceHint")}>
                         <Input type="number" value={d.projectPrice || ""} onChange={(e) => setData({ projectPrice: Number(e.target.value) || 0 })} data-testid="input-project-price" />
                       </Field>
                     ) : <>
                     <p className="text-[11px] text-muted-foreground">{kind === "quote" ? t("proposals.packagesHint") : t("proposals.packagesHintTech")}</p>
                     <div className="rounded border border-border divide-y divide-border">
-                      {svc.packages.map((pkg) => {
+                      {TIERS.map((tier) => ({ tier, price: svc.packages.find((p) => p.tier === tier)?.price ?? 0, features: packageContents(d, tier).map((x) => x.title) })).map((pkg) => {
                         const chosen = pkg.tier === d.tier;
                         const on = d.included[pkg.tier] !== false;
                         return (
@@ -643,9 +675,9 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                               </label>
                               {kind === "quote" && <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />}
                             </div>
-                            <div className="text-[11px] text-muted-foreground">{pkg.features.map((x) => (ar ? x.ar : x.en)).join(" · ")}</div>
+                            <div className="text-[11px] text-muted-foreground">{pkg.tier !== "starter" && hasSpecTiers(d) ? "+ " : ""}{pkg.features.join(" · ") || "—"}</div>
                             {kind === "quote" && <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] text-muted-foreground">{d.prices[pkg.tier] !== pkg.price ? `${t("proposals.guidePrice")}: ${pkg.price.toLocaleString()}` : ""}</span>
+                              <span className="text-[11px] text-muted-foreground">{pkg.price > 0 && d.prices[pkg.tier] !== pkg.price ? `${t("proposals.guidePrice")}: ${pkg.price.toLocaleString()}` : ""}</span>
                               <Button size="sm" variant={chosen ? "default" : "outline"} className="h-7" onClick={() => choosePackage(pkg.tier)} data-testid={`choose-${pkg.tier}`}>
                                 {chosen ? `✓ ${t("proposals.chosen")}` : t("proposals.choose")}
                               </Button>
@@ -656,7 +688,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                     </div>
                     </>}
                     {kind === "quote" && (() => {
-                      const custom = isCustomService(d.serviceKey);
+                      const custom = isSinglePrice(d);
                       const tiers = custom ? [""] as const : TIERS.filter((x) => d.included[x] !== false);
                       return (
                         <div className="space-y-3">
