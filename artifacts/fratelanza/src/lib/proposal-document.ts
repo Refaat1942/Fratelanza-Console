@@ -1,7 +1,7 @@
 import defaultLogo from "@/assets/fratelanza-logo.png?inline";
 import { COMPANY, amountToArabicWords, computeStages, formatMoney, today } from "@/lib/contract-document";
 import { featureOf, type Requirement } from "@/lib/requirements-match";
-import { looksLikeSpec, renderSpec, type SpecItem } from "@/lib/spec-document";
+import { hasOwnPhases, looksLikeSpec, renderSpec, type SpecItem } from "@/lib/spec-document";
 import {
   EXTERNAL_FEES_NOTE, MILESTONES, PRICE_NOTE, PROVIDES, STAGES, TIERS, TIER_NAME,
   serviceByKey, isCustomService, type Tier,
@@ -190,7 +190,8 @@ const T = {
     overviewTitle: "نبذة عن المشروع", needs: "احتياج العميل", contentsTitle: "الباقات وتفاصيل المحتويات",
     plus: (p: string) => `تشمل جميع محتويات باقة ${p}، بالإضافة إلى:`, featureCol: "البند", detailCol: "التفاصيل",
     stagesTitle: "مراحل التنفيذ", approvalTitle: "الاعتماد", forCompany: "عن شركة فراتيلانزا", forClient: "اعتماد العميل",
-    name: "الاسم", signature: "التوقيع", sigDate: "التاريخ", manager: "المدير العام",
+    name: "الاسم", signature: "التوقيع", sigDate: "التاريخ", manager: "المدير العام", title: "الصفة",
+    firstParty: "الطرف الأول (الجهة المنفذة)", secondParty: "الطرف الثاني (العميل)",
     yourBusiness: "نشاطكم", contactLine: "للتواصل",
     intro: (svc: string, company: string, business: string, needs: string) =>
       `يسعد شركة فراتيلانزا للتدريب والبرمجة وحلول الذكاء الاصطناعي أن تتقدم إليكم بهذا العرض الخاص بخدمة «${svc}»`
@@ -228,7 +229,8 @@ const T = {
     overviewTitle: "Project overview", needs: "Client requirement", contentsTitle: "Packages and their contents",
     plus: (p: string) => `Includes everything in the ${p} package, plus:`, featureCol: "Item", detailCol: "Details",
     stagesTitle: "Delivery stages", approvalTitle: "Approval", forCompany: "For Fratelanza", forClient: "Client approval",
-    name: "Name", signature: "Signature", sigDate: "Date", manager: "General Manager",
+    name: "Name", signature: "Signature", sigDate: "Date", manager: "General Manager", title: "Title",
+    firstParty: "First party (service provider)", secondParty: "Second party (client)",
     yourBusiness: "your business", contactLine: "Contact",
     intro: (svc: string, company: string, business: string, needs: string) =>
       `Fratelanza for Training, Software & AI Solutions is pleased to submit this proposal for ${svc}`
@@ -435,10 +437,15 @@ function provides(d: ProposalData) {
 function approval(d: ProposalData) {
   const t = T[d.language];
   const blank = "................................";
+  const ar = d.language === "ar";
+  const c = d.customer;
+  const clientName = c.company.trim() || c.contactName.trim();
   return `<h2>${t.approvalTitle}</h2>
   <div class="sign">
-    <div><b>${t.forCompany}</b>${t.name}: ${d.language === "ar" ? COMPANY.manager : "Ahmed Mohamed Refaat El-Sayed"} – ${t.manager}<br>${t.signature}: ${blank}</div>
-    <div><b>${t.forClient}</b>${t.name}: ${esc(d.customer.contactName) || blank}<br>${t.signature}: ${blank}<br>${t.sigDate}: ${blank}</div>
+    <div><b>${t.firstParty}</b>${esc(ar ? COMPANY.name : "Fratelanza for Training, Software & AI Solutions")}<br>
+      ${t.name}: ${ar ? COMPANY.manager : "Ahmed Mohamed Refaat El-Sayed"}<br>${t.title}: ${t.manager}<br>${t.signature}: ${blank}<br>${t.sigDate}: ${blank}</div>
+    <div><b>${t.secondParty}</b>${clientName ? esc(clientName) : blank}<br>
+      ${t.name}: ${esc(c.contactName) || blank}<br>${t.title}: ${esc(c.contactTitle) || blank}<br>${t.signature}: ${blank}<br>${t.sigDate}: ${blank}</div>
   </div>`;
 }
 
@@ -623,8 +630,8 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
   ${showBlocks ? `<h2>${specTiers ? t.specPackagesTitle : t.contentsTitle}</h2>
   ${specTiers ? `<p>${esc(t.specPackagesIntro)}</p>` : ""}
   ${blocks}` : ""}
-  <h2>${t.stagesTitle}</h2>
-  <div class="stages">${STAGES.map((s, i) => `<div><b><span class="n">${i + 1}</span>${esc(lang === "ar" ? s.ar : s.en)}</b>${esc(lang === "ar" ? s.dAr : s.dEn)}</div>`).join("")}</div>
+  ${spec && hasOwnPhases(d.requirementsText) ? "" : `<h2>${t.stagesTitle}</h2>
+  <div class="stages">${STAGES.map((s, i) => `<div><b><span class="n">${i + 1}</span>${esc(lang === "ar" ? s.ar : s.en)}</b>${esc(lang === "ar" ? s.dAr : s.dEn)}</div>`).join("")}</div>`}
   ${provides(d)}
   ${notesList(d, false)}
   ${approval(d)}`;

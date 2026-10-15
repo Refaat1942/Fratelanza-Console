@@ -28,13 +28,29 @@ const NUMBERED = /^\s*(\d{1,3})[.)]\s+(.*)$/;
 const cells = (row: string) => row.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((c) => c.trim());
 const numeric = (c: string) => /^[\d,.\s%−\-+×=]+(?:\s*(?:جنيه|جنيهًا|جنيهات|كيلو|EGP))?$/.test(c.replace(/\*\*/g, "")) && /\d/.test(c);
 
-/** The document title: its first level-1 heading ("# المواصفات الفنية لنظام …"). */
+/** Section headings that are not a title ("1. مقدمة", "Introduction"…). */
+const SECTION_LIKE = /^(?:\d{1,2}(?:\.\d{1,2})*[.)]?\s|مقدمة|مقدمه|introduction|overview|نبذة|الفهرس|المحتويات|contents)/i;
+const NAMES_SYSTEM = /(?:نظام|منصة|منصه|تطبيق|موقع|بوابة|بوابه|برنامج|system|platform|application|app\b|portal|website)/i;
+
+/**
+ * The document title: its first level-1 heading ("# المواصفات الفنية لنظام …"),
+ * or — when the document starts with a bold cover ("**نظام إدارة مركز …**") and
+ * its headings are numbered sections — the cover line that names the system.
+ */
 export function specTitle(md: string): string {
-  for (const line of md.split(/\r?\n/)) {
-    const m = HEADING.exec(line.trim());
-    if (m) return m[1] === "#" ? m[2]!.replace(/\*\*/g, "").trim() : "";
+  const lines = md.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const firstHeading = lines.find((l) => HEADING.test(l));
+  const m = firstHeading ? HEADING.exec(firstHeading) : null;
+  const headingText = m ? m[2]!.replace(/\*\*/g, "").trim() : "";
+  if (m && m[1] === "#" && !SECTION_LIKE.test(headingText)) return headingText;
+  // Cover lines before the first heading (bold or short), preferring one that names the system
+  const cover: string[] = [];
+  for (const l of lines) {
+    if (HEADING.test(l)) break;
+    const text = l.replace(/\*\*/g, "").trim();
+    if (text && text.length <= 120 && !/[:：]/.test(text)) cover.push(text);
   }
-  return "";
+  return cover.find((c) => NAMES_SYSTEM.test(c)) ?? cover[0] ?? "";
 }
 
 /** Main sections ("1. وصف عام للنظام", "2. إدارة الأصناف والمخزون", …) used as quotation items. */
@@ -96,12 +112,20 @@ export function renderSpec(md: string, opts: { skipTitle?: string } = {}): strin
     list = null;
   };
 
+  // The proposal prints its own approval / signature block, so the document's is left out
+  const SIGN = /(?:التوقيع|التوقيعات|اعتماد العميل|اعتماد الطرفين|signature|sign-?off)/i;
+  let skipUntil = 0; // inside a signature section: skip until a heading at this level or higher
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i]!;
     const line = raw.trim();
     if (!line) { flushPara(); flushList(); continue; }
 
     const h = HEADING.exec(line);
+    if (skipUntil) {
+      if (!h || h[1]!.length > skipUntil) continue;
+      skipUntil = 0;
+    }
+    if (h && SIGN.test(h[2]!)) { flushPara(); flushList(); skipUntil = h[1]!.length; continue; }
     if (h) {
       flushPara(); flushList();
       const text = h[2]!.replace(/\*\*/g, "").trim();
@@ -122,6 +146,8 @@ export function renderSpec(md: string, opts: { skipTitle?: string } = {}): strin
         i += 1;
       }
       i -= 1;
+      // A signature table ("الطرف الأول … التوقيع") is replaced by the proposal's own approval block
+      if ([...(header ?? []), ...rows.flat()].join(" ").match(/التوقيع|signature/i)) continue;
       const head = header ? `<thead><tr>${header.map((c) => `<th>${inline(c)}</th>`).join("")}</tr></thead>` : "";
       const body = rows.map((r) => `<tr>${r.map((c) => `<td${numeric(c) ? ' class="num"' : ""}>${inline(c)}</td>`).join("")}</tr>`).join("");
       out.push(`<table class="spec-table">${head}<tbody>${body}</tbody></table>`);
@@ -205,7 +231,15 @@ export type SpecTier = "starter" | "business" | "enterprise";
 export type SpecItem = { text: string; section: string; tier: SpecTier };
 
 const clean = (h: string) => h.replace(/\*\*/g, "").replace(/^\d{1,2}(?:\.\d{1,2})*[.)]?\s*/, "").trim();
-const SKIP = /^(?:النتيجة المستهدفة|الخلاصة|الخاتمة|summary|conclusion|وصف عام|نبذة|مقدمة|overview|introduction|general description|قواعد .*(?:الاعتماد|التنفيذ)|assumptions|approval)/i;
+const SKIP = /^(?:النتيجة المستهدفة|الخلاصة|الخاتمة|summary|conclusion|وصف عام|نبذة|مقدمة|مقدمه|overview|introduction|general description|قواعد .*(?:الاعتماد|التنفيذ)|assumptions|approval|الأهداف|الاهداف|أهداف|اهداف|objectives|goals|الوحدات الرئيسية|main modules|مراحل|المرحلة|المرحله|خطة العمل|خطه العمل|الجدول الزمني|phase|timeline|milestone|مسؤوليات|مسئوليات|التزامات العميل|responsibilit|نقاط تحتاج|حدود النطاق|خارج النطاق|out of scope|scope limits|معايير القبول|acceptance|اعتماد|التوقيع|التوقيعات|signature|sign-?off|ملاحظات|notes|افتراضات|الافتراضات|المراجع|references|الملاحق|appendix)/i;
+
+/** Does the specification describe its own delivery phases? (then the generic stages are not repeated) */
+export function hasOwnPhases(md: string): boolean {
+  return md.split(/\r?\n/).some((l) => {
+    const m = HEADING.exec(l.trim());
+    return !!m && /(?:مراحل|خطة العمل|خطه العمل|الجدول الزمني|phases|timeline|work plan)/i.test(m[2]!);
+  });
+}
 
 /**
  * Deliverables of a specification: each sub-section ("3.2 البيع الكاش العادي")
@@ -243,7 +277,7 @@ export function specItems(md: string): { text: string; section: string }[] {
 }
 
 // Words that mark an item as advanced (Enterprise) or extended (Business); everything else is core (Starter)
-const ADVANCED = /(?:فروع|تعدد|متعدد|multi|tenant|منشآت|تكامل|ربط|api|استيراد|import|excel|csv|ذكاء|ai\b|تحليل|analytics|متقدم|advanced|ميزانية|balance sheet|قائمة الدخل|أرباح|ارباح|profit|مستندات|documents|نسخ احتياطي|backup|تطبيق موبايل|mobile app|عمولة|عموله|commission|ضرائب|tax|سحابي|cloud|تخصيص|custom)/i;
+const ADVANCED = /(?:فروع|تعدد|متعدد|multi|tenant|منشآت|تكامل|ربط|api|استيراد|import|excel|csv|ذكاء|ai\b|تحليل|analytics|متقدم|advanced|ميزانية|balance sheet|قائمة الدخل|أرباح|ارباح|profit|مستندات|documents|نسخ\s*(?:ال)?احتياطي|backup|تطبيق موبايل|mobile app|عمولة|عموله|commission|ضرائب|tax|سحابي|cloud|تخصيص|custom)/i;
 const EXTENDED = /(?:تقارير|تقرير|report|صلاحيات|permission|مستخدم|user|تنبيه|تنبيهات|alert|إشعار|اشعار|notification|آجل|اجل|credit|تحصيل|collection|كشف حساب|statement|موردين|مورد|supplier|خزنة|خزنه|cash|مصروفات|expense|لوحة|dashboard|متابعة|متابعه|مرتجع|جرد|inventory count|حسابات|accounts)/i;
 
 /**
