@@ -197,3 +197,77 @@ export function htmlToMarkdown(html: string): string {
   walk(doc.body);
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+/* ───────────── Package contents from a specification ───────────── */
+
+export type SpecTier = "starter" | "business" | "enterprise";
+/** One deliverable from the specification and the first package that includes it. */
+export type SpecItem = { text: string; section: string; tier: SpecTier };
+
+const clean = (h: string) => h.replace(/\*\*/g, "").replace(/^\d{1,2}(?:\.\d{1,2})*[.)]?\s*/, "").trim();
+const SKIP = /^(?:النتيجة المستهدفة|الخلاصة|الخاتمة|summary|conclusion|وصف عام|نبذة|مقدمة|overview|introduction|general description|قواعد .*(?:الاعتماد|التنفيذ)|assumptions|approval)/i;
+
+/**
+ * Deliverables of a specification: each sub-section ("3.2 البيع الكاش العادي")
+ * under its main section, or the main section itself when it has none.
+ */
+export function specItems(md: string): { text: string; section: string }[] {
+  const title = specTitle(md);
+  const heads = md.split(/\r?\n/).map((l) => HEADING.exec(l.trim())).filter(Boolean)
+    .map((m) => ({ level: m![1]!.length, raw: m![2]!.replace(/\*\*/g, "").trim() }))
+    .filter((h) => h.raw !== title);
+  if (!heads.length) return [];
+  // Main sections: numbered "N." headings, else the highest level used
+  const numbered = heads.filter((h) => /^\d{1,2}[.)]\s/.test(h.raw) && !/^\d+\.\d+/.test(h.raw));
+  const top = Math.min(...heads.map((h) => h.level));
+  const isMain = (h: { level: number; raw: string }) => (numbered.length >= 2 ? numbered.includes(h) : h.level === top);
+
+  const out: { text: string; section: string }[] = [];
+  let section = "";
+  let sectionHasSubs = false;
+  let skipSection = false;
+  const closeSection = () => { if (section && !sectionHasSubs && !skipSection) out.push({ text: section, section }); };
+  for (const h of heads) {
+    if (isMain(h)) {
+      closeSection();
+      section = clean(h.raw);
+      skipSection = SKIP.test(section);
+      sectionHasSubs = false;
+    } else if (section && !skipSection) {
+      const text = clean(h.raw);
+      if (text && !SKIP.test(text) && !/^(?:مثال|example)/i.test(text)) { out.push({ text, section }); sectionHasSubs = true; }
+    }
+  }
+  closeSection();
+  return out.filter((x, i, all) => all.findIndex((y) => y.text === x.text) === i);
+}
+
+// Words that mark an item as advanced (Enterprise) or extended (Business); everything else is core (Starter)
+const ADVANCED = /(?:فروع|تعدد|متعدد|multi|tenant|منشآت|تكامل|ربط|api|استيراد|import|excel|csv|ذكاء|ai\b|تحليل|analytics|متقدم|advanced|ميزانية|balance sheet|قائمة الدخل|أرباح|ارباح|profit|مستندات|documents|نسخ احتياطي|backup|تطبيق موبايل|mobile app|عمولة|عموله|commission|ضرائب|tax|سحابي|cloud|تخصيص|custom)/i;
+const EXTENDED = /(?:تقارير|تقرير|report|صلاحيات|permission|مستخدم|user|تنبيه|تنبيهات|alert|إشعار|اشعار|notification|آجل|اجل|credit|تحصيل|collection|كشف حساب|statement|موردين|مورد|supplier|خزنة|خزنه|cash|مصروفات|expense|لوحة|dashboard|متابعة|متابعه|مرتجع|جرد|inventory count|حسابات|accounts)/i;
+
+/**
+ * First package for each deliverable: advanced → Enterprise, extended → Business,
+ * core → Starter; then balanced so every package has its own items.
+ */
+export function autoTierItems(items: { text: string; section: string }[]): SpecItem[] {
+  const tierOf = (x: { text: string; section: string }): SpecTier => {
+    const s = `${x.text} ${x.section}`;
+    if (ADVANCED.test(x.text)) return "enterprise";
+    if (EXTENDED.test(x.text)) return "business";
+    if (ADVANCED.test(s)) return "business";
+    return "starter";
+  };
+  const out: SpecItem[] = items.map((x) => ({ ...x, tier: tierOf(x) }));
+  const count = (t: SpecTier) => out.filter((x) => x.tier === t).length;
+  if (out.length >= 3) {
+    // Nothing basic found: the first items become the Starter core
+    if (count("starter") === 0) out.slice(0, Math.max(1, Math.round(out.length / 3))).forEach((x) => { x.tier = "starter"; });
+    // Starter must not hold almost everything: move its later items up
+    const starters = out.filter((x) => x.tier === "starter");
+    if (starters.length > out.length * 0.6) starters.slice(Math.ceil(out.length * 0.4)).forEach((x) => { x.tier = "business"; });
+    if (count("business") === 0) { const s = out.filter((x) => x.tier === "starter"); if (s.length > 1) s[s.length - 1]!.tier = "business"; }
+    if (count("enterprise") === 0) { const b = out.filter((x) => x.tier === "business"); if (b.length > 1) b[b.length - 1]!.tier = "enterprise"; }
+  }
+  return out;
+}
