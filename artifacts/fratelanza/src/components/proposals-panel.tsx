@@ -45,6 +45,12 @@ function fromSaved(p: Proposal): Editing {
   };
 }
 
+/** quote / technical, or "both" for older saves that held the two documents together */
+export function docKindOf(p: Proposal): DocKind | "both" {
+  const k = (p.data as Partial<ProposalData> | undefined)?.kind;
+  return k === "quote" || k === "technical" ? k : "both";
+}
+
 function buildHtml(kind: DocKind, d: ProposalData, logoDataUrl?: string | null) {
   return kind === "quote" ? buildQuoteHtml(d, { logoDataUrl }) : buildTechnicalHtml(d, { logoDataUrl });
 }
@@ -85,16 +91,26 @@ export function ProposalPrintButtons({ p, size = "sm" }: { p: Proposal; size?: "
   const print = (kind: DocKind) => {
     if (!printContractHtml(buildHtml(kind, fromSaved(p).data, branding.logoDataUrl))) toast({ title: t("contracts.popupBlocked"), variant: "destructive" });
   };
+  const k = docKindOf(p);
   return (
     <>
-      <Button size={size} variant="outline" className="h-8" onClick={() => print("quote")} data-testid={`button-print-quote-${p.id}`} title={t("proposals.printQuote")}>
+      {k !== "technical" && <Button size={size} variant="outline" className="h-8" onClick={() => print("quote")} data-testid={`button-print-quote-${p.id}`} title={t("proposals.printQuote")}>
         <FileText className="h-3.5 w-3.5 sm:me-1" /><span className="hidden sm:inline">{t("proposals.quote")}</span>
-      </Button>
-      <Button size={size} variant="outline" className="h-8" onClick={() => print("technical")} data-testid={`button-print-technical-${p.id}`} title={t("proposals.printTechnical")}>
+      </Button>}
+      {k !== "quote" && <Button size={size} variant="outline" className="h-8" onClick={() => print("technical")} data-testid={`button-print-technical-${p.id}`} title={t("proposals.printTechnical")}>
         <ClipboardList className="h-3.5 w-3.5 sm:me-1" /><span className="hidden sm:inline">{t("proposals.technical")}</span>
-      </Button>
+      </Button>}
     </>
   );
+}
+
+function KindBadge({ p }: { p: Proposal }) {
+  const { t } = useTranslation();
+  const k = docKindOf(p);
+  if (k === "both") return <Badge variant="outline">{t("proposals.quote")} + {t("proposals.technical")}</Badge>;
+  return k === "quote"
+    ? <Badge className="bg-green-600/15 text-green-500 border-green-600/30" variant="outline"><FileText className="h-3 w-3 me-1" />{t("proposals.quote")}</Badge>
+    : <Badge className="bg-sky-600/15 text-sky-400 border-sky-600/30" variant="outline"><ClipboardList className="h-3 w-3 me-1" />{t("proposals.technical")}</Badge>;
 }
 
 function useServiceName() {
@@ -119,7 +135,7 @@ export function ClientProposals({ clientId }: { clientId: number }) {
           {data.map((p) => (
             <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-border p-2 text-sm" data-testid={`client-proposal-${p.id}`}>
               <div className="min-w-0">
-                <div className="font-medium">{serviceName(p.serviceKey)}{p.tier ? ` — ${TIER_NAME[p.tier as Tier] ?? p.tier}` : ""}</div>
+                <div className="font-medium flex flex-wrap items-center gap-2"><KindBadge p={p} />{serviceName(p.serviceKey)}{p.tier && docKindOf(p) !== "technical" ? ` — ${TIER_NAME[p.tier as Tier] ?? p.tier}` : ""}</div>
                 <div className="text-xs text-muted-foreground">{String((p.data as Partial<ProposalData>)?.date ?? p.createdAt.slice(0, 10))}{p.amount > 0 && <> · <PrivacyWrapper value={p.amount} /></>}</div>
               </div>
               <div className="flex gap-1"><ProposalPrintButtons p={p} /></div>
@@ -158,7 +174,44 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   const setData = (patch: Partial<ProposalData>) => setEditing((e) => (e ? { ...e, data: { ...e.data, ...patch } } : e));
   const setCustomer = (patch: Partial<ProposalCustomer>) => setEditing((e) => (e ? { ...e, data: { ...e.data, customer: { ...e.data.customer, ...patch } } } : e));
 
-  const startNew = () => { setEditing({ id: null, clientId: null, data: defaultProposal() }); setKind("quote"); setMobileView("form"); };
+  const startNew = (k: DocKind) => {
+    const data = defaultProposal();
+    data.kind = k;
+    if (k === "quote") data.tier = ""; // the client chooses; set it here once they do
+    setEditing({ id: null, clientId: null, data });
+    setKind(k);
+    setMobileView("form");
+  };
+  const openSaved = (p: Proposal) => {
+    const e = fromSaved(p);
+    setEditing(e);
+    setKind(e.data.kind ?? "quote");
+    setMobileView("form");
+  };
+
+  /** Quotation: bring the service, packages and additional items over from a technical proposal. */
+  const technicalSources = proposals.filter((p) => docKindOf(p) !== "quote" && (!editing?.clientId || p.clientId === editing.clientId));
+  const importTechnical = (id: string) => {
+    const src = proposals.find((p) => p.id === Number(id));
+    if (!src || !editing) return;
+    const from = fromSaved(src).data;
+    setEditing({
+      ...editing,
+      clientId: editing.clientId ?? src.clientId ?? null,
+      data: {
+        ...editing.data,
+        serviceKey: from.serviceKey,
+        prices: from.serviceKey === editing.data.serviceKey ? editing.data.prices : guidePrices(from.serviceKey),
+        included: from.included,
+        requirements: from.requirements,
+        requirementsText: from.requirementsText,
+        sourceFile: from.sourceFile,
+        customer: editing.data.customer.company.trim() ? editing.data.customer : from.customer,
+      },
+    });
+    toast({ title: t("proposals.imported", { count: from.requirements.filter((r) => r.match === "extra").length }) });
+  };
+  const addExtra = () => setEditing((e) => (e ? { ...e, data: { ...e.data, requirements: [...e.data.requirements, { text: "", match: "extra", price: 0 }] } } : e));
 
   const pickClient = (v: string) => {
     if (v === "new") { setEditing((e) => (e ? { ...e, clientId: null } : e)); return; }
@@ -254,7 +307,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
       serviceKey: d.serviceKey,
       tier: d.tier,
       language: d.language,
-      amount: proposalAmount(d),
+      amount: d.kind === "technical" ? 0 : proposalAmount(d),
       data: d as unknown as Record<string, unknown>,
     };
     try {
@@ -295,7 +348,10 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     <div className="space-y-4">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <p className="text-sm text-muted-foreground max-w-2xl">{t("proposals.intro")}</p>
-        {canWrite && <Button onClick={startNew} data-testid="button-new-proposal"><Plus className="h-4 w-4 me-1" />{t("proposals.new")}</Button>}
+        {canWrite && <div className="flex gap-2 flex-wrap">
+          <Button onClick={() => startNew("quote")} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-new-quote"><FileText className="h-4 w-4 me-1" />{t("proposals.newQuote")}</Button>
+          <Button onClick={() => startNew("technical")} variant="secondary" data-testid="button-new-technical"><ClipboardList className="h-4 w-4 me-1" />{t("proposals.newTechnical")}</Button>
+        </div>}
       </div>
 
       {isLoading ? (
@@ -307,7 +363,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
           <table className="w-full text-sm min-w-[640px]">
             <thead className="bg-card">
               <tr className="border-b border-border">
-                {[t("proposals.client"), t("proposals.service"), t("proposals.package"), t("proposals.value"), t("quotes.date"), t("common.actions")].map((h) => (
+                {[t("proposals.docType"), t("proposals.client"), t("proposals.service"), t("proposals.clientChose"), t("proposals.value"), t("quotes.date"), t("common.actions")].map((h) => (
                   <th key={h} className="px-3 py-2.5 text-start text-xs font-semibold text-muted-foreground uppercase tracking-wider">{h}</th>
                 ))}
               </tr>
@@ -315,16 +371,17 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
             <tbody>
               {proposals.map((p) => (
                 <tr key={p.id} className="border-b border-border hover:bg-card/50" data-testid={`row-proposal-${p.id}`}>
+                  <td className="px-3 py-2"><KindBadge p={p} /></td>
                   <td className="px-3 py-2 font-medium">{p.clientName || "—"}</td>
                   <td className="px-3 py-2">{serviceName(p.serviceKey)}</td>
-                  <td className="px-3 py-2">{p.tier ? <Badge variant="outline">{TIER_NAME[p.tier as Tier] ?? p.tier}</Badge> : "—"}</td>
+                  <td className="px-3 py-2">{p.tier && docKindOf(p) !== "technical" ? <Badge variant="outline">{TIER_NAME[p.tier as Tier] ?? p.tier}</Badge> : "—"}</td>
                   <td className="px-3 py-2 font-semibold text-primary">{p.amount > 0 ? <PrivacyWrapper value={p.amount} /> : "—"}</td>
                   <td className="px-3 py-2 text-muted-foreground">{String((p.data as Partial<ProposalData>)?.date ?? p.createdAt.slice(0, 10))}</td>
                   <td className="px-3 py-2">
                     <div className="flex gap-1 flex-wrap">
                       <ProposalPrintButtons p={p} />
                       {canWrite && <>
-                        <Button size="icon" variant="ghost" className="h-8 w-8" title={t("common.edit", { defaultValue: "Edit" })} onClick={() => { setEditing(fromSaved(p)); setKind("quote"); setMobileView("form"); }} data-testid={`button-edit-proposal-${p.id}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8" title={t("common.edit", { defaultValue: "Edit" })} onClick={() => openSaved(p)} data-testid={`button-edit-proposal-${p.id}`}><Pencil className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" className="h-8 w-8" title={t("common.delete")} onClick={() => setDeleteId(p.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                       </>}
                     </div>
@@ -341,16 +398,19 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
           {editing && d && svc && (
             <>
               <DialogHeader className="px-3 sm:px-5 py-3 border-b border-border flex-row flex-wrap items-center justify-between gap-2 space-y-0 pe-12 sm:pe-14">
-                <DialogTitle>{editing.id ? t("proposals.edit") : t("proposals.new")}</DialogTitle>
+                <DialogTitle className="flex items-center gap-2">
+                  {kind === "quote" ? <FileText className="h-5 w-5 text-green-500" /> : <ClipboardList className="h-5 w-5 text-sky-400" />}
+                  {kind === "quote" ? (editing.id ? t("proposals.editQuote") : t("proposals.newQuote")) : (editing.id ? t("proposals.editTechnical") : t("proposals.newTechnical"))}
+                </DialogTitle>
                 <div className="flex gap-2 flex-wrap">
-                  <div className="flex rounded-md border border-primary/40 p-0.5" title={t("proposals.docSwitchHint")}>
+                  {!d.kind && <div className="flex rounded-md border border-primary/40 p-0.5" title={t("proposals.docSwitchHint")}>
                     {(["quote", "technical"] as const).map((k) => (
                       <Button key={k} size="sm" variant={kind === k ? "default" : "ghost"} className="h-8" onClick={() => setKind(k)} data-testid={`toggle-doc-${k}`}>
                         {k === "quote" ? <FileText className="h-4 w-4 me-1" /> : <ClipboardList className="h-4 w-4 me-1" />}
                         {k === "quote" ? t("proposals.quote") : t("proposals.technical")}
                       </Button>
                     ))}
-                  </div>
+                  </div>}
                   <Button variant="outline" size="sm" onClick={save} disabled={create.isPending || update.isPending} data-testid="button-save-proposal"><Save className="h-4 w-4 me-1" />{t("common.save")}</Button>
                   <Button variant="outline" size="sm" onClick={word}><FileDown className="h-4 w-4 me-1" />Word</Button>
                   <Button size="sm" onClick={print} className="bg-green-600 hover:bg-green-700 text-white" data-testid="button-print-proposal"><Printer className="h-4 w-4 me-1" />{kind === "quote" ? t("proposals.printQuote") : t("proposals.printTechnical")}</Button>
@@ -414,6 +474,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                     </Field>
                   </section>
 
+                  {kind === "technical" && (
                   <section className="space-y-3" data-testid="requirements-section">
                     <h3 className="text-sm font-semibold text-primary">3. {t("proposals.requirementsSection")}</h3>
                     <p className="text-[11px] text-muted-foreground">{t("proposals.requirementsHint")}</p>
@@ -465,15 +526,43 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                       </div>
                     )}
                   </section>
+                  )}
 
-                  <section className="space-y-3">
+                  {kind === "quote" && (
+                  <section className="space-y-3" data-testid="extras-section">
+                    <h3 className="text-sm font-semibold text-primary">3. {isCustomService(d.serviceKey) ? t("proposals.scopeItems") : t("proposals.extrasSection")}</h3>
+                    <p className="text-[11px] text-muted-foreground">{isCustomService(d.serviceKey) ? t("proposals.scopeItemsHint") : t("proposals.extrasHint")}</p>
+                    {technicalSources.length > 0 && (
+                      <Select value="" onValueChange={importTechnical}>
+                        <SelectTrigger className="h-9" data-testid="select-import-technical"><SelectValue placeholder={t("proposals.importTechnical")} /></SelectTrigger>
+                        <SelectContent>
+                          {technicalSources.map((p) => (
+                            <SelectItem key={p.id} value={String(p.id)}>{p.clientName} — {serviceName(p.serviceKey)} ({String((p.data as Partial<ProposalData>)?.date ?? p.createdAt.slice(0, 10))})</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <div className="rounded border border-border divide-y divide-border">
+                      {d.requirements.map((r, i) => r.match !== "extra" ? null : (
+                        <div key={i} className="p-2 flex items-center gap-2" data-testid={`extra-${i}`}>
+                          <Input className="flex-1 h-8 text-sm" value={r.text} placeholder={t("proposals.itemText")} onChange={(e) => setReq(i, { text: e.target.value })} data-testid={`input-extra-text-${i}`} />
+                          <Input type="number" className="w-28 h-8" placeholder={t("proposals.price")} value={r.price || ""} onChange={(e) => setReq(i, { price: Number(e.target.value) || 0 })} data-testid={`input-extra-price-${i}`} />
+                          <button type="button" onClick={() => removeReq(i)} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
+                        </div>
+                      ))}
+                      <div className="p-2"><Button size="sm" variant="outline" className="h-8" onClick={addExtra} data-testid="button-add-extra"><Plus className="h-4 w-4 me-1" />{t("proposals.addItem")}</Button></div>
+                    </div>
+                  </section>
+                  )}
+
+                  {!(kind === "technical" && isCustomService(d.serviceKey)) && <section className="space-y-3">
                     <h3 className="text-sm font-semibold text-primary">4. {isCustomService(d.serviceKey) ? t("proposals.priceSection") : t("proposals.packagesSection")}</h3>
                     {isCustomService(d.serviceKey) ? (
                       <Field label={t("proposals.projectPrice")} hint={t("proposals.projectPriceHint")}>
                         <Input type="number" value={d.projectPrice || ""} onChange={(e) => setData({ projectPrice: Number(e.target.value) || 0 })} data-testid="input-project-price" />
                       </Field>
                     ) : <>
-                    <p className="text-[11px] text-muted-foreground">{t("proposals.packagesHint")}</p>
+                    <p className="text-[11px] text-muted-foreground">{kind === "quote" ? t("proposals.packagesHint") : t("proposals.packagesHintTech")}</p>
                     <div className="rounded border border-border divide-y divide-border">
                       {svc.packages.map((pkg) => {
                         const chosen = pkg.tier === d.tier;
@@ -485,22 +574,23 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                                 <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={on} onChange={(e) => toggleIncluded(pkg.tier, e.target.checked)} data-testid={`include-${pkg.tier}`} />
                                 {TIER_NAME[pkg.tier]}
                               </label>
-                              <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />
+                              {kind === "quote" && <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />}
                             </div>
                             <div className="text-[11px] text-muted-foreground">{pkg.features.map((x) => (ar ? x.ar : x.en)).join(" · ")}</div>
-                            <div className="flex items-center justify-between gap-2">
+                            {kind === "quote" && <div className="flex items-center justify-between gap-2">
                               <span className="text-[11px] text-muted-foreground">{d.prices[pkg.tier] !== pkg.price ? `${t("proposals.guidePrice")}: ${pkg.price.toLocaleString()}` : ""}</span>
                               <Button size="sm" variant={chosen ? "default" : "outline"} className="h-7" onClick={() => choosePackage(pkg.tier)} data-testid={`choose-${pkg.tier}`}>
                                 {chosen ? `✓ ${t("proposals.chosen")}` : t("proposals.choose")}
                               </Button>
-                            </div>
+                            </div>}
                           </div>
                         );
                       })}
                     </div>
                     </>}
-                    {d.tier || isCustomService(d.serviceKey) ? (() => {
-                      const tot = proposalTotals(d);
+                    {kind === "quote" && (() => {
+                      const custom = isCustomService(d.serviceKey);
+                      const tiers = custom ? [""] as const : TIERS.filter((x) => d.included[x] !== false);
                       return (
                         <div className="space-y-3">
                           <div className="grid grid-cols-2 gap-3">
@@ -521,19 +611,28 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                             )}
                           </div>
                           <div className="rounded border border-primary/30 bg-primary/5 px-3 py-2 text-sm space-y-1" data-testid="proposal-totals">
-                            <div className="flex justify-between"><span className="text-muted-foreground">{isCustomService(d.serviceKey) ? t("proposals.projectPrice") : t("proposals.packagePrice", { pkg: TIER_NAME[d.tier as Tier] })}</span><PrivacyWrapper value={tot.packagePrice} /></div>
-                            {tot.extras > 0 && <div className="flex justify-between"><span className="text-muted-foreground">+ {isCustomService(d.serviceKey) ? t("proposals.itemsTotal") : t("proposals.extrasTotal")}</span><PrivacyWrapper value={tot.extras} /></div>}
-                            {tot.discount > 0 && <div className="flex justify-between text-red-400"><span>{t("proposals.discount")}{d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</span><span>− <PrivacyWrapper value={tot.discount} /></span></div>}
-                            <div className="flex justify-between font-semibold border-t border-border pt-1"><span>{t("proposals.value")}</span><PrivacyWrapper value={tot.total} /></div>
+                            <div className="text-[11px] text-muted-foreground">{custom ? t("proposals.value") : t("proposals.totalsPerPackage")}</div>
+                            {tiers.map((tier) => {
+                              const tot = proposalTotals(d, tier as Tier | "");
+                              return (
+                                <div key={tier || "custom"} className={`flex justify-between gap-2 ${tier && tier === d.tier ? "font-semibold text-primary" : ""}`}>
+                                  <span>{tier ? TIER_NAME[tier as Tier] : t("proposals.value")}{tier && tier === d.tier ? ` ✓ ${t("proposals.chosen")}` : ""}</span>
+                                  <span className="tabular-nums">
+                                    {(tot.extras > 0 || tot.discount > 0) && <span className="text-muted-foreground text-xs me-2"><PrivacyWrapper value={tot.packagePrice} />{tot.extras > 0 && <> + <PrivacyWrapper value={tot.extras} /></>}{tot.discount > 0 && <> − <PrivacyWrapper value={tot.discount} /></>} =</span>}
+                                    <PrivacyWrapper value={tot.total} />
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                       );
-                    })() : <p className="text-xs text-muted-foreground">{t("proposals.noChoiceHint")}</p>}
-                  </section>
+                    })()}
+                  </section>}
 
                   <section className="space-y-3">
                     <h3 className="text-sm font-semibold text-primary">5. {t("proposals.termsSection")}</h3>
-                    <Field label={t("proposals.validDays")}><Input type="number" value={d.validDays} onChange={(e) => setData({ validDays: Number(e.target.value) || 0 })} /></Field>
+                    {kind === "quote" && <Field label={t("proposals.validDays")}><Input type="number" value={d.validDays} onChange={(e) => setData({ validDays: Number(e.target.value) || 0 })} /></Field>}
                     <Field label={t("proposals.notes")} hint={t("proposals.notesHint")}><Textarea rows={3} value={d.notes} onChange={(e) => setData({ notes: e.target.value })} /></Field>
                   </section>
                 </div>

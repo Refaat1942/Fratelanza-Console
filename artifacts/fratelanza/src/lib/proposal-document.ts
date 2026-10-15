@@ -52,6 +52,8 @@ export type ProposalData = {
   projectPrice: number;
   /** Name of the uploaded requirements document, if any */
   sourceFile: string;
+  /** quote = sales quotation, technical = technical proposal (older saves had both in one) */
+  kind?: "quote" | "technical";
 };
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
@@ -107,9 +109,9 @@ export function extraItems(d: ProposalData) {
 }
 
 /** Package price + additional requirements → discount → total. */
-export function proposalTotals(d: ProposalData) {
+export function proposalTotals(d: ProposalData, tier: Tier | "" = d.tier) {
   const packagePrice = isCustomService(d.serviceKey) ? Math.max(0, Number(d.projectPrice) || 0)
-    : d.tier ? Math.max(0, Number(d.prices[d.tier] ?? 0)) : 0;
+    : tier ? Math.max(0, Number(d.prices[tier] ?? 0)) : 0;
   const extras = r2(extraItems(d).reduce((s, r) => s + Math.max(0, Number(r.price) || 0), 0));
   const subtotal = r2(packagePrice + extras);
   const v = Math.max(0, Number(d.discountValue) || 0);
@@ -138,6 +140,8 @@ const T = {
     scopeTitle: "نطاق العمل والتكلفة", projectValue: "قيمة تنفيذ المشروع", itemsSum: "بنود مسعّرة منفصلة", inProject: "ضمن قيمة المشروع",
     scopeTechTitle: "نطاق العمل التفصيلي", fromDoc: (f: string) => `وفقاً لمستند المتطلبات المقدم من العميل (${f})، يشمل نطاق العمل البنود التالية:`, scopeIntro: "يشمل نطاق العمل البنود التالية حسب متطلبات العميل:",
     general: "متطلبات عامة",
+    compareTitle: "قيمة العرض لكل باقة", itemCol: "البند", packagePriceRow: "سعر الباقة",
+    chooseNote: "يختار العميل الباقة المناسبة له، وتُحسب الدفعات وفق قيمة الباقة المختارة.",
     extrasTitle: "متطلبات إضافية خارج الباقة", extrasSum: "المتطلبات الإضافية", subtotal: "الإجمالي قبل الخصم", grandTotal: "الإجمالي",
     reqTitle: "متطلبات العميل والحل المقترح", reqCol: "المتطلب", solutionCol: "الحل المقترح", inCol: "ضمن", extraLabel: "تطوير إضافي",
     extraDetail: "تطوير خاص لهذا المتطلب ضمن نطاق المشروع، ويُسعّر منفصلاً في العرض المالي.",
@@ -172,6 +176,8 @@ const T = {
     scopeTitle: "Scope of work and cost", projectValue: "Project delivery price", itemsSum: "Separately priced items", inProject: "Included in project price",
     scopeTechTitle: "Detailed scope of work", fromDoc: (f: string) => `Based on the requirements document provided by the client (${f}), the scope of work covers:`, scopeIntro: "The scope of work covers the following, per the client's requirements:",
     general: "General requirements",
+    compareTitle: "Quotation value per package", itemCol: "Item", packagePriceRow: "Package price",
+    chooseNote: "The client chooses the package that suits them; payments follow the value of the chosen package.",
     extrasTitle: "Additional requirements (outside the package)", extrasSum: "Additional requirements", subtotal: "Subtotal", grandTotal: "Total",
     reqTitle: "Customer requirements and proposed solution", reqCol: "Requirement", solutionCol: "Proposed solution", inCol: "In", extraLabel: "Additional development",
     extraDetail: "Custom development for this requirement within the project scope, priced separately in the financial proposal.",
@@ -274,6 +280,7 @@ function shell(lang: Lang, title: string, body: string, opts: ProposalHtmlOption
   td.num { text-align: center; white-space: nowrap; }
   tr.rec td { background: #ecfeff; }
   tr.total td { background: #f1f5f9; font-weight: 700; }
+  tr.disc td { color: #b91c1c; }
   tr.grp td { background: #e0f2fe; color: #0a192f; font-weight: 700; }
   table.sum { width: 60%; margin-${start}: auto; margin-${end}: 0; }
   table.sum td { border: 0; border-bottom: 1px solid #e5e7eb; padding: 4px 8px; }
@@ -424,33 +431,31 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
 
   const rows = custom ? "" : shownTiers(d).map((tier) => {
     const pkg = svc.packages.find((p) => p.tier === tier)!;
-    const rec = tier === d.tier;
+    // The client chooses: every package is shown the same way (the chosen one is internal only)
     const price = Number(d.prices[tier] ?? pkg.price);
-    return `<tr class="${rec ? "rec" : ""}">
-      <td class="pkg">${TIER_NAME[tier]}${rec ? `<br><span class="badge">${t.recommended}</span>` : ""}</td>
+    return `<tr>
+      <td class="pkg">${TIER_NAME[tier]}</td>
       <td><ul>${pkg.features.map((x) => `<li>${esc(lang === "ar" ? x.ar : x.en)}</li>`).join("")}</ul></td>
       <td class="num"><b>${money(price, lang)}</b></td>
     </tr>`;
   }).join("");
 
   let totals = "";
-  if ((custom || d.tier) && amount > 0) {
+  const extrasTable = (items: Requirement[]) => items.length ? `<h2>${t.extrasTitle}</h2>
+    <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
+    <tbody>${items.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : "";
+  if (custom && amount > 0) {
     const calc = computeStages(amount, MILESTONES);
-    const extras = custom ? [] : extraItems(d);
-    const baseLabel = custom ? t.projectValue : t.priceOf(TIER_NAME[d.tier as Tier]);
     // Breakdown only when there is more than one figure to add up (or a discount)
     const showSum = tot.discount > 0 || (tot.extras > 0 && tot.packagePrice > 0);
-    totals = `${extras.length ? `<h2>${t.extrasTitle}</h2>
-    <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
-    <tbody>${extras.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : ""}
-    <h2>${t.totalTitle}</h2>
+    totals = `<h2>${t.totalTitle}</h2>
     ${showSum ? `<table class="sum"><tbody>
-      ${tot.packagePrice > 0 || !custom ? `<tr><td>${esc(baseLabel)}</td><td class="num">${money(tot.packagePrice, lang)}</td></tr>` : ""}
-      ${tot.extras > 0 ? `<tr><td>${esc(custom ? t.itemsSum : t.extrasSum)}</td><td class="num">${money(tot.extras, lang)}</td></tr>` : ""}
+      ${tot.packagePrice > 0 ? `<tr><td>${esc(t.projectValue)}</td><td class="num">${money(tot.packagePrice, lang)}</td></tr>` : ""}
+      ${tot.extras > 0 ? `<tr><td>${esc(t.itemsSum)}</td><td class="num">${money(tot.extras, lang)}</td></tr>` : ""}
       ${tot.extras > 0 && tot.discount > 0 ? `<tr><td><b>${esc(t.subtotal)}</b></td><td class="num"><b>${money(tot.subtotal, lang)}</b></td></tr>` : ""}
       ${tot.discount > 0 ? `<tr class="disc"><td>${esc(t.discount)}${d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</td><td class="num">− ${money(tot.discount, lang)}</td></tr>` : ""}
     </tbody></table>` : ""}
-    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : tot.extras > 0 || custom ? t.grandTotal : t.totalFor(TIER_NAME[d.tier as Tier]))}</span><b>${money(amount, lang)}</b>
+    <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : t.grandTotal)}</span><b>${money(amount, lang)}</b>
       ${lang === "ar" ? `<span class="w">${t.words} ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير.</span>` : ""}</div>
     <h2>${t.milestonesTitle}</h2>
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th><th>${t.amountCol}</th></tr></thead>
@@ -461,12 +466,27 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th></tr></thead>
     <tbody>${MILESTONES.map((m) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td></tr>`).join("")}</tbody></table>`;
   } else {
-    // No package chosen yet: show each offered package's amount per milestone
-    const cols = shownTiers(d).map((tier) => ({ tier, calc: computeStages(Math.max(0, Number(d.prices[tier]) || 0), MILESTONES) }));
-    totals = `<h2>${t.milestonesTitle}</h2>
-    <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th>${cols.map((c) => `<th>${TIER_NAME[c.tier]}</th>`).join("")}</tr></thead>
+    // Every offered package side by side: price, additions, discount, total, and each payment in % and amount
+    const cols = shownTiers(d).map((tier) => {
+      const tt = proposalTotals(d, tier);
+      return { tier, tt, calc: computeStages(tt.total, MILESTONES) };
+    });
+    const anyExtras = cols.some((c) => c.tt.extras > 0);
+    const anyDiscount = cols.some((c) => c.tt.discount > 0);
+    const head = `<tr><th>${t.itemCol}</th>${cols.map((c) => `<th class="num">${TIER_NAME[c.tier]}</th>`).join("")}</tr>`;
+    totals = `${extrasTable(extraItems(d))}
+    <h2>${t.compareTitle}</h2>
+    <table><thead>${head}</thead><tbody>
+      <tr><td>${t.packagePriceRow}</td>${cols.map((c) => `<td class="num">${money(c.tt.packagePrice, lang)}</td>`).join("")}</tr>
+      ${anyExtras ? `<tr><td>+ ${t.extrasSum}</td>${cols.map((c) => `<td class="num">${money(c.tt.extras, lang)}</td>`).join("")}</tr>` : ""}
+      ${anyDiscount ? `<tr class="disc"><td>${t.discount}${d.discountType === "percent" ? ` (${Math.min(100, Number(d.discountValue) || 0)}%)` : ""}</td>${cols.map((c) => `<td class="num">− ${money(c.tt.discount, lang)}</td>`).join("")}</tr>` : ""}
+      <tr class="total"><td>${anyDiscount ? t.totalAfter : t.total}</td>${cols.map((c) => `<td class="num">${money(c.tt.total, lang)}</td>`).join("")}</tr>
+    </tbody></table>
+    <h2>${t.milestonesTitle}</h2>
+    <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th>${cols.map((c) => `<th class="num">${TIER_NAME[c.tier]}</th>`).join("")}</tr></thead>
     <tbody>${MILESTONES.map((m, i) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td>${cols.map((c) => `<td class="num">${money(c.calc.rows[i]!.amount, lang)}</td>`).join("")}</tr>`).join("")}
-    <tr class="total"><td>${t.total}</td><td class="num">100%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>`;
+    <tr class="total"><td>${t.total}</td><td class="num">100%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>
+    <p class="muted">${esc(t.chooseNote)}</p>`;
   }
 
   const body = `
@@ -528,9 +548,8 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
     const pkg = svc.packages.find((p) => p.tier === tier)!;
     const idx = TIERS.indexOf(tier);
     const prev = idx > 0 ? TIERS[idx - 1]! : null;
-    const rec = tier === d.tier;
-    return `<div class="pkgblock ${rec ? "rec" : ""}">
-      <h3>${lang === "ar" ? "باقة" : "Package:"} ${TIER_NAME[tier]}${rec ? `<span class="badge">${t.recommended}</span>` : ""}</h3>
+    return `<div class="pkgblock">
+      <h3>${lang === "ar" ? "باقة" : "Package:"} ${TIER_NAME[tier]}</h3>
       ${prev ? `<div class="plus">${esc(t.plus(TIER_NAME[prev]))}</div>` : ""}
       <table><thead><tr><th style="width:34%">${t.featureCol}</th><th>${t.detailCol}</th></tr></thead>
       <tbody>${pkg.features.map((x) => `<tr><td><b>${esc(lang === "ar" ? x.ar : x.en)}</b></td><td>${esc(lang === "ar" ? x.dAr : x.dEn)}</td></tr>`).join("")}</tbody></table>
