@@ -1,8 +1,36 @@
 import { Router, type IRouter } from "express";
+import multer from "multer";
+import mammoth from "mammoth";
+import { extractTextFromUpload } from "../lib/document-parser.js";
 import { db, proposalsTable, clientsTable } from "@workspace/db";
 import { desc, eq, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+
+/**
+ * Read a specification document for the technical proposal.
+ * Word files keep their structure (headings, lists, tables) as HTML; other
+ * files (PDF, TXT, Excel) come back as plain text.
+ */
+router.post("/proposals/parse-document", upload.single("file"), async (req, res): Promise<void> => {
+  const file = (req as unknown as { file?: Express.Multer.File }).file;
+  if (!file) {
+    res.status(400).json({ error: "No file uploaded (field name must be 'file')" });
+    return;
+  }
+  try {
+    if (/\.docx$/i.test(file.originalname)) {
+      const result = await mammoth.convertToHtml({ buffer: file.buffer });
+      res.json({ html: result.value ?? "" });
+      return;
+    }
+    const parsed = await extractTextFromUpload(file.buffer, file.originalname);
+    res.json({ text: parsed.text });
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+  }
+});
 
 function toShape(r: typeof proposalsTable.$inferSelect) {
   let data: Record<string, unknown> = {};

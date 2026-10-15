@@ -21,8 +21,9 @@ import { printContractHtml, downloadContractWord } from "@/lib/contract-document
 import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, isCustomService, serviceByKey, type Tier } from "@/lib/service-catalog";
 import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
+import { htmlToMarkdown, looksLikeSpec, specSections, specTitle } from "@/lib/spec-document";
 import {
-  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal,
+  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf,
   type ProposalData, type ProposalCustomer,
 } from "@/lib/proposal-document";
 
@@ -195,6 +196,10 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     const src = proposals.find((p) => p.id === Number(id));
     if (!src || !editing) return;
     const from = fromSaved(src).data;
+    // A specification document brings its main sections as items to price
+    const items = scopeModeOf(from) === "spec"
+      ? specSections(from.requirementsText).map((text) => ({ text, match: "extra", price: 0 }))
+      : from.requirements;
     setEditing({
       ...editing,
       clientId: editing.clientId ?? src.clientId ?? null,
@@ -203,13 +208,14 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         serviceKey: from.serviceKey,
         prices: from.serviceKey === editing.data.serviceKey ? editing.data.prices : guidePrices(from.serviceKey),
         included: from.included,
-        requirements: from.requirements,
+        requirements: items,
         requirementsText: from.requirementsText,
         sourceFile: from.sourceFile,
+        projectTitle: from.projectTitle,
         customer: editing.data.customer.company.trim() ? editing.data.customer : from.customer,
       },
     });
-    toast({ title: t("proposals.imported", { count: from.requirements.filter((r) => r.match === "extra").length }) });
+    toast({ title: t("proposals.imported", { count: items.filter((r) => r.match === "extra").length }) });
   };
   const addExtra = () => setEditing((e) => (e ? { ...e, data: { ...e.data, requirements: [...e.data.requirements, { text: "", match: "extra", price: 0 }] } } : e));
 
@@ -255,7 +261,39 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     if (!file || !editing) return;
     setReading(true);
     try {
-      const { text } = await extractOutlineFromFile(file);
+      // 1) Read the file, keeping its structure where possible
+      let text: string;
+      if (/\.docx$/i.test(file.name)) {
+        const fd = new FormData();
+        fd.append("file", file);
+        const r = await fetch(`${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/proposals/parse-document`, { method: "POST", credentials: "include", body: fd });
+        const body = await r.json().catch(() => ({})) as { html?: string; text?: string; error?: string };
+        if (!r.ok) throw new Error(body.error ?? t("common.error"));
+        text = body.html ? htmlToMarkdown(body.html) : body.text ?? "";
+      } else if (/\.(md|txt)$/i.test(file.name)) {
+        text = await file.text();
+      } else {
+        text = (await extractOutlineFromFile(file)).text;
+      }
+
+      // 2) A structured specification is printed as written
+      if (looksLikeSpec(text)) {
+        const detected = detectService(text);
+        const serviceKey = detected?.key ?? CUSTOM_SERVICE.key;
+        const base = editing.data;
+        setEditing({
+          ...editing,
+          data: {
+            ...base, serviceKey, scopeMode: "spec", requirementsText: text.trim(), requirements: [], sourceFile: file.name,
+            projectTitle: specTitle(text) || base.projectTitle,
+            prices: serviceKey === base.serviceKey ? base.prices : guidePrices(serviceKey),
+          },
+        });
+        toast({ title: t("proposals.specRead", { count: specSections(text).length }) });
+        return;
+      }
+
+      // 3) A plain list of requirements is matched to the packages
       const lines = requirementsFromDocument(text);
       if (!lines.some((l) => !l.startsWith("# "))) throw new Error(t("proposals.nothingRead"));
       const detected = detectService(text);
@@ -268,6 +306,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         requirementsText: lines.join("\n"),
         requirements: [],
         sourceFile: file.name,
+        scopeMode: "matched",
       });
       setEditing({ ...editing, data });
       toast({ title: t("proposals.fileRead", { count: data.requirements.length, service: serviceName(serviceKey) }) });
@@ -485,11 +524,28 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                       </Button>
                       <p className="text-[11px] text-muted-foreground">{d.sourceFile ? t("proposals.readFrom", { file: d.sourceFile }) : t("proposals.uploadHint")}</p>
                     </div>
-                    <Textarea rows={5} value={d.requirementsText} onChange={(e) => setData({ requirementsText: e.target.value })}
+                    <div className="grid grid-cols-1 gap-2">
+                      <Field label={t("proposals.scopeMode")}>
+                        <Select value={scopeModeOf(d)} onValueChange={(v) => setData({ scopeMode: v as "spec" | "matched", ...(v === "spec" && !d.projectTitle ? { projectTitle: specTitle(d.requirementsText) } : {}) })}>
+                          <SelectTrigger data-testid="select-scope-mode"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="spec">{t("proposals.modeSpec")}</SelectItem>
+                            <SelectItem value="matched">{t("proposals.modeMatched")}</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </Field>
+                      {scopeModeOf(d) === "spec" && (
+                        <Field label={t("proposals.projectTitle")} hint={t("proposals.projectTitleHint")}>
+                          <Input value={d.projectTitle ?? ""} onChange={(e) => setData({ projectTitle: e.target.value })} data-testid="input-project-title" />
+                        </Field>
+                      )}
+                    </div>
+                    {scopeModeOf(d) === "spec" && <p className="text-[11px] text-muted-foreground">{t("proposals.specHint")}</p>}
+                    <Textarea rows={scopeModeOf(d) === "spec" ? 16 : 5} dir="auto" className="font-mono text-xs leading-relaxed" value={d.requirementsText} onChange={(e) => setData({ requirementsText: e.target.value })}
                       placeholder={ar ? "مثال:\nإدارة المخزون لثلاثة فروع\nقراءة الباركود\nتنبيه قبل انتهاء الصلاحية\nربط مع تطبيق التوصيل" : "e.g.\nStock management for three branches\nBarcode scanning\nAlerts before expiry\nIntegration with a delivery app"}
                       data-testid="input-requirements" />
-                    <Button size="sm" variant="secondary" onClick={analyze} disabled={!d.requirementsText.trim()} data-testid="button-analyze"><Wand2 className="h-4 w-4 me-1" />{t("proposals.analyze")}</Button>
-                    {d.requirements.length > 0 && (
+                    {scopeModeOf(d) === "matched" && <Button size="sm" variant="secondary" onClick={analyze} disabled={!d.requirementsText.trim()} data-testid="button-analyze"><Wand2 className="h-4 w-4 me-1" />{t("proposals.analyze")}</Button>}
+                    {scopeModeOf(d) === "matched" && d.requirements.length > 0 && (
                       <div className="rounded border border-border divide-y divide-border">
                         {d.requirements.map((r, i) => {
                           const custom = isCustomService(d.serviceKey);

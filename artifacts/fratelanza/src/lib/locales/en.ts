@@ -215,6 +215,13 @@ export const en = {
     tooBig: "The file is too large (max {{max}})",
   },
   proposals: {
+    scopeMode: "How to present the requirements",
+    modeSpec: "Full specification document (as written: sections, tables, examples)",
+    modeMatched: "Requirements list matched to the packages",
+    projectTitle: "Project name",
+    projectTitleHint: "Shown in the document header; taken from the specification title.",
+    specHint: "Printed as written. Use # for a section, ## for a sub-section, - for a bullet, | a | b | for tables and **bold**. Word files keep their headings, lists and tables.",
+    specRead: "Specification read — {{count}} main sections; it will be printed as written",
     newQuote: "New sales quotation",
     newTechnical: "New technical proposal",
     editQuote: "Edit sales quotation",
