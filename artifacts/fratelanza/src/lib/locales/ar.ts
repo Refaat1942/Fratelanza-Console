@@ -218,6 +218,12 @@ export const ar: Translations = {
     tooBig: "الملف كبير جداً (الحد الأقصى {{max}})",
   },
   proposals: {
+    milestonesSection: "مراحل الدفع",
+    milestonesHint: "الافتراضي 30% / 30% / 30% / 10%. غيّر الصياغة أو النسب لهذا العرض، والمبالغ تُحسب لكل باقة.",
+    resetMilestones: "رجوع إلى 30 / 30 / 30 / 10",
+    addMilestone: "إضافة دفعة",
+    milestonesTotal: "الإجمالي: {{sum}}%",
+    milestonesMust100: "يجب أن يكون مجموع النسب 100%.",
     linkedTechnical: "الباقات مقروءة من العرض الفني: {{name}} ({{date}})",
     refreshTechnical: "تحديث من العرض الفني",
     includesPrevious: "كل محتويات {{pkg}}، بالإضافة إلى:",

@@ -314,11 +314,14 @@ export const isCustomService = (key: string) => key === CUSTOM_SERVICE.key;
 export const serviceByKey = (key: string) => (isCustomService(key) ? CUSTOM_SERVICE : SERVICES.find((s) => s.key === key) ?? SERVICES[0]!);
 
 /** Standard Fratelanza payment milestones (all services). */
-export const MILESTONES: { pct: number; ar: string; en: string }[] = [
-  { pct: 30, ar: "المرحلة الأولى: عند التعاقد وبدء المشروع", en: "Phase one: on signing and project start" },
-  { pct: 20, ar: "المرحلة الثانية: بعد اعتماد المرحلة الأولى من التنفيذ", en: "Phase two: after approval of the first delivery stage" },
-  { pct: 20, ar: "المرحلة الثالثة: بعد اعتماد المرحلة التالية وفق خطة العمل", en: "Phase three: after approval of the next stage in the work plan" },
-  { pct: 30, ar: "المرحلة الرابعة: عند التسليم النهائي وفق بنود التعاقد", en: "Phase four: on final delivery under the contract" },
+export type Milestone = { pct: number; ar: string; en: string };
+
+/** Default client payment milestones for quotations (30 / 30 / 30 / 10, same as the client contract). */
+export const MILESTONES: Milestone[] = [
+  { pct: 30, ar: "الدفعة الأولى: مقدم التعاقد وبدء المشروع", en: "First payment: on signing and project start" },
+  { pct: 30, ar: "الدفعة الثانية: أثناء التنفيذ", en: "Second payment: during delivery" },
+  { pct: 30, ar: "الدفعة الثالثة: أثناء التنفيذ", en: "Third payment: during delivery" },
+  { pct: 10, ar: "الدفعة الرابعة والأخيرة: عند التسليم النهائي", en: "Fourth and final payment: on final delivery" },
 ];
 
 /** What every package includes (company commitments). */

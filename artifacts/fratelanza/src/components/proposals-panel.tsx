@@ -18,12 +18,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2, Eraser } from "lucide-react";
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
-import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, isCustomService, serviceByKey, type Tier } from "@/lib/service-catalog";
+import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, MILESTONES, isCustomService, serviceByKey, type Milestone, type Tier } from "@/lib/service-catalog";
 import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
 import { autoTierItems, htmlToMarkdown, looksLikeSpec, specItems, specSections, specTitle, type SpecItem } from "@/lib/spec-document";
 import {
-  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, hasSpecTiers, isSinglePrice, packageContents,
+  buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, milestonesOf, hasSpecTiers, isSinglePrice, packageContents,
   type ProposalData, type ProposalCustomer,
 } from "@/lib/proposal-document";
 
@@ -263,6 +263,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   } : e));
   const removeTierItem = (i: number) => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: (e.data.tierItems ?? []).filter((_, j) => j !== i) } } : e));
   const addTierItem = () => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: [...(e.data.tierItems ?? []), { text: "", section: "", tier: "enterprise" as const }] } } : e));
+  const setMilestones = (fn: (list: Milestone[]) => Milestone[]) => setEditing((e) => (e ? { ...e, data: { ...e.data, milestones: fn(milestonesOf(e.data).map((m) => ({ ...m }))) } } : e));
   const addExtra = () => setEditing((e) => (e ? { ...e, data: { ...e.data, requirements: [...e.data.requirements, { text: "", match: "extra", price: 0 }] } } : e));
 
   const pickClient = (v: string) => {
@@ -770,6 +771,38 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                       );
                     })()}
                   </section>}
+
+                  {kind === "quote" && (() => {
+                    const list = milestonesOf(d);
+                    const sum = Math.round(list.reduce((a, m) => a + (Number(m.pct) || 0), 0) * 100) / 100;
+                    const langKey = d.language === "ar" ? "ar" : "en";
+                    return (
+                      <section className="space-y-2" data-testid="milestones-section">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <h3 className="text-sm font-semibold text-primary">{t("proposals.milestonesSection")}</h3>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setData({ milestones: MILESTONES.map((m) => ({ ...m })) })} data-testid="button-reset-milestones">{t("proposals.resetMilestones")}</Button>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{t("proposals.milestonesHint")}</p>
+                        <div className="rounded border border-border divide-y divide-border">
+                          {list.map((m, i) => (
+                            <div key={i} className="p-2 flex items-center gap-2" data-testid={`milestone-${i}`}>
+                              <Input className="flex-1 h-8 text-sm" value={m[langKey]} onChange={(e) => setMilestones((l) => l.map((x, j) => (j === i ? { ...x, [langKey]: e.target.value } : x)))} data-testid={`input-milestone-label-${i}`} />
+                              <div className="flex items-center gap-1">
+                                <Input type="number" min={0} max={100} className="w-20 h-8" value={m.pct} onChange={(e) => setMilestones((l) => l.map((x, j) => (j === i ? { ...x, pct: Number(e.target.value) || 0 } : x)))} data-testid={`input-milestone-pct-${i}`} />
+                                <span className="text-xs text-muted-foreground">%</span>
+                              </div>
+                              <button type="button" onClick={() => setMilestones((l) => l.filter((_, j) => j !== i))} disabled={list.length <= 1} className="text-muted-foreground hover:text-destructive disabled:opacity-30" title={t("common.delete")}><X className="h-4 w-4" /></button>
+                            </div>
+                          ))}
+                          <div className="p-2 flex items-center justify-between gap-2">
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => setMilestones((l) => [...l, { pct: 0, ar: `الدفعة ${l.length + 1}`, en: `Payment ${l.length + 1}` }])} data-testid="button-add-milestone"><Plus className="h-4 w-4 me-1" />{t("proposals.addMilestone")}</Button>
+                            <span className={`text-xs font-semibold ${sum === 100 ? "text-green-500" : "text-red-400"}`} data-testid="milestones-sum">{t("proposals.milestonesTotal", { sum })}</span>
+                          </div>
+                        </div>
+                        {sum !== 100 && <p className="text-[11px] text-red-400">{t("proposals.milestonesMust100")}</p>}
+                      </section>
+                    );
+                  })()}
 
                   <section className="space-y-3">
                     <h3 className="text-sm font-semibold text-primary">5. {t("proposals.termsSection")}</h3>
