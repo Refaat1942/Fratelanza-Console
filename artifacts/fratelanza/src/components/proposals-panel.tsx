@@ -16,7 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2, Eraser } from "lucide-react";
+import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2, Eraser, Eye, EyeOff, RotateCcw } from "lucide-react";
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
 import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, MILESTONES, isCustomService, serviceByKey, type Milestone, type Tier } from "@/lib/service-catalog";
 import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
@@ -24,7 +24,8 @@ import { extractOutlineFromFile } from "@/lib/outline-file-parser";
 import { autoTierItems, htmlToMarkdown, looksLikeSpec, specItems, specSections, specTitle, type SpecItem } from "@/lib/spec-document";
 import {
   buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, milestonesOf, suggestedPrices, withSuggestedPrices, hasSpecTiers, isSinglePrice, packageContents,
-  type ProposalData, type ProposalCustomer,
+  QUOTE_SECTIONS, TEXT_SECTIONS, quoteSectionDefaults,
+  type ProposalData, type ProposalCustomer, type QuoteSectionKey, type SectionEdit, type CustomSection,
 } from "@/lib/proposal-document";
 
 type DocKind = "quote" | "technical";
@@ -266,6 +267,12 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   } : e));
   const removeTierItem = (i: number) => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: (e.data.tierItems ?? []).filter((_, j) => j !== i) } } : e));
   const addTierItem = () => setEditing((e) => (e ? { ...e, data: { ...e.data, tierItems: [...(e.data.tierItems ?? []), { text: "", section: "", tier: "enterprise" as const }] } } : e));
+  const setSection = (k: QuoteSectionKey, patch: Partial<SectionEdit>) => setEditing((e) => (e ? {
+    ...e, data: { ...e.data, sections: { ...e.data.sections, [k]: { ...e.data.sections?.[k], ...patch } } },
+  } : e));
+  const setCustomSections = (fn: (list: CustomSection[]) => CustomSection[]) => setEditing((e) => (e ? {
+    ...e, data: { ...e.data, customSections: fn([...(e.data.customSections ?? [])]) },
+  } : e));
   const setMilestones = (fn: (list: Milestone[]) => Milestone[]) => setEditing((e) => (e ? { ...e, data: { ...e.data, milestones: fn(milestonesOf(e.data).map((m) => ({ ...m }))) } } : e));
   const addExtra = () => setEditing((e) => (e ? { ...e, data: { ...e.data, requirements: [...e.data.requirements, { text: "", match: "extra", price: 0 }] } } : e));
 
@@ -713,10 +720,14 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                         return (
                           <div key={pkg.tier} className={`p-3 space-y-2 ${chosen ? "bg-primary/10" : ""} ${on ? "" : "opacity-60"}`} data-testid={`package-${pkg.tier}`}>
                             <div className="flex items-center justify-between gap-2">
-                              <label className="flex items-center gap-2 text-sm font-semibold cursor-pointer">
-                                <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={on} onChange={(e) => toggleIncluded(pkg.tier, e.target.checked)} data-testid={`include-${pkg.tier}`} />
-                                {TIER_NAME[pkg.tier]}
-                              </label>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-semibold">{TIER_NAME[pkg.tier]}</span>
+                                <Button size="sm" variant={on ? "outline" : "secondary"} className="h-7 px-2 text-xs" onClick={() => toggleIncluded(pkg.tier, !on)}
+                                  disabled={on && TIERS.filter((x) => d.included[x] !== false).length <= 1}
+                                  title={on ? t("proposals.hidePackage") : t("proposals.showPackage")} data-testid={`include-${pkg.tier}`}>
+                                  {on ? <><Eye className="h-3.5 w-3.5 me-1" />{t("proposals.shown")}</> : <><EyeOff className="h-3.5 w-3.5 me-1" />{t("proposals.hidden")}</>}
+                                </Button>
+                              </div>
                               {kind === "quote" && <Input type="number" className="w-32 h-8" value={d.prices[pkg.tier] || ""} onChange={(e) => setData({ prices: { ...d.prices, [pkg.tier]: Number(e.target.value) || 0 } })} data-testid={`input-price-${pkg.tier}`} />}
                             </div>
                             {hasSpecTiers(d) ? (
@@ -819,6 +830,63 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                     {kind === "quote" && <Field label={t("proposals.validDays")}><Input type="number" value={d.validDays} onChange={(e) => setData({ validDays: Number(e.target.value) || 0 })} /></Field>}
                     <Field label={t("proposals.notes")} hint={t("proposals.notesHint")}><Textarea rows={3} value={d.notes} onChange={(e) => setData({ notes: e.target.value })} /></Field>
                   </section>
+
+                  {kind === "quote" && (() => {
+                    const defs = quoteSectionDefaults(d);
+                    const keys = QUOTE_SECTIONS.filter((k): k is QuoteSectionKey => k !== "custom");
+                    const customs = d.customSections ?? [];
+                    return (
+                      <section className="space-y-2" data-testid="sections-editor">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <h3 className="text-sm font-semibold text-primary">6. {t("proposals.sectionsSection")}</h3>
+                          {(Object.keys(d.sections ?? {}).length > 0) && <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setData({ sections: {} })} data-testid="button-reset-sections"><RotateCcw className="h-3.5 w-3.5 me-1" />{t("proposals.resetSections")}</Button>}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">{t("proposals.sectionsHint")}</p>
+                        <div className="rounded border border-border divide-y divide-border">
+                          {keys.map((k) => {
+                            const ed = d.sections?.[k] ?? {};
+                            const shown = !ed.hidden;
+                            const canText = TEXT_SECTIONS.includes(k) && defs[k].text !== null;
+                            const editingText = ed.text !== undefined;
+                            return (
+                              <div key={k} className={`p-2 space-y-2 ${shown ? "" : "opacity-60"}`} data-testid={`section-${k}`}>
+                                <div className="flex items-center gap-2">
+                                  <button type="button" onClick={() => setSection(k, { hidden: shown })} className={shown ? "text-primary" : "text-muted-foreground"}
+                                    title={shown ? t("proposals.hideSection") : t("proposals.showSection")} data-testid={`toggle-section-${k}`}>
+                                    {shown ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                  </button>
+                                  <Input className="flex-1 h-8 text-sm" value={ed.title ?? ""} placeholder={defs[k].title} disabled={!shown}
+                                    onChange={(e) => setSection(k, { title: e.target.value })} data-testid={`input-section-title-${k}`} />
+                                  {canText && shown && (
+                                    <Button size="sm" variant={editingText ? "secondary" : "outline"} className="h-8 text-xs"
+                                      onClick={() => setSection(k, { text: editingText ? undefined : defs[k].text ?? "" })} data-testid={`edit-section-${k}`}>
+                                      {editingText ? <><RotateCcw className="h-3.5 w-3.5 me-1" />{t("proposals.autoText")}</> : <><Pencil className="h-3.5 w-3.5 me-1" />{t("proposals.editText")}</>}
+                                    </Button>
+                                  )}
+                                </div>
+                                {canText && shown && editingText && (
+                                  <Textarea rows={4} className="text-sm" value={ed.text} onChange={(e) => setSection(k, { text: e.target.value })} data-testid={`input-section-text-${k}`} />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">{t("proposals.customSections")}</Label>
+                          {customs.map((c, i) => (
+                            <div key={i} className="rounded border border-border p-2 space-y-2" data-testid={`custom-section-${i}`}>
+                              <div className="flex items-center gap-2">
+                                <Input className="flex-1 h-8 text-sm" value={c.title} placeholder={t("proposals.sectionTitle")} onChange={(e) => setCustomSections((l) => l.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} data-testid={`input-custom-title-${i}`} />
+                                <button type="button" onClick={() => setCustomSections((l) => l.filter((_, j) => j !== i))} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
+                              </div>
+                              <Textarea rows={3} className="text-sm" value={c.text} placeholder={t("proposals.sectionTextHint")} onChange={(e) => setCustomSections((l) => l.map((x, j) => (j === i ? { ...x, text: e.target.value } : x)))} data-testid={`input-custom-text-${i}`} />
+                            </div>
+                          ))}
+                          <Button size="sm" variant="outline" className="h-8" onClick={() => setCustomSections((l) => [...l, { title: "", text: "" }])} data-testid="button-add-section"><Plus className="h-4 w-4 me-1" />{t("proposals.addSection")}</Button>
+                        </div>
+                      </section>
+                    );
+                  })()}
                 </div>
                 <div className={`bg-muted/40 min-h-0 ${mobileView === "form" ? "hidden lg:block" : ""}`}>
                   <LivePreview html={html} />

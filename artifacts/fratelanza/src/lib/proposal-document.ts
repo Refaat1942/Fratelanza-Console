@@ -68,7 +68,20 @@ export type ProposalData = {
   milestones?: Milestone[];
   /** Quotation: the technical proposal its packages were read from */
   technicalId?: number | null;
+  /** Quotation: per-section edits (hide it, rename it, replace its text) */
+  sections?: Partial<Record<QuoteSectionKey, SectionEdit>>;
+  /** Quotation: the client's own extra sections, printed after the prices */
+  customSections?: CustomSection[];
 };
+
+/** Sections of the sales quotation, in print order ("custom" = the client's own sections). */
+export const QUOTE_SECTIONS = ["client", "intro", "benefits", "packages", "extras", "compare", "milestones", "custom", "provides", "notes", "approval"] as const;
+export type QuoteSectionKey = Exclude<(typeof QUOTE_SECTIONS)[number], "custom">;
+/** hidden = left out of the print; title / text replace the generated ones ("" or missing = generated) */
+export type SectionEdit = { hidden?: boolean; title?: string; text?: string };
+export type CustomSection = { title: string; text: string };
+/** Sections whose body is text the user can rewrite (the rest are tables / generated blocks). */
+export const TEXT_SECTIONS: QuoteSectionKey[] = ["intro", "benefits", "provides", "notes"];
 
 export function defaultProposal(serviceKey = "websites"): ProposalData {
   return {
@@ -422,24 +435,30 @@ function titleBar(d: ProposalData, title: string, withValidity: boolean) {
   </div>`;
 }
 
-function clientBox(d: ProposalData) {
+function clientBox(d: ProposalData, title?: string) {
   const t = T[d.language];
   const c = d.customer;
   const row = (label: string, v: string, full = false) => (v.trim() ? `<div class="${full ? "full" : ""}"><span class="lbl">${label}:</span> ${esc(v)}</div>` : "");
   const contact = [c.contactName, c.contactTitle].filter((x) => x.trim()).join(d.language === "ar" ? " – " : ", ");
   return `<div class="client">
-    <div class="hd">${t.preparedFor}</div>
+    <div class="hd">${esc(title ?? t.preparedFor)}</div>
     ${row(t.company, c.company)}${row(t.contact, contact)}${row(t.business, c.business)}${row(t.phone, c.phone)}${row(t.email, c.email)}${row(t.address, c.address, true)}
   </div>`;
 }
 
-function benefits(d: ProposalData) {
+function benefitLines(d: ProposalData): string[] {
   const t = T[d.language];
   const svc = serviceByKey(d.serviceKey);
   const biz = d.customer.company.trim() || d.customer.business.trim() || t.yourBusiness;
   // English possessive: "Al Nour Pharmacies'" rather than "Pharmacies's"
   const possessive = biz !== t.yourBusiness && /s$/i.test(biz) ? `${biz}'` : `${biz}'s`;
-  return `<ul class="check">${svc.benefits.map((b) => `<li>${esc(b[d.language].replace("{biz}'s", possessive).replace("{biz}", biz))}</li>`).join("")}</ul>`;
+  return svc.benefits.map((b) => b[d.language].replace("{biz}'s", possessive).replace("{biz}", biz));
+}
+function checkList(lines: string[]) {
+  return `<ul class="check">${lines.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+}
+function benefits(d: ProposalData) {
+  return checkList(benefitLines(d));
 }
 
 function intro(d: ProposalData) {
@@ -451,30 +470,71 @@ function intro(d: ProposalData) {
   <p>${esc(t.intro(svc.name[d.language], c.company.trim(), c.business.trim(), c.needs.trim()))}</p>`;
 }
 
-function notesList(d: ProposalData, withValidity: boolean) {
+function noteLines(d: ProposalData, withValidity: boolean): string[] {
   const t = T[d.language];
   const svc = serviceByKey(d.serviceKey);
-  const items = [
+  return [
     // Custom projects are priced firmly, so no "guide prices" note
     ...(isSinglePrice(d) || hasSpecTiers(d) ? [] : [PRICE_NOTE[d.language]]), svc.scopeNote[d.language], EXTERNAL_FEES_NOTE[d.language],
     ...d.notes.split("\n").map((x) => x.trim()).filter(Boolean),
     ...(withValidity ? [t.validity(d.validDays)] : []),
   ];
-  return `<h2>${t.notesTitle}</h2><ul class="check">${items.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+}
+function notesList(d: ProposalData, withValidity: boolean) {
+  return `<h2>${T[d.language].notesTitle}</h2>${checkList(noteLines(d, withValidity))}`;
 }
 
 function provides(d: ProposalData) {
   const t = T[d.language];
-  return `<h2>${t.providesTitle}</h2><ul class="check">${PROVIDES.map((x) => `<li>${esc(x[d.language])}</li>`).join("")}</ul>`;
+  return `<h2>${t.providesTitle}</h2>${checkList(PROVIDES.map((x) => x[d.language]))}`;
 }
 
-function approval(d: ProposalData) {
+/** The quotation's generated section titles and texts (what an edit starts from). */
+export function quoteSectionDefaults(d: ProposalData): Record<QuoteSectionKey, { title: string; text: string | null }> {
+  const t = T[d.language];
+  const lang = d.language;
+  const c = d.customer;
+  const svc = serviceByKey(d.serviceKey);
+  const custom = isSinglePrice(d);
+  const addressee = c.contactName.trim() || c.company.trim();
+  return {
+    client: { title: t.preparedFor, text: null },
+    intro: {
+      title: lang === "ar" ? "مقدمة" : "Introduction",
+      text: [addressee ? `${t.dear(addressee)}${t.greeting ? ` ${t.greeting}` : ""}` : "", t.intro(svc.name[lang], c.company.trim(), c.business.trim(), c.needs.trim())].filter(Boolean).join("\n"),
+    },
+    benefits: { title: t.benefitsTitle, text: benefitLines(d).map((x) => `- ${x}`).join("\n") },
+    packages: { title: custom ? t.scopeTitle : t.packagesTitle, text: null },
+    extras: { title: custom ? t.totalTitle : t.extrasTitle, text: null },
+    compare: { title: t.compareTitle, text: null },
+    milestones: { title: t.milestonesTitle, text: null },
+    provides: { title: t.providesTitle, text: PROVIDES.map((x) => `- ${x[lang]}`).join("\n") },
+    notes: { title: t.notesTitle, text: noteLines(d, true).map((x) => `- ${x}`).join("\n") },
+    approval: { title: t.approvalTitle, text: null },
+  };
+}
+
+/** Free text as printed: "- item" lines become a list, the rest paragraphs. */
+function freeText(text: string) {
+  const out: string[] = [];
+  let list: string[] = [];
+  const flush = () => { if (list.length) { out.push(checkList(list)); list = []; } };
+  for (const line of text.split("\n").map((x) => x.trim()).filter(Boolean)) {
+    const m = /^[-•*]\s*(.+)$/.exec(line);
+    if (m) list.push(m[1]!);
+    else { flush(); out.push(`<p>${esc(line)}</p>`); }
+  }
+  flush();
+  return out.join("");
+}
+
+function approval(d: ProposalData, title?: string) {
   const t = T[d.language];
   const blank = "................................";
   const ar = d.language === "ar";
   const c = d.customer;
   const clientName = c.company.trim() || c.contactName.trim();
-  return `<h2>${t.approvalTitle}</h2>
+  return `<h2>${esc(title ?? t.approvalTitle)}</h2>
   <div class="sign">
     <div><b>${t.firstParty}</b>${esc(ar ? COMPANY.name : "Fratelanza for Training, Software & AI Solutions")}<br>
       ${t.name}: ${ar ? COMPANY.manager : "Ahmed Mohamed Refaat El-Sayed"}<br>${t.title}: ${t.manager}<br>${t.signature}: ${blank}<br>${t.sigDate}: ${blank}</div>
@@ -484,7 +544,8 @@ function approval(d: ProposalData) {
 }
 
 function shownTiers(d: ProposalData): Tier[] {
-  const list = TIERS.filter((tier) => d.included?.[tier] !== false || tier === d.tier);
+  // A hidden package is never printed, even when it is the (internal) client choice
+  const list = TIERS.filter((tier) => d.included?.[tier] !== false);
   return list.length ? list : TIERS;
 }
 
@@ -501,7 +562,7 @@ function grouped(reqs: Requirement[], fallback: string) {
 }
 
 /** Custom project, financial view: scope items by section with their price. */
-function customScopeTable(d: ProposalData) {
+function customScopeTable(d: ProposalData, title?: string) {
   const t = T[d.language];
   const lang = d.language;
   const groups = grouped(d.requirements ?? [], t.general);
@@ -509,7 +570,7 @@ function customScopeTable(d: ProposalData) {
   const many = groups.length > 1 || groups[0]!.title !== t.general;
   const rows = groups.map((g) => `${many ? `<tr class="grp"><td colspan="3">${esc(g.title)}</td></tr>` : ""}${g.items.map(({ r, n }) =>
     `<tr><td class="num">${n}</td><td>${esc(r.text)}</td><td class="num">${Number(r.price) > 0 ? money(Number(r.price), lang) : `<span class="muted">${t.inProject}</span>`}</td></tr>`).join("")}`).join("");
-  return `<h2>${t.scopeTitle}</h2>
+  return `<h2>${esc(title ?? t.scopeTitle)}</h2>
   <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:22%">${t.priceCol}</th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
@@ -534,15 +595,27 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     </tr>`;
   }).join("");
 
-  let totals = "";
-  const extrasTable = (items: Requirement[]) => items.length ? `<h2>${t.extrasTitle}</h2>
-    <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
-    <tbody>${items.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : "";
+  const def = quoteSectionDefaults(d);
+  const edit = (k: QuoteSectionKey) => d.sections?.[k] ?? {};
+  const on = (k: QuoteSectionKey) => !edit(k).hidden;
+  const title = (k: QuoteSectionKey) => edit(k).title?.trim() || def[k].title;
+  const h2 = (k: QuoteSectionKey) => `<h2>${esc(title(k))}</h2>`;
+  /** A text section: the user's own text, or the generated body */
+  const textOr = (k: QuoteSectionKey, generated: string) => (edit(k).text?.trim() ? freeText(edit(k).text!) : generated);
+  const sumPct = milestonesOf(d).reduce((a, m) => a + (Number(m.pct) || 0), 0);
+
+  const parts: Partial<Record<QuoteSectionKey, string>> = {};
+  parts.client = clientBox(d, title("client"));
+  parts.intro = `${h2("intro")}${textOr("intro", intro(d))}`;
+  parts.benefits = `${h2("benefits")}${textOr("benefits", benefits(d))}`;
+  parts.packages = custom ? customScopeTable(d, title("packages")) : `${h2("packages")}
+  <table><thead><tr><th style="width:18%">${t.packageCol}</th><th>${t.includesCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead><tbody>${rows}</tbody></table>`;
+
   if (custom && amount > 0) {
     const calc = computeStages(amount, milestonesOf(d));
     // Breakdown only when there is more than one figure to add up (or a discount)
     const showSum = tot.discount > 0 || (tot.extras > 0 && tot.packagePrice > 0);
-    totals = `<h2>${t.totalTitle}</h2>
+    parts.extras = `${h2("extras")}
     ${showSum ? `<table class="sum"><tbody>
       ${tot.packagePrice > 0 ? `<tr><td>${esc(t.projectValue)}</td><td class="num">${money(tot.packagePrice, lang)}</td></tr>` : ""}
       ${tot.extras > 0 ? `<tr><td>${esc(t.itemsSum)}</td><td class="num">${money(tot.extras, lang)}</td></tr>` : ""}
@@ -550,13 +623,13 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
       ${tot.discount > 0 ? `<tr class="disc"><td>${esc(t.discount)}${d.discountType === "percent" ? ` (${tot.discountPct}%)` : ""}</td><td class="num">− ${money(tot.discount, lang)}</td></tr>` : ""}
     </tbody></table>` : ""}
     <div class="totalbox"><span>${esc(tot.discount > 0 ? t.totalAfter : t.grandTotal)}</span><b>${money(amount, lang)}</b>
-      ${lang === "ar" ? `<span class="w">${t.words} ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير.</span>` : ""}</div>
-    <h2>${t.milestonesTitle}</h2>
+      ${lang === "ar" ? `<span class="w">${t.words} ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير.</span>` : ""}</div>`;
+    parts.milestones = `${h2("milestones")}
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th><th>${t.amountCol}</th></tr></thead>
     <tbody>${calc.rows.map((r) => `<tr><td>${esc(lang === "ar" ? r.ar : r.en)}</td><td class="num">${r.pct}%</td><td class="num">${money(r.amount, lang)}</td></tr>`).join("")}
-    <tr class="total"><td>${t.total}</td><td class="num">${milestonesOf(d).reduce((a, m) => a + (Number(m.pct) || 0), 0)}%</td><td class="num">${money(calc.totalAllocated, lang)}</td></tr></tbody></table>`;
+    <tr class="total"><td>${t.total}</td><td class="num">${sumPct}%</td><td class="num">${money(calc.totalAllocated, lang)}</td></tr></tbody></table>`;
   } else if (custom) {
-    totals = `<h2>${t.milestonesTitle}</h2>
+    parts.milestones = `${h2("milestones")}
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th></tr></thead>
     <tbody>${milestonesOf(d).map((m) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td></tr>`).join("")}</tbody></table>`;
   } else {
@@ -568,34 +641,32 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
     const anyExtras = cols.some((c) => c.tt.extras > 0);
     const anyDiscount = cols.some((c) => c.tt.discount > 0);
     const head = `<tr><th>${t.itemCol}</th>${cols.map((c) => `<th class="num">${TIER_NAME[c.tier]}</th>`).join("")}</tr>`;
-    totals = `${extrasTable(extraItems(d))}
-    <h2>${t.compareTitle}</h2>
+    const extras = extraItems(d);
+    parts.extras = extras.length ? `${h2("extras")}
+    <table><thead><tr><th style="width:6%">#</th><th>${t.reqCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead>
+    <tbody>${extras.map((r, i) => `<tr><td class="num">${i + 1}</td><td>${esc(r.text)}</td><td class="num">${money(Number(r.price) || 0, lang)}</td></tr>`).join("")}</tbody></table>` : "";
+    parts.compare = `${h2("compare")}
     <table><thead>${head}</thead><tbody>
       <tr><td>${t.packagePriceRow}</td>${cols.map((c) => `<td class="num">${money(c.tt.packagePrice, lang)}</td>`).join("")}</tr>
       ${anyExtras ? `<tr><td>+ ${t.extrasSum}</td>${cols.map((c) => `<td class="num">${money(c.tt.extras, lang)}</td>`).join("")}</tr>` : ""}
       ${anyDiscount ? `<tr class="disc"><td>${t.discount}${d.discountType === "percent" ? ` (${Math.min(100, Number(d.discountValue) || 0)}%)` : ""}</td>${cols.map((c) => `<td class="num">− ${money(c.tt.discount, lang)}</td>`).join("")}</tr>` : ""}
       <tr class="total"><td>${anyDiscount ? t.totalAfter : t.total}</td>${cols.map((c) => `<td class="num">${money(c.tt.total, lang)}</td>`).join("")}</tr>
-    </tbody></table>
-    <h2>${t.milestonesTitle}</h2>
+    </tbody></table>`;
+    parts.milestones = `${h2("milestones")}
     <table><thead><tr><th>${t.stageCol}</th><th>${t.pctCol}</th>${cols.map((c) => `<th class="num">${TIER_NAME[c.tier]}</th>`).join("")}</tr></thead>
     <tbody>${milestonesOf(d).map((m, i) => `<tr><td>${esc(lang === "ar" ? m.ar : m.en)}</td><td class="num">${m.pct}%</td>${cols.map((c) => `<td class="num">${money(c.calc.rows[i]!.amount, lang)}</td>`).join("")}</tr>`).join("")}
-    <tr class="total"><td>${t.total}</td><td class="num">${milestonesOf(d).reduce((a, m) => a + (Number(m.pct) || 0), 0)}%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>
-    <p class="muted">${esc(t.chooseNote)}</p>`;
+    <tr class="total"><td>${t.total}</td><td class="num">${sumPct}%</td>${cols.map((c) => `<td class="num">${money(c.calc.totalAllocated, lang)}</td>`).join("")}</tr></tbody></table>
+    ${cols.length > 1 ? `<p class="muted">${esc(t.chooseNote)}</p>` : ""}`;
   }
+  parts.provides = `${h2("provides")}${textOr("provides", checkList(PROVIDES.map((x) => x[lang])))}`;
+  parts.notes = `${h2("notes")}${textOr("notes", checkList(noteLines(d, true)))}`;
+  parts.approval = approval(d, title("approval"));
 
+  const customHtml = (d.customSections ?? []).filter((c) => c.title.trim() || c.text.trim())
+    .map((c) => `${c.title.trim() ? `<h2>${esc(c.title)}</h2>` : ""}${freeText(c.text)}`).join("");
   const body = `
   ${titleBar(d, t.quote, true)}
-  ${clientBox(d)}
-  <h2>${lang === "ar" ? "مقدمة" : "Introduction"}</h2>
-  ${intro(d)}
-  <h2>${t.benefitsTitle}</h2>
-  ${benefits(d)}
-  ${custom ? customScopeTable(d) : `<h2>${t.packagesTitle}</h2>
-  <table><thead><tr><th style="width:18%">${t.packageCol}</th><th>${t.includesCol}</th><th style="width:20%">${t.priceCol}</th></tr></thead><tbody>${rows}</tbody></table>`}
-  ${totals}
-  ${provides(d)}
-  ${notesList(d, true)}
-  ${approval(d)}`;
+  ${QUOTE_SECTIONS.map((k) => (k === "custom" ? customHtml : on(k) ? parts[k] ?? "" : "")).join("\n  ")}`;
   return shell(lang, `${t.quote} – ${d.customer.company || svc.name[lang]}`, body, opts);
 }
 
