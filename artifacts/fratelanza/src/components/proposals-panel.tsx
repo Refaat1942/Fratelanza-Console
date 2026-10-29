@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { useBranding } from "@/lib/branding-context";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
+import { SearchSelect } from "@/components/search-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -552,13 +553,9 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                   <section className="space-y-3">
                     <h3 className="text-sm font-semibold text-primary">2. {t("proposals.customerSection")}</h3>
                     <Field label={t("proposals.existingClient")} hint={editing.clientId ? undefined : t("proposals.newClientHint")}>
-                      <Select value={editing.clientId ? String(editing.clientId) : "new"} onValueChange={pickClient}>
-                        <SelectTrigger data-testid="select-proposal-client"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="new">{t("proposals.newClient")}</SelectItem>
-                          {clients.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <SearchSelect value={editing.clientId ? String(editing.clientId) : "new"} onChange={pickClient} testId="select-proposal-client"
+                        pinned={[{ value: "new", label: t("proposals.newClient") }]}
+                        options={clients.map((c) => ({ value: String(c.id), label: c.name, hint: c.activity ?? undefined }))} />
                     </Field>
                     <Field label={t("proposals.company")}><Input value={d.customer.company} onChange={(e) => setCustomer({ company: e.target.value })} data-testid="input-customer-company" /></Field>
                     <div className="grid grid-cols-2 gap-3">

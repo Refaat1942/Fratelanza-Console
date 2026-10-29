@@ -9,6 +9,7 @@ import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { FreelancerPicker } from "@/components/freelancer-picker";
 import { ProjectPaymentDialog } from "@/components/project-payment-dialog";
 import { ProjectDocumentsPanel, type ClientQuoteSummary } from "@/components/project-documents-panel";
+import { SearchSelect } from "@/components/search-select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -437,17 +438,9 @@ export default function Projects() {
             </div>
             <div className="md:col-span-2 space-y-1">
               <Label>{t('projects.clientName')}</Label>
-              <Select value={form.clientName} onValueChange={fs("clientName")}>
-                <SelectTrigger data-testid="input-client-name"><SelectValue placeholder={t('projects.selectClient')} /></SelectTrigger>
-                <SelectContent>
-                  {form.clientName && !clients.some((c) => c.name === form.clientName) && (
-                    <SelectItem value={form.clientName}>{form.clientName}</SelectItem>
-                  )}
-                  {clients.map((c) => (
-                    <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <SearchSelect value={form.clientName} onChange={fs("clientName")} testId="input-client-name" placeholder={t("projects.selectClient")}
+                  pinned={form.clientName && !clients.some((c) => c.name === form.clientName) ? [{ value: form.clientName, label: form.clientName }] : []}
+                  options={clients.map((c) => ({ value: c.name, label: c.name }))} />
             </div>
 
             {/* Freelancers list */}

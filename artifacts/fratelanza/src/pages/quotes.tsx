@@ -4,6 +4,7 @@ import { useListQuotes, getListQuotesQueryKey, useCreateQuote, useUpdateQuote, u
 import type { QuoteTierPackage } from "@workspace/api-client-react";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { SmartQuotePanel, type SmartQuoteApplyPayload } from "@/components/smart-quote-panel";
+import { SearchSelect } from "@/components/search-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -380,19 +381,9 @@ export default function Quotes() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <Label>{t("quotes.clientName")}</Label>
-                <Select value={form.clientName} onValueChange={fs("clientName")}>
-                  <SelectTrigger data-testid="input-quote-client">
-                    <SelectValue placeholder={t("quotes.selectClient")} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {form.clientName && !clients.some((c) => c.name === form.clientName) && (
-                      <SelectItem value={form.clientName}>{form.clientName}</SelectItem>
-                    )}
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.name}>{c.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchSelect value={form.clientName} onChange={fs("clientName")} testId="input-quote-client" placeholder={t("quotes.selectClient")}
+                  pinned={form.clientName && !clients.some((c) => c.name === form.clientName) ? [{ value: form.clientName, label: form.clientName }] : []}
+                  options={clients.map((c) => ({ value: c.name, label: c.name }))} />
               </div>
               <div className="space-y-1">
                 <Label>{t("quotes.language")}</Label>
