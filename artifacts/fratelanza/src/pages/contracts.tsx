@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { useBranding } from "@/lib/branding-context";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
+import { SearchSelect } from "@/components/search-select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -243,13 +244,9 @@ export default function Contracts() {
               <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(380px,460px)_1fr] min-h-0">
                 <div className={`overflow-y-auto p-3 sm:p-5 space-y-4 lg:border-e border-border ${mobileView === "preview" ? "hidden lg:block" : ""}`}>
                   <Field label={t("contracts.linkProject")}>
-                    <Select value={editing.projectId ? String(editing.projectId) : "none"} onValueChange={pickProject}>
-                      <SelectTrigger data-testid="select-contract-project"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">{t("contracts.noProject")}</SelectItem>
-                        {projectList.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.projectName}{p.clientName ? ` — ${p.clientName}` : ""}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <SearchSelect value={editing.projectId ? String(editing.projectId) : "none"} onChange={pickProject} testId="select-contract-project"
+                      pinned={[{ value: "none", label: t("contracts.noProject") }]}
+                      options={projectList.map((p) => ({ value: String(p.id), label: p.projectName, hint: p.clientName ?? undefined }))} />
                   </Field>
                   {editing.type === "client"
                     ? <ClientForm d={editing.client} set={setClient} />
