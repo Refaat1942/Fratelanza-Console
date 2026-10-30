@@ -228,7 +228,8 @@ export function htmlToMarkdown(html: string): string {
 
 export type SpecTier = "starter" | "business" | "enterprise";
 /** One deliverable from the specification and the first package that includes it. */
-export type SpecItem = { text: string; section: string; tier: SpecTier };
+/** A package item: the deliverable, its section, its package and (from AI) its specs in a sentence. */
+export type SpecItem = { text: string; section: string; tier: SpecTier; detail?: string };
 
 const clean = (h: string) => h.replace(/\*\*/g, "").replace(/^\d{1,2}(?:\.\d{1,2})*[.)]?\s*/, "").trim();
 const SKIP = /^(?:النتيجة المستهدفة|الخلاصة|الخاتمة|summary|conclusion|وصف عام|نبذة|مقدمة|مقدمه|overview|introduction|general description|قواعد .*(?:الاعتماد|التنفيذ)|assumptions|approval|الأهداف|الاهداف|أهداف|اهداف|objectives|goals|الوحدات الرئيسية|main modules|مراحل|المرحلة|المرحله|خطة العمل|خطه العمل|الجدول الزمني|phase|timeline|milestone|مسؤوليات|مسئوليات|التزامات العميل|responsibilit|نقاط تحتاج|حدود النطاق|خارج النطاق|out of scope|scope limits|معايير القبول|acceptance|اعتماد|التوقيع|التوقيعات|signature|sign-?off|ملاحظات|notes|افتراضات|الافتراضات|المراجع|references|الملاحق|appendix)/i;
