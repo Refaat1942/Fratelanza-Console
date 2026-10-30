@@ -153,7 +153,7 @@ export function packageContents(d: ProposalData, tier: Tier): { title: string; d
   const lang = d.language;
   if (hasSpecTiers(d)) {
     return (d.tierItems ?? []).filter((x) => x.tier === tier)
-      .map((x) => ({ title: x.text, detail: x.section && x.section !== x.text ? x.section : "" }));
+      .map((x) => ({ title: x.text, detail: x.detail?.trim() || (x.section && x.section !== x.text ? x.section : "") }));
   }
   const pkg = serviceByKey(d.serviceKey).packages.find((p) => p.tier === tier);
   return (pkg?.features ?? []).map((f) => ({ title: lang === "ar" ? f.ar : f.en, detail: lang === "ar" ? f.dAr : f.dEn }));
@@ -584,13 +584,15 @@ export function buildQuoteHtml(d: ProposalData, opts: ProposalHtmlOptions = {}):
   const amount = tot.total;
   const custom = isSinglePrice(d);
 
+  // Specs written per item (AI split) print under each item of the package
+  const specDetails = hasSpecTiers(d) && (d.tierItems ?? []).some((x) => x.detail?.trim());
   const rows = custom ? "" : shownTiers(d).map((tier, i, all) => {
     // The client chooses: every package is shown the same way (the chosen one is internal only)
     const price = Number(d.prices[tier] ?? 0);
     const prev = i > 0 ? all[i - 1]! : null;
     return `<tr>
       <td class="pkg">${TIER_NAME[tier]}</td>
-      <td>${prev ? `<div class="muted">${esc(t.plus(TIER_NAME[prev]))}</div>` : ""}<ul>${packageContents(d, tier).map((x) => `<li>${esc(x.title)}</li>`).join("")}</ul></td>
+      <td>${prev ? `<div class="muted">${esc(t.plus(TIER_NAME[prev]))}</div>` : ""}<ul>${packageContents(d, tier).map((x) => `<li>${esc(x.title)}${specDetails && x.detail ? `<div class="muted">${esc(x.detail)}</div>` : ""}</li>`).join("")}</ul></td>
       <td class="num"><b>${money(price, lang)}</b></td>
     </tr>`;
   }).join("");
@@ -719,7 +721,7 @@ export function buildTechnicalHtml(d: ProposalData, opts: ProposalHtmlOptions = 
     return `<div class="pkgblock">
       <h3>${lang === "ar" ? "باقة" : "Package:"} ${TIER_NAME[tier]}</h3>
       ${prev ? `<div class="plus">${esc(t.plus(TIER_NAME[prev]))}</div>` : ""}
-      <table><thead><tr><th style="width:34%">${t.featureCol}</th><th>${specTiers ? t.sectionCol : t.detailCol}</th></tr></thead>
+      <table><thead><tr><th style="width:34%">${t.featureCol}</th><th>${specTiers && !(d.tierItems ?? []).some((x) => x.detail?.trim()) ? t.sectionCol : t.detailCol}</th></tr></thead>
       <tbody>${items.map((x) => `<tr><td><b>${esc(x.title)}</b></td><td>${esc(x.detail)}</td></tr>`).join("")}</tbody></table>
     </div>`;
   }).join("");

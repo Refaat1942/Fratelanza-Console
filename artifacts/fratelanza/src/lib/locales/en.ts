@@ -33,6 +33,13 @@ export const en = {
   },
   theme: { light: "Light theme", dark: "Dark theme" },
   language: { english: "English", arabic: "العربية", label: "Language" },
+  ai: {
+    title: "Artificial intelligence (OpenAI)", connected: "Connected", notConnected: "Not connected", fromEnv: "from server environment",
+    intro: "Used to split a technical proposal's specification over the packages (Starter / Business / Enterprise) with the system's actual points and specs. The key is kept on the server only and is never shown in full again.",
+    adminOnly: "Only an admin can change the key.", apiKey: "OpenAI API key", keyKeep: "Key saved – type a new key to replace it",
+    keyHelp: "Create a key in your OpenAI account and paste it here:", model: "Model", modelHelp: "Leave empty to use {{model}} (fast and economical), or type e.g. gpt-4o for higher accuracy.",
+    test: "Test connection", testOk: "Connection works ({{model}})", remove: "Remove key", removed: "Key removed", saved: "AI settings saved",
+  },
   branding: {
     settings: "Branding & Settings", logo: "Company Logo", uploadLogo: "Upload Logo",
     removeLogo: "Remove Logo", brandName: "Brand Name", tagline: "Tagline",
@@ -227,6 +234,9 @@ export const en = {
     sectionsSection: "Quotation sections", sectionsHint: "Hide any section (eye icon), rename it, or rewrite its text for this client. Lines starting with \"-\" print as list items.",
     showSection: "Show section", hideSection: "Hide section", editText: "Edit text", autoText: "Automatic text", resetSections: "Restore all sections",
     customSections: "Extra sections for this client", addSection: "Add section", sectionTitle: "Section title", sectionTextHint: "Section text – each line a paragraph; start a line with \"-\" for a list item",
+    aiSplit: "Split packages with AI", aiWorking: "Splitting…", aiSplitHint: "Reads the technical proposal's specification and spreads its actual points over the three packages, with each point's details",
+    aiNotSetUp: "AI is not set up", aiNotSetUpHint: "To split packages with AI, add an OpenAI key in Settings.", aiOpenSettings: "Open Settings",
+    aiNothing: "There is no specification or requirement list to split – upload the specification or type the requirements first.", aiDone: "{{count}} items split over the packages – review and adjust them", aiFailed: "AI split failed",
     milestonesMust100: "The percentages must add up to 100%.",
     linkedTechnical: "Packages read from the technical proposal: {{name}} ({{date}})",
     refreshTechnical: "Update from the technical proposal",

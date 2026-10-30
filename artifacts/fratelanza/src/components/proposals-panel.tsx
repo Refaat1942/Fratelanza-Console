@@ -17,11 +17,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2, Eraser, Eye, EyeOff, RotateCcw } from "lucide-react";
+import { FileText, ClipboardList, Plus, Pencil, Trash2, Save, FileDown, Printer, Wand2, X, Upload, Loader2, Eraser, Eye, EyeOff, RotateCcw, Sparkles } from "lucide-react";
 import { printContractHtml, downloadContractWord } from "@/lib/contract-document";
 import { SERVICES, TIERS, TIER_NAME, CUSTOM_SERVICE, MILESTONES, isCustomService, serviceByKey, type Milestone, type Tier } from "@/lib/service-catalog";
 import { analyzeRequirements, suggestedTier, requirementsFromDocument, detectService, type Requirement } from "@/lib/requirements-match";
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
+import { useAiStatus, aiSplitPackages } from "@/lib/ai-client";
+import { Link } from "wouter";
 import { autoTierItems, htmlToMarkdown, looksLikeSpec, specItems, specSections, specTitle, type SpecItem } from "@/lib/spec-document";
 import {
   buildQuoteHtml, buildTechnicalHtml, defaultProposal, guidePrices, proposalAmount, proposalTotals, normalizeProposal, scopeModeOf, milestonesOf, suggestedPrices, withSuggestedPrices, hasSpecTiers, isSinglePrice, packageContents,
@@ -49,6 +51,19 @@ function fromSaved(p: Proposal): Editing {
 }
 
 /** quote / technical, or "both" for older saves that held the two documents together */
+/**
+ * The points a technical proposal's packages are made of: its own package items,
+ * else its specification's deliverables, else the client's requirements matched
+ * to a package. Empty when none of these exist (the catalog wording is used then).
+ */
+function packageItemsOf(d: ProposalData): SpecItem[] {
+  if (hasSpecTiers(d)) return d.tierItems!;
+  if (scopeModeOf(d) === "spec" && d.requirementsText.trim()) return autoTierItems(specItems(d.requirementsText));
+  const matched = d.requirements.filter((r) => r.text.trim() && /^(starter|business|enterprise):/.test(r.match))
+    .map((r) => ({ text: r.text.trim(), section: r.group?.trim() ?? "", tier: r.match.split(":")[0] as Tier }));
+  return matched.length >= 3 ? matched : [];
+}
+
 export function docKindOf(p: Proposal): DocKind | "both" {
   const k = (p.data as Partial<ProposalData> | undefined)?.kind;
   return k === "quote" || k === "technical" ? k : "both";
@@ -212,8 +227,10 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   const withTechnical = (base: Editing, src: Proposal): Editing => {
     const from = fromSaved(src).data;
     const ownExtras = base.data.requirements.filter((r) => r.match === "extra" && r.text.trim());
-    // Packages built from the specification come over as packages; otherwise its sections / requirements become items to price
-    const items = hasSpecTiers(from) ? ownExtras
+    // The packages hold the technical proposal's own points: its package items, else the specification's
+    // deliverables, else the client's requirements matched to a package (never the catalog's general wording)
+    const tierItems = packageItemsOf(from);
+    const items = tierItems.length ? (scopeModeOf(from) === "spec" ? ownExtras : from.requirements.filter((r) => r.match === "extra"))
       : scopeModeOf(from) === "spec" ? specSections(from.requirementsText).map((text) => ({ text, match: "extra", price: 0 }))
       : from.requirements;
     const next: Editing = {
@@ -229,7 +246,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
         requirementsText: from.requirementsText,
         sourceFile: from.sourceFile,
         projectTitle: from.projectTitle,
-        tierItems: from.tierItems,
+        tierItems: tierItems.length ? tierItems : from.tierItems,
         scopeMode: from.scopeMode,
         customer: base.data.customer.company.trim() ? base.data.customer : from.customer,
       },
@@ -240,22 +257,76 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
   };
   const importedToast = (src: Proposal) => {
     const from = fromSaved(src).data;
-    toast({ title: hasSpecTiers(from) ? t("proposals.importedTiers", { count: from.tierItems!.length }) : t("proposals.imported", { count: from.requirements.filter((r) => r.match === "extra").length }) });
+    const items = packageItemsOf(from);
+    toast({ title: items.length ? t("proposals.importedTiers", { count: items.length }) : t("proposals.imported", { count: from.requirements.filter((r) => r.match === "extra").length }) });
   };
   const importTechnical = (id: string) => {
     const src = proposals.find((p) => p.id === Number(id));
     if (!src || !editing) return;
-    setEditing(withTechnical(editing, src));
+    const next = withTechnical(editing, src);
+    setEditing(next);
     importedToast(src);
+    autoSplit(next, src);
   };
   /** Latest technical proposal of a client (the list is newest first). */
   const latestTechnicalOf = (clientId: number) => proposals.find((p) => p.clientId === clientId && docKindOf(p) !== "quote");
   const linkedTechnical = editing?.data.technicalId ? proposals.find((p) => p.id === editing.data.technicalId) : undefined;
   const refreshFromTechnical = () => {
     if (!editing || !linkedTechnical) return;
-    setEditing(withTechnical(editing, linkedTechnical));
+    const next = withTechnical(editing, linkedTechnical);
+    setEditing(next);
     importedToast(linkedTechnical);
+    autoSplit(next, linkedTechnical);
   };
+  /** AI: split the specification / requirements into the three packages (items with their specs). */
+  const { data: aiStatus } = useAiStatus();
+  const [aiBusy, setAiBusy] = useState(false);
+  const splitWithAi = async (target?: Editing) => {
+    const cur = target ?? editing;
+    if (!cur) return;
+    if (!aiStatus?.configured) {
+      toast({ title: t("proposals.aiNotSetUp"), description: t("proposals.aiNotSetUpHint"), variant: "destructive" });
+      return;
+    }
+    const d0 = cur.data;
+    const requirements = [...d0.requirements.map((r) => r.text), ...(d0.tierItems ?? []).map((x) => x.text)].filter((x) => x.trim());
+    if (!d0.requirementsText.trim() && !requirements.length) {
+      toast({ title: t("proposals.aiNothing"), variant: "destructive" });
+      return;
+    }
+    setAiBusy(true);
+    try {
+      const out = await aiSplitPackages({
+        language: d0.language, serviceName: isCustomService(d0.serviceKey) ? undefined : serviceByKey(d0.serviceKey).name[d0.language],
+        projectTitle: d0.projectTitle, customer: d0.customer.company || d0.customer.business,
+        text: d0.requirementsText.trim() || undefined, requirements: d0.requirementsText.trim() ? undefined : requirements,
+      });
+      setEditing((e) => {
+        if (!e) return e;
+        // Unpriced items are now inside the packages; priced additions stay as additions
+        const requirements = e.data.kind === "quote" || scopeModeOf(e.data) === "spec"
+          ? e.data.requirements.filter((r) => r.match === "extra" && Number(r.price) > 0) : e.data.requirements;
+        const next = { ...e.data, tierItems: out.items, requirements, projectTitle: e.data.projectTitle?.trim() || out.projectTitle || e.data.projectTitle };
+        return { ...e, data: { ...next, prices: withSuggestedPrices(next) } };
+      });
+      toast({ title: t("proposals.aiDone", { count: out.items.length }) });
+    } catch (err) {
+      toast({ title: t("proposals.aiFailed"), description: (err as Error).message, variant: "destructive" });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+  /** After reading a technical proposal that has no package items of its own, let AI split it (when set up). */
+  const autoSplit = (next: Editing, src: Proposal) => {
+    if (aiStatus?.configured && !hasSpecTiers(fromSaved(src).data)) void splitWithAi(next);
+  };
+  const aiButton = (testId: string) => (
+    <Button size="sm" variant="outline" className="h-8 border-primary/40 text-primary" onClick={() => splitWithAi()} disabled={aiBusy} data-testid={testId}
+      title={aiStatus?.configured ? t("proposals.aiSplitHint") : t("proposals.aiNotSetUpHint")}>
+      {aiBusy ? <Loader2 className="h-4 w-4 me-1 animate-spin" /> : <Sparkles className="h-4 w-4 me-1" />}{aiBusy ? t("proposals.aiWorking") : t("proposals.aiSplit")}
+    </Button>
+  );
+
   const rebuildTiers = () => setEditing((e) => {
     if (!e) return e;
     // Also fix a project name that was taken from a section heading ("1. مقدمة")
@@ -289,6 +360,7 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
     const tech = kind === "quote" && !editing.data.technicalId ? latestTechnicalOf(c.id) : undefined;
     if (tech) { next = withTechnical(next, tech); importedToast(tech); }
     setEditing(next);
+    if (tech) autoSplit(next, tech);
   };
 
   const pickService = (key: string) => setEditing((e) => {
@@ -608,7 +680,10 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                       <div className="rounded border border-border p-3 space-y-2" data-testid="spec-tiers">
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="text-sm font-semibold">{t("proposals.specTiersTitle")}</div>
-                          <Button size="sm" variant="outline" className="h-8" onClick={rebuildTiers} disabled={!d.requirementsText.trim()} data-testid="button-rebuild-tiers"><Wand2 className="h-4 w-4 me-1" />{t("proposals.rebuildTiers")}</Button>
+                          <div className="flex gap-2 flex-wrap">
+                            {aiButton("button-ai-split-tech")}
+                            <Button size="sm" variant="outline" className="h-8" onClick={rebuildTiers} disabled={!d.requirementsText.trim()} data-testid="button-rebuild-tiers"><Wand2 className="h-4 w-4 me-1" />{t("proposals.rebuildTiers")}</Button>
+                          </div>
                         </div>
                         <p className="text-[11px] text-muted-foreground">{t("proposals.specTiersHint")}</p>
                         {(d.tierItems ?? []).length === 0 ? (
@@ -700,7 +775,11 @@ export function ProposalsPanel({ canWrite }: { canWrite: boolean }) {
                   )}
 
                   {!(kind === "technical" && isSinglePrice(d)) && <section className="space-y-3">
-                    <h3 className="text-sm font-semibold text-primary">4. {isSinglePrice(d) ? t("proposals.priceSection") : t("proposals.packagesSection")}</h3>
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <h3 className="text-sm font-semibold text-primary">4. {isSinglePrice(d) ? t("proposals.priceSection") : t("proposals.packagesSection")}</h3>
+                      {aiButton("button-ai-split")}
+                    </div>
+                    {!aiStatus?.configured && <p className="text-[11px] text-muted-foreground">{t("proposals.aiNotSetUpHint")} <Link href="/settings" className="text-primary underline">{t("proposals.aiOpenSettings")}</Link></p>}
                     {isSinglePrice(d) ? (
                       <Field label={t("proposals.projectPrice")} hint={t("proposals.projectPriceHint")}>
                         <Input type="number" value={d.projectPrice || ""} onChange={(e) => setData({ projectPrice: Number(e.target.value) || 0 })} data-testid="input-project-price" />

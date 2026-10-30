@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
+import { AiSettingsCard } from "@/components/ai-settings-card";
 import { Upload, Trash2, RotateCcw, Check, Sun, Moon, Languages } from "lucide-react";
 
 export default function Settings() {
@@ -167,6 +168,9 @@ export default function Settings() {
             </div>
           </CardContent>
         </Card>
+      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <AiSettingsCard />
       </motion.div>
     </div>
   );

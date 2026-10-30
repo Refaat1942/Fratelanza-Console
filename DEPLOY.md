@@ -46,6 +46,8 @@ ADMIN_PASSWORD=your_app_login_password
 
 Save with `Ctrl+O`, exit with `Ctrl+X`.
 
+> **AI (optional):** the OpenAI key used to split packages is normally added in the console under **Settings → Artificial intelligence (OpenAI)** (kept on the server, admin only). `OPENAI_API_KEY` / `OPENAI_MODEL` in `.env` work as a fallback.
+
 ---
 
 ## Step 4 — Copy `docker-compose.yml` and `nginx.conf`
@@ -166,8 +168,8 @@ bash /opt/fratelanza-console/source/scripts/vps-update-now.sh
 
 Expected after a successful deploy:
 
-- Sidebar shows **v2026.10.26**
-- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.10.26"`
+- Sidebar shows **v2026.10.27**
+- `curl -s https://console.fratelanza.com/api/version` → `"consoleVersion":"2026.10.27"`
 
 ### Login fails / "Invalid credentials"
 
