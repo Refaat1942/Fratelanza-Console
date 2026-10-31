@@ -58,6 +58,7 @@ export const ar: Translations = {
     lastYear: "السنة الماضية", custom: "تواريخ مخصصة…", from: "من", to: "إلى", showing: "عرض",
   },
   payments: {
+    printReceipt: "طباعة سند استلام نقدية", receiptWord: "سند الاستلام (Word)", confirmAndReceipt: "تأكيد وطباعة سند الاستلام", receiptNotesHint: "اختياري – يظهر في سند الاستلام (مثال: الدفعة الأولى عند التعاقد)",
     total: "إجمالي المستلم",
     title: "المدفوعات",
     amount: "المبلغ",

@@ -55,6 +55,7 @@ export const en = {
     lastYear: "Last year", custom: "Custom dates…", from: "From", to: "To", showing: "Showing",
   },
   payments: {
+    printReceipt: "Print cash receipt", receiptWord: "Receipt (Word)", confirmAndReceipt: "Confirm & print receipt", receiptNotesHint: "Optional – shown on the receipt (e.g. first payment on signing)",
     total: "Total received",
     title: "Payments",
     amount: "Amount",
