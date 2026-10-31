@@ -193,7 +193,7 @@ export function formatMoney(n: number): string {
 
 /* ───────────────────────── HTML document ───────────────────────── */
 
-function esc(s: unknown): string {
+export function esc(s: unknown): string {
   return String(s ?? "")
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
@@ -224,7 +224,8 @@ const COMPANY_FOOTER = `${COMPANY.name} – سجل تجاري ${COMPANY.registry
 /** The internal contract serial is kept in the database only and never printed. */
 export type ContractHtmlOptions = { logoDataUrl?: string | null; autoPrint?: boolean };
 
-function shell(title: string, body: string, opts: ContractHtmlOptions): string {
+/** The corporate A4 page (letterhead, fonts, footer) that contracts and receipts are printed on. */
+export function shell(title: string, body: string, opts: ContractHtmlOptions, extraCss = ""): string {
   const logo = opts.logoDataUrl || defaultLogo;
   return `<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8">
@@ -270,6 +271,7 @@ function shell(title: string, body: string, opts: ContractHtmlOptions): string {
   .sign b { display: block; color: #0a192f; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px; }
   footer { display: none; }
   @media screen { body { background: #e5e7eb; } .page { background: #fff; padding: 14mm 16mm; margin: 12px auto; box-shadow: 0 2px 10px rgba(0,0,0,.15); max-width: 210mm; } footer { display: block; text-align: center; font-size: 8.5pt; color: #6b7280; max-width: 210mm; margin: 0 auto 12px; } }
+${extraCss}
 </style></head>
 <body>
 <div class="page">

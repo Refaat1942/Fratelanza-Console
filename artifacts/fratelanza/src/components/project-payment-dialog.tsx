@@ -9,7 +9,10 @@ import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { PAYMENT_METHODS, paymentMethodLabel } from "@/lib/payment-methods";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { Trash2 } from "lucide-react";
+import { Trash2, Printer, FileDown } from "lucide-react";
+import { useBranding } from "@/lib/branding-context";
+import { downloadContractWord } from "@/lib/contract-document";
+import { buildReceiptHtml, paidUpTo, printHtmlInFrame, receiptNo } from "@/lib/receipt-document";
 
 export type ProjectPaymentRow = {
   id: number;
@@ -30,6 +33,7 @@ type FreelancerSummary = {
 type ProjectSummary = {
   id: number;
   projectName: string;
+  clientName?: string | null;
   clientPrice: number;
   paidAmount: number;
   remainingAmount: number;
@@ -78,6 +82,8 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
   const [paymentMethod, setPaymentMethod] = useState<string>("bank_transfer");
   const [paidAt, setPaidAt] = useState(today());
   const [nextDate, setNextDate] = useState("");
+  const [notes, setNotes] = useState("");
+  const { logoDataUrl } = useBranding();
 
   // Freelancer payments
   const [fr, setFr] = useState<FreelancerSummary | null>(null);
@@ -91,7 +97,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
     if (!open || !project) return;
     setTab(initialTab);
     setPaid({ paidAmount: project.paidAmount, remainingAmount: project.remainingAmount });
-    setAmount(""); setPaymentMethod("bank_transfer"); setPaidAt(today()); setNextDate("");
+    setAmount(""); setPaymentMethod("bank_transfer"); setPaidAt(today()); setNextDate(""); setNotes("");
     setFrAmount(""); setFrMethod("bank_transfer"); setFrDate(today()); setFrNotes("");
     setLoadingHistory(true);
     fetch(`${apiBase()}/projects/${project.id}/payments`, { credentials: "include" })
@@ -116,19 +122,33 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
     return data;
   };
 
-  const addClientPayment = async () => {
+  /** سند استلام نقدية for one client payment (as of that payment). */
+  const receiptHtml = (p: ProjectPaymentRow, all: ProjectPaymentRow[]) => buildReceiptHtml({
+    paymentId: p.id, amount: Number(p.amount), paymentMethod: p.paymentMethod, paidAt: p.paidAt ?? p.createdAt.slice(0, 10), notes: p.notes,
+    clientName: project?.clientName ?? "", projectName: project?.projectName ?? "",
+    projectTotal: Number(project?.clientPrice) || 0, paidToDate: paidUpTo(all, p.id),
+  }, { logoDataUrl });
+  const printReceipt = (p: ProjectPaymentRow, all = payments) => printHtmlInFrame(receiptHtml(p, all));
+  const wordReceipt = (p: ProjectPaymentRow) => downloadContractWord(receiptHtml(p, payments), receiptNo({ paymentId: p.id, paidAt: p.paidAt ?? p.createdAt }));
+
+  const addClientPayment = async (withReceipt = false) => {
     if (!project || !amount) return;
     setSaving(true);
     try {
+      const before = new Set(payments.map((p) => p.id));
       const data = await call(`${apiBase()}/projects/${project.id}/payment`, {
         method: "POST",
-        body: JSON.stringify({ amount: Number(amount), paymentMethod, paidAt: paidAt || undefined, nextPaymentDate: nextDate || undefined }),
+        body: JSON.stringify({ amount: Number(amount), paymentMethod, paidAt: paidAt || undefined, nextPaymentDate: nextDate || undefined, notes: notes.trim() || undefined }),
       });
+      const list: ProjectPaymentRow[] = Array.isArray(data.payments) ? data.payments : payments;
       if (Array.isArray(data.payments)) setPayments(data.payments);
       if (data.project) setPaid({ paidAmount: data.project.paidAmount, remainingAmount: data.project.remainingAmount });
-      setAmount("");
+      setAmount(""); setNotes("");
       onSuccess();
       toast({ title: t("projects.paymentLogged") });
+      // The payment just added: the one that was not in the list before
+      const added = list.filter((p) => !before.has(p.id)).sort((a, b) => b.id - a.id)[0];
+      if (withReceipt && added) printReceipt(added, list);
     } catch (err) {
       toast({ title: (err as Error).message, variant: "destructive" });
     } finally {
@@ -226,15 +246,15 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
             ) : payments.length === 0 ? (
               <div className="text-sm text-muted-foreground py-3 text-center">{t("projects.noPayments")}</div>
             ) : (
-              <div className="rounded-md border border-border overflow-hidden max-h-44 overflow-y-auto">
+              <div className="rounded-md border border-border overflow-hidden max-h-60 overflow-y-auto">
                 <table className="w-full text-xs">
-                  <thead className="bg-card/80 sticky top-0">
+                  <thead className="bg-card sticky top-0">
                     <tr>
                       <th className="px-2 py-1.5 text-start">{t("projects.paymentDate")}</th>
                       <th className="px-2 py-1.5 text-start">{t("projects.paymentMethod")}</th>
                       <th className="px-2 py-1.5 text-start">{t("payments.notes")}</th>
                       <th className="px-2 py-1.5 text-end">{t("payments.amount")}</th>
-                      <th className="w-8" />
+                      <th className="w-20" />
                     </tr>
                   </thead>
                   <tbody>
@@ -244,11 +264,15 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                         <td className="px-2 py-1.5">{paymentMethodLabel(p.paymentMethod, lang)}</td>
                         <td className="px-2 py-1.5 text-muted-foreground">{p.notes ?? ""}</td>
                         <td className="px-2 py-1.5 text-end text-blue-400"><PrivacyWrapper value={p.amount} /></td>
-                        <td className="px-1"><Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.delete")} onClick={() => deleteClientPayment(p.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button></td>
+                        <td className="px-1 whitespace-nowrap">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.printReceipt")} onClick={() => printReceipt(p)} data-testid={`button-receipt-${p.id}`}><Printer className="h-3 w-3 text-primary" /></Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.receiptWord")} onClick={() => wordReceipt(p)}><FileDown className="h-3 w-3" /></Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.delete")} onClick={() => deleteClientPayment(p.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
-                  <tfoot className="bg-card/80 sticky bottom-0">
+                  <tfoot className="bg-card sticky bottom-0">
                     <tr className="border-t border-border font-semibold">
                       <td className="px-2 py-1.5" colSpan={3}>{t("payments.total")}</td>
                       <td className="px-2 py-1.5 text-end text-blue-400" data-testid="client-payments-total"><PrivacyWrapper value={payments.reduce((s, p) => s + Number(p.amount), 0)} /></td>
@@ -275,8 +299,15 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                 <Label>{t("projects.nextPaymentDate")}</Label>
                 <Input type="date" value={nextDate} onChange={(e) => setNextDate(e.target.value)} />
               </div>
-              <Button className="col-span-2" data-testid="button-confirm-payment" onClick={addClientPayment} disabled={saving || !amount}>
+              <div className="col-span-2 space-y-1">
+                <Label>{t("payments.notes")}</Label>
+                <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("payments.receiptNotesHint")} data-testid="input-payment-notes" />
+              </div>
+              <Button variant="outline" data-testid="button-confirm-payment" onClick={() => addClientPayment(false)} disabled={saving || !amount}>
                 {saving ? t("common.saving") : t("projects.confirmPayment")}
+              </Button>
+              <Button data-testid="button-confirm-payment-receipt" onClick={() => addClientPayment(true)} disabled={saving || !amount}>
+                <Printer className="h-4 w-4 me-1" />{t("payments.confirmAndReceipt")}
               </Button>
             </div>
           </TabsContent>
