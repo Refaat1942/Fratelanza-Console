@@ -8,6 +8,8 @@ import {
 import { useBranding } from "@/lib/branding-context";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { SearchSelect } from "@/components/search-select";
+import { useDocAssets } from "@/lib/doc-assets";
+import { MarksControl } from "@/components/doc-marks-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -116,11 +118,12 @@ export default function Contracts() {
     setFreelancer({ freelancerName: name, amount: m ? m.commission : editing?.freelancer.amount ?? 0, paidSoFar: m ? m.paid : 0 });
   };
 
+  const { data: docAssets } = useDocAssets();
   const html = useMemo(() => {
     if (!editing) return "";
-    const opts = { logoDataUrl: branding.logoDataUrl };
+    const opts = { logoDataUrl: branding.logoDataUrl, assets: docAssets };
     return editing.type === "client" ? buildClientContractHtml(editing.client, opts) : buildFreelancerContractHtml(editing.freelancer, opts);
-  }, [editing, branding.logoDataUrl]);
+  }, [editing, branding.logoDataUrl, docAssets]);
 
   const calc = editing
     ? editing.type === "client"
@@ -156,7 +159,7 @@ export default function Contracts() {
   const print = async () => {
     const saved = await save();
     if (!saved) return;
-    const opts = { logoDataUrl: branding.logoDataUrl };
+    const opts = { logoDataUrl: branding.logoDataUrl, assets: docAssets };
     const out = saved.type === "client" ? buildClientContractHtml(saved.client, opts) : buildFreelancerContractHtml(saved.freelancer, opts);
     if (!printContractHtml(out)) toast({ title: t("contracts.popupBlocked"), variant: "destructive" });
   };
@@ -169,7 +172,7 @@ export default function Contracts() {
 
   const printSaved = (c: Contract) => {
     const e = fromSaved(c);
-    const opts = { logoDataUrl: branding.logoDataUrl };
+    const opts = { logoDataUrl: branding.logoDataUrl, assets: docAssets };
     printContractHtml(e.type === "client" ? buildClientContractHtml(e.client, opts) : buildFreelancerContractHtml(e.freelancer, opts));
   };
 
@@ -248,6 +251,9 @@ export default function Contracts() {
                       pinned={[{ value: "none", label: t("contracts.noProject") }]}
                       options={projectList.map((p) => ({ value: String(p.id), label: p.projectName, hint: p.clientName ?? undefined }))} />
                   </Field>
+                  {editing.type === "client"
+                    ? <MarksControl kind="contracts" value={editing.client.marks} onChange={(marks) => setClient({ marks })} />
+                    : <MarksControl kind="contracts" value={editing.freelancer.marks} onChange={(marks) => setFreelancer({ marks })} />}
                   {editing.type === "client"
                     ? <ClientForm d={editing.client} set={setClient} />
                     : <FreelancerForm d={editing.freelancer} set={setFreelancer} members={members} pickFreelancer={pickFreelancer} />}

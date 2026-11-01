@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { AiSettingsCard } from "@/components/ai-settings-card";
+import { DocMarksCard } from "@/components/doc-marks-card";
 import { Upload, Trash2, RotateCcw, Check, Sun, Moon, Languages } from "lucide-react";
 
 export default function Settings() {
@@ -171,6 +172,9 @@ export default function Settings() {
       </motion.div>
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
         <AiSettingsCard />
+      </motion.div>
+      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <DocMarksCard />
       </motion.div>
     </div>
   );

@@ -1,4 +1,4 @@
-import { COMPANY, amountToArabicWords, esc, formatDateAr, formatMoney, shell, type ContractHtmlOptions } from "@/lib/contract-document";
+import { COMPANY, amountToArabicWords, esc, formatDateAr, formatMoney, resolveMarks, shell, signatureMark, type ContractHtmlOptions, type MarksChoice } from "@/lib/contract-document";
 import { paymentMethodLabel } from "@/lib/payment-methods";
 
 /** One payment received from a client, with the project's position after it. */
@@ -15,6 +15,8 @@ export type ReceiptData = {
   projectTotal: number;
   /** Everything the client has paid up to and including this payment */
   paidToDate: number;
+  /** Company stamp / manager's signature on this receipt (missing = Settings default) */
+  marks?: MarksChoice;
 };
 
 /** Receipt serial printed on the document, e.g. RC-2026-00012 (from the payment's id). */
@@ -51,11 +53,13 @@ const CSS = `
   .rc-words { color: #0a192f; font-weight: 700; }
   .rc-note { font-size: 10pt; color: #4b5563; margin-top: 10px; }
   .sign.rc-sign div { line-height: 2.4; }
+  .sign div.rc-stamp { margin-top: 6px; border: 0; padding: 0; line-height: 1; } .rc-stamp img.mk-stamp { width: 170px; }
   .stamp { height: 70px; border: 1px dashed #9ca3af; border-radius: 50%; width: 110px; margin-top: 4px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 9pt; }
 `;
 
 /** سند استلام نقدية: printed for the client after any payment. */
 export function buildReceiptHtml(d: ReceiptData, opts: ContractHtmlOptions = {}): string {
+  const marks = resolveMarks(opts.assets, "receipts", d.marks);
   const amount = Number(d.amount) || 0;
   const remaining = Math.max(0, (Number(d.projectTotal) || 0) - (Number(d.paidToDate) || 0));
   const money = (n: number) => `${formatMoney(n)} ج.م`;
@@ -77,7 +81,7 @@ export function buildReceiptHtml(d: ReceiptData, opts: ContractHtmlOptions = {})
     ${balance}
   </tbody></table>
   <div class="sign rc-sign">
-    <div><b>المستلم (عن الشركة)</b>الاسم: ................................<br>التوقيع: ................................<div class="stamp">ختم الشركة</div></div>
+    <div><b>المستلم (عن الشركة)</b>الاسم: ${marks.signature ? esc(COMPANY.manager) : "................................"}<br>التوقيع: ${signatureMark(marks.signature, "................................")}${marks.stamp ? `<div class="rc-stamp"><img class="mk-stamp" src="${marks.stamp}" alt=""></div>` : `<div class="stamp">ختم الشركة</div>`}</div>
     <div><b>المسدِّد (العميل)</b>الاسم: ${esc(d.clientName) || "................................"}<br>التوقيع: ................................</div>
   </div>
   <p class="rc-note">هذا السند إثبات لاستلام المبلغ المذكور فقط، ولا يُعد مخالصة نهائية إلا بسداد كامل قيمة المشروع. ${d.paymentMethod !== "cash" ? "في حالة الشيك أو التحويل يُعتبر السداد تامّاً بعد تحصيل المبلغ فعلياً." : ""}</p>`;

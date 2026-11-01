@@ -29,6 +29,8 @@ export type ClientContractData = {
   /** Show a "paid so far" column in the payments table */
   showPaid: boolean;
   paidSoFar: number;
+  /** Company stamp / manager's signature on this contract (missing = Settings default) */
+  marks?: MarksChoice;
 };
 
 export type FreelancerContractData = {
@@ -43,6 +45,8 @@ export type FreelancerContractData = {
   payWithinDays: string;
   showPaid: boolean;
   paidSoFar: number;
+  /** Company stamp / manager's signature on this contract (missing = Settings default) */
+  marks?: MarksChoice;
 };
 
 export const today = () => new Date().toISOString().slice(0, 10);
@@ -221,8 +225,42 @@ export const COMPANY = {
 
 const COMPANY_FOOTER = `${COMPANY.name} – سجل تجاري ${COMPANY.registry} – بطاقة ضريبية ${COMPANY.taxId}`;
 
+/* ─────────────── Company stamp and manager's signature ─────────────── */
+
+export type SignatureChoice = "none" | "ar" | "en";
+/** Per document: print the stamp, and which signature (undefined = the Settings default). */
+export type MarksChoice = { stamp?: boolean; signature?: SignatureChoice };
+export type DocMarkPrefs = {
+  contractsStamp: boolean; contractsSignature: SignatureChoice;
+  receiptsStamp: boolean; receiptsSignature: SignatureChoice;
+};
+export const DEFAULT_MARK_PREFS: DocMarkPrefs = { contractsStamp: true, contractsSignature: "ar", receiptsStamp: true, receiptsSignature: "ar" };
+/** Images uploaded in Settings (data URLs, "" = none) and the defaults. */
+export type DocAssets = { stamp: string; signatureAr: string; signatureEn: string; prefs: DocMarkPrefs };
+
+/** What one document prints: the choice made on it, else the Settings default for its kind. */
+export function resolveMarks(assets: DocAssets | null | undefined, kind: "contracts" | "receipts", choice?: MarksChoice) {
+  if (!assets) return { stamp: "", signature: "" };
+  const prefs = { ...DEFAULT_MARK_PREFS, ...assets.prefs };
+  const wantStamp = choice?.stamp ?? (kind === "contracts" ? prefs.contractsStamp : prefs.receiptsStamp);
+  const sig = choice?.signature ?? (kind === "contracts" ? prefs.contractsSignature : prefs.receiptsSignature);
+  return {
+    stamp: wantStamp ? assets.stamp : "",
+    signature: sig === "ar" ? assets.signatureAr || assets.signatureEn : sig === "en" ? assets.signatureEn || assets.signatureAr : "",
+  };
+}
+
+/** The signature image on the signature line, or the dotted line to sign by hand. */
+export function signatureMark(src: string, dots = "............................") {
+  return src ? `<img class="mk-sig" src="${src}" alt="">` : dots;
+}
+/** The stamp image, or the dotted line to stamp by hand. */
+export function stampMark(src: string, dots = "............................") {
+  return src ? `<span class="mk-stamp-wrap"><img class="mk-stamp" src="${src}" alt=""></span>` : dots;
+}
+
 /** The internal contract serial is kept in the database only and never printed. */
-export type ContractHtmlOptions = { logoDataUrl?: string | null; autoPrint?: boolean };
+export type ContractHtmlOptions = { logoDataUrl?: string | null; autoPrint?: boolean; assets?: DocAssets | null };
 
 /** The corporate A4 page (letterhead, fonts, footer) that contracts and receipts are printed on. */
 export function shell(title: string, body: string, opts: ContractHtmlOptions, extraCss = ""): string {
@@ -269,6 +307,10 @@ export function shell(title: string, body: string, opts: ContractHtmlOptions, ex
   .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; page-break-inside: avoid; }
   .sign div { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px 14px; line-height: 2.3; }
   .sign b { display: block; color: #0a192f; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px; }
+  img.mk-sig { height: 46px; max-width: 170px; vertical-align: middle; margin: -14px 2px -10px; mix-blend-mode: multiply; }
+  .mk-stamp-wrap { display: inline-block; vertical-align: middle; margin: 4px 2px -6px; }
+  img.mk-stamp { width: 150px; transform: rotate(-4deg); opacity: .92; mix-blend-mode: multiply; display: block; }
+  img.mk-sig, img.mk-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   footer { display: none; }
   @media screen { body { background: #e5e7eb; } .page { background: #fff; padding: 14mm 16mm; margin: 12px auto; box-shadow: 0 2px 10px rgba(0,0,0,.15); max-width: 210mm; } footer { display: block; text-align: center; font-size: 8.5pt; color: #6b7280; max-width: 210mm; margin: 0 auto 12px; } }
 ${extraCss}
@@ -289,6 +331,7 @@ ${opts.autoPrint ? `<script>window.onload=function(){(document.fonts&&document.f
 }
 
 export function buildClientContractHtml(d: ClientContractData, opts: ContractHtmlOptions = {}): string {
+  const marks = resolveMarks(opts.assets, "contracts", d.marks);
   const calc = computeStages(d.totalPrice, d.stages, d.showPaid ? d.paidSoFar : 0);
   const company = d.clientType === "company";
   const secondParty = company
@@ -360,13 +403,14 @@ export function buildClientContractHtml(d: ClientContractData, opts: ContractHtm
   <p>ويعتبر هذا البند مكملاً لبنود العقد دون إلغاء أو حذف أو تعديل أي من النصوص الواردة فيه، مع الالتزام بما هو متفق عليه في العرض الفني الخاص بالمشروع والتطبيق وملحق المواصفات الفنية.</p>
 
   <div class="sign">
-    <div><b>الطرف الأول (الشركة المنفذة)</b>الاسم / ${COMPANY.manager}<br>الصفة / المدير المسئول<br>التوقيع / ............................<br>الختم / ............................</div>
+    <div><b>الطرف الأول (الشركة المنفذة)</b>الاسم / ${COMPANY.manager}<br>الصفة / المدير المسئول<br>التوقيع / ${signatureMark(marks.signature)}<br>الختم / ${stampMark(marks.stamp)}</div>
     <div><b>الطرف الثاني (العميل)</b>الاسم / ${fill(d.signatoryName || (company ? d.representativeName : d.clientName), "............................")}<br>الصفة / ${fill(d.signatoryTitle, "............................")}<br>التوقيع / ............................<br>&nbsp;</div>
   </div>`;
   return shell("عقد اتفاق على تنفيذ وتطوير مشروع تقني", body, opts);
 }
 
 export function buildFreelancerContractHtml(d: FreelancerContractData, opts: ContractHtmlOptions = {}): string {
+  const marks = resolveMarks(opts.assets, "contracts", d.marks);
   const calc = computeStages(d.amount, d.stages, d.showPaid ? d.paidSoFar : 0);
   const paidCols = d.showPaid;
   const rows = calc.rows.map((r) => `<tr><td>${esc(r.label)}</td><td class="num">${r.pct}%</td><td class="num">${formatMoney(r.amount)} ج.م</td>${paidCols ? `<td class="num paid">${formatMoney(r.paid)}</td>` : ""}<td>${fill(r.due, "..................")}</td><td>${fill(r.deliverable, "..................")}</td></tr>`).join("");
@@ -416,7 +460,7 @@ export function buildFreelancerContractHtml(d: FreelancerContractData, opts: Con
   <p>تظل جميع بنود العقد الأصلي، وبالأخص السرية وحماية بيانات العملاء والملكية الفكرية وعدم التعامل المباشر مع العملاء وأمن المعلومات والإنهاء والمسؤولية، سارية وملزمة للطرفين. يقر الطرفان بقراءة هذا الملحق وفهمه والموافقة عليه، ويحرر من نسختين أصليتين بيد كل طرف نسخة.</p>
 
   <div class="sign">
-    <div><b>الطرف الأول – شركة فراتيلانزا</b>الاسم: ${COMPANY.manager}<br>الصفة: المدير المسؤول<br>التوقيع: ........................<br>الختم: ........................<br>التاريخ: ${dateFill(d.contractDate)}</div>
+    <div><b>الطرف الأول – شركة فراتيلانزا</b>الاسم: ${COMPANY.manager}<br>الصفة: المدير المسؤول<br>التوقيع: ${signatureMark(marks.signature, "........................")}<br>الختم: ${stampMark(marks.stamp, "........................")}<br>التاريخ: ${dateFill(d.contractDate)}</div>
     <div><b>الطرف الثاني – منفذ العمل</b>الاسم: ${fill(d.freelancerName)}<br>الرقم القومي: ${fill(d.freelancerNationalId)}<br>التوقيع: ........................<br>&nbsp;<br>التاريخ: ${dateFill(d.contractDate)}</div>
   </div>
 `;

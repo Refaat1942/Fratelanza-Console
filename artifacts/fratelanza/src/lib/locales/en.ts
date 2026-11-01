@@ -40,6 +40,14 @@ export const en = {
     keyHelp: "Create a key in your OpenAI account and paste it here:", model: "Model", modelHelp: "Leave empty to use {{model}} (fast and economical), or type e.g. gpt-4o for higher accuracy.",
     test: "Test connection", testOk: "Connection works ({{model}})", remove: "Remove key", removed: "Key removed", saved: "AI settings saved",
   },
+  marks: {
+    title: "Company stamp & signature", intro: "Upload the company stamp and your signature (Arabic and/or English) once; they print automatically on contracts and receipts. A phone photo works – the paper background is removed automatically.",
+    stamp: "Stamp", signature: "Signature", signatureAr: "Arabic signature", signatureEn: "English signature", none: "Not uploaded yet",
+    upload: "Upload image", replace: "Replace", uploaded: "Saved", removed: "Removed", prefsSaved: "Default saved",
+    contracts: "Contracts (default)", receipts: "Receipts (default)", printStamp: "Print the stamp", printSignature: "Signature",
+    sigNone: "No signature", sigAr: "Arabic", sigEn: "English", onDocument: "On this document:", uploadFirst: "Upload it in Settings first",
+    perDocument: "This is the default; you can change it on each contract or receipt before printing.", adminOnly: "Only an admin can change the stamp and signature.",
+  },
   branding: {
     settings: "Branding & Settings", logo: "Company Logo", uploadLogo: "Upload Logo",
     removeLogo: "Remove Logo", brandName: "Brand Name", tagline: "Tagline",
