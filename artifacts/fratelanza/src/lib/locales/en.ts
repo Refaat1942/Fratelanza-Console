@@ -63,6 +63,7 @@ export const en = {
     lastYear: "Last year", custom: "Custom dates…", from: "From", to: "To", showing: "Showing",
   },
   payments: {
+    paymentUpdated: "Payment updated", marksHint: "Applies to every receipt printed here, for new and earlier payments (🖨️ next to each payment). To correct an earlier payment's date or amount, press ✏️.",
     printReceipt: "Print cash receipt", receiptWord: "Receipt (Word)", confirmAndReceipt: "Confirm & print receipt", receiptNotesHint: "Optional – shown on the receipt (e.g. first payment on signing)",
     total: "Total received",
     title: "Payments",

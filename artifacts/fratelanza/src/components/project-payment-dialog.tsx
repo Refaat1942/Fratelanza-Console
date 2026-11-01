@@ -9,7 +9,7 @@ import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { PAYMENT_METHODS, paymentMethodLabel } from "@/lib/payment-methods";
 import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
-import { Trash2, Printer, FileDown } from "lucide-react";
+import { Trash2, Printer, FileDown, Pencil, Check, X } from "lucide-react";
 import { useBranding } from "@/lib/branding-context";
 import { downloadContractWord } from "@/lib/contract-document";
 import { useDocAssets } from "@/lib/doc-assets";
@@ -161,6 +161,29 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
     }
   };
 
+  /** Correcting a logged payment (date, amount, method, notes) in its row. */
+  const [editRow, setEditRow] = useState<{ id: number; paidAt: string; amount: string; paymentMethod: string; notes: string } | null>(null);
+  const startEdit = (p: ProjectPaymentRow) => setEditRow({ id: p.id, paidAt: p.paidAt ?? p.createdAt.slice(0, 10), amount: String(p.amount), paymentMethod: p.paymentMethod, notes: p.notes ?? "" });
+  const saveEdit = async () => {
+    if (!project || !editRow) return;
+    setSaving(true);
+    try {
+      const data = await call(`${apiBase()}/projects/${project.id}/payments/${editRow.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ paidAt: editRow.paidAt, amount: Number(editRow.amount), paymentMethod: editRow.paymentMethod, notes: editRow.notes }),
+      });
+      if (Array.isArray(data.payments)) setPayments(data.payments);
+      if (data.project) setPaid({ paidAmount: data.project.paidAmount, remainingAmount: data.project.remainingAmount });
+      setEditRow(null);
+      onSuccess();
+      toast({ title: t("payments.paymentUpdated") });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteClientPayment = async (paymentId: number) => {
     if (!project || !window.confirm(t("payments.confirmDelete"))) return;
     try {
@@ -246,6 +269,10 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
               <span className="text-muted-foreground">{t("projects.remaining")}</span>
               <span className="font-semibold text-destructive"><PrivacyWrapper value={paid.remainingAmount} /></span>
             </div>
+            <div className="space-y-1">
+              <MarksControl kind="receipts" value={marks} onChange={setMarks} />
+              <p className="text-[11px] text-muted-foreground">{t("payments.marksHint")}</p>
+            </div>
             {loadingHistory ? (
               <div className="text-sm text-muted-foreground py-3 text-center">{t("common.loading")}</div>
             ) : payments.length === 0 ? (
@@ -259,11 +286,22 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                       <th className="px-2 py-1.5 text-start">{t("projects.paymentMethod")}</th>
                       <th className="px-2 py-1.5 text-start">{t("payments.notes")}</th>
                       <th className="px-2 py-1.5 text-end">{t("payments.amount")}</th>
-                      <th className="w-20" />
+                      <th className="w-28" />
                     </tr>
                   </thead>
                   <tbody>
-                    {payments.map((p) => (
+                    {payments.map((p) => editRow?.id === p.id ? (
+                      <tr key={p.id} className="border-t border-border/40 bg-primary/5" data-testid={`payment-edit-${p.id}`}>
+                        <td className="px-1 py-1"><Input type="date" className="h-7 text-xs px-1" value={editRow.paidAt} onChange={(e) => setEditRow({ ...editRow, paidAt: e.target.value })} data-testid="input-edit-paid-at" /></td>
+                        <td className="px-1 py-1"><MethodSelect value={editRow.paymentMethod} onChange={(v) => setEditRow({ ...editRow, paymentMethod: v })} lang={lang} /></td>
+                        <td className="px-1 py-1"><Input className="h-7 text-xs" value={editRow.notes} onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })} data-testid="input-edit-notes" /></td>
+                        <td className="px-1 py-1"><Input type="number" className="h-7 text-xs text-end" value={editRow.amount} onChange={(e) => setEditRow({ ...editRow, amount: e.target.value })} data-testid="input-edit-amount" /></td>
+                        <td className="px-1 whitespace-nowrap">
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.save")} disabled={saving || !Number(editRow.amount) || !editRow.paidAt} onClick={saveEdit} data-testid="button-save-payment-edit"><Check className="h-3.5 w-3.5 text-green-500" /></Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.cancel")} onClick={() => setEditRow(null)}><X className="h-3.5 w-3.5" /></Button>
+                        </td>
+                      </tr>
+                    ) : (
                       <tr key={p.id} className="border-t border-border/40">
                         <td className="px-2 py-1.5 text-muted-foreground">{p.paidAt ?? p.createdAt.slice(0, 10)}</td>
                         <td className="px-2 py-1.5">{paymentMethodLabel(p.paymentMethod, lang)}</td>
@@ -272,6 +310,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                         <td className="px-1 whitespace-nowrap">
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.printReceipt")} onClick={() => printReceipt(p)} data-testid={`button-receipt-${p.id}`}><Printer className="h-3 w-3 text-primary" /></Button>
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.receiptWord")} onClick={() => wordReceipt(p)}><FileDown className="h-3 w-3" /></Button>
+                          <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.edit")} onClick={() => startEdit(p)} data-testid={`button-edit-payment-${p.id}`}><Pencil className="h-3 w-3" /></Button>
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.delete")} onClick={() => deleteClientPayment(p.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
                         </td>
                       </tr>
@@ -308,7 +347,6 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                 <Label>{t("payments.notes")}</Label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("payments.receiptNotesHint")} data-testid="input-payment-notes" />
               </div>
-              <div className="col-span-2"><MarksControl kind="receipts" value={marks} onChange={setMarks} /></div>
               <Button variant="outline" data-testid="button-confirm-payment" onClick={() => addClientPayment(false)} disabled={saving || !amount}>
                 {saving ? t("common.saving") : t("projects.confirmPayment")}
               </Button>

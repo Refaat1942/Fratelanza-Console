@@ -66,6 +66,7 @@ export const ar: Translations = {
     lastYear: "السنة الماضية", custom: "تواريخ مخصصة…", from: "من", to: "إلى", showing: "عرض",
   },
   payments: {
+    paymentUpdated: "تم تعديل الدفعة", marksHint: "ينطبق على أي سند استلام تطبعه من هنا، للدفعات الجديدة والسابقة (زر 🖨️ جنب كل دفعة). لتعديل تاريخ أو مبلغ دفعة سابقة اضغط ✏️.",
     printReceipt: "طباعة سند استلام نقدية", receiptWord: "سند الاستلام (Word)", confirmAndReceipt: "تأكيد وطباعة سند الاستلام", receiptNotesHint: "اختياري – يظهر في سند الاستلام (مثال: الدفعة الأولى عند التعاقد)",
     total: "إجمالي المستلم",
     title: "المدفوعات",
