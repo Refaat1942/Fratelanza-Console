@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { DEFAULT_MARK_PREFS, type DocAssets, type DocMarkPrefs } from "@/lib/contract-document";
+import type { DocAssets, DocMarkPrefs } from "@/lib/contract-document";
 
 const base = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 const KEY = ["doc-assets"];
@@ -10,7 +10,8 @@ export function useDocAssets() {
     queryKey: KEY,
     queryFn: async (): Promise<DocAssets> => {
       const r = await fetch(`${base()}/doc-assets`, { credentials: "include" });
-      if (!r.ok) return { stamp: "", signatureAr: "", signatureEn: "", prefs: DEFAULT_MARK_PREFS };
+      // A failure is shown to the user (the documents would silently print without the marks)
+      if (!r.ok) throw new Error(`Error ${r.status}`);
       return r.json() as Promise<DocAssets>;
     },
     staleTime: 5 * 60_000,

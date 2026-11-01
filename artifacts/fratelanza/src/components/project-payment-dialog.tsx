@@ -264,7 +264,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>{t("payments.title")} — {project?.projectName}</DialogTitle>
         </DialogHeader>
@@ -311,8 +311,8 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
             ) : payments.length === 0 ? (
               <div className="text-sm text-muted-foreground py-3 text-center">{t("projects.noPayments")}</div>
             ) : (
-              <div className="rounded-md border border-border overflow-hidden max-h-60 overflow-y-auto">
-                <table className="w-full text-xs">
+              <div className="rounded-md border border-border overflow-hidden max-h-[22rem] overflow-y-auto">
+                <table className="w-full text-sm">
                   <thead className="bg-card sticky top-0">
                     <tr>
                       <th className="px-2 py-1.5 text-start">{t("projects.paymentDate")}</th>
@@ -328,7 +328,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                         <td className="px-1 py-1"><Input type="date" className="h-7 text-xs px-1" value={editRow.paidAt} onChange={(e) => setEditRow({ ...editRow, paidAt: e.target.value })} data-testid="input-edit-paid-at" /></td>
                         <td className="px-1 py-1"><MethodSelect value={editRow.paymentMethod} onChange={(v) => setEditRow({ ...editRow, paymentMethod: v })} lang={lang} /></td>
                         <td className="px-1 py-1"><Input className="h-7 text-xs" value={editRow.notes} onChange={(e) => setEditRow({ ...editRow, notes: e.target.value })} data-testid="input-edit-notes" /></td>
-                        <td className="px-1 py-1"><Input type="number" className="h-7 text-xs text-end" value={editRow.amount} onChange={(e) => setEditRow({ ...editRow, amount: e.target.value })} data-testid="input-edit-amount" /></td>
+                        <td className="px-1 py-1"><Input type="number" className="h-7 text-xs text-end min-w-24" value={editRow.amount} onChange={(e) => setEditRow({ ...editRow, amount: e.target.value })} data-testid="input-edit-amount" /></td>
                         <td className="px-1 whitespace-nowrap">
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.save")} disabled={saving || !Number(editRow.amount) || !editRow.paidAt} onClick={saveEdit} data-testid="button-save-payment-edit"><Check className="h-3.5 w-3.5 text-green-500" /></Button>
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.cancel")} onClick={() => setEditRow(null)}><X className="h-3.5 w-3.5" /></Button>
@@ -339,7 +339,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                         <td className="px-2 py-1.5 text-muted-foreground">{p.paidAt ?? p.createdAt.slice(0, 10)}</td>
                         <td className="px-2 py-1.5">{paymentMethodLabel(p.paymentMethod, lang)}</td>
                         <td className="px-2 py-1.5 text-muted-foreground">{p.notes ?? ""}</td>
-                        <td className="px-2 py-1.5 text-end text-blue-400"><PrivacyWrapper value={p.amount} /></td>
+                        <td className="px-2 py-1.5 text-end text-blue-400 whitespace-nowrap"><PrivacyWrapper value={p.amount} /></td>
                         <td className="px-1 whitespace-nowrap">
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.printReceipt")} onClick={() => printReceipt(p)} data-testid={`button-receipt-${p.id}`}><Printer className="h-3 w-3 text-primary" /></Button>
                           <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.receiptWord")} onClick={() => wordReceipt(p)}><FileDown className="h-3 w-3" /></Button>
@@ -352,7 +352,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                   <tfoot className="bg-card sticky bottom-0">
                     <tr className="border-t border-border font-semibold">
                       <td className="px-2 py-1.5" colSpan={3}>{t("payments.total")}</td>
-                      <td className="px-2 py-1.5 text-end text-blue-400" data-testid="client-payments-total"><PrivacyWrapper value={payments.reduce((s, p) => s + Number(p.amount), 0)} /></td>
+                      <td className="px-2 py-1.5 text-end text-blue-400 whitespace-nowrap" data-testid="client-payments-total"><PrivacyWrapper value={payments.reduce((s, p) => s + Number(p.amount), 0)} /></td>
                       <td />
                     </tr>
                   </tfoot>
@@ -395,7 +395,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
             ) : (
               <>
                 <div className="rounded-md border border-border overflow-hidden">
-                  <table className="w-full text-xs">
+                  <table className="w-full text-sm">
                     <thead className="bg-card/80">
                       <tr>
                         <th className="px-2 py-1.5 text-start">{t("payments.freelancer")}</th>
@@ -424,8 +424,8 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                   </div>
                 )}
                 {fr.payments.length > 0 && (
-                  <div className="rounded-md border border-border overflow-hidden max-h-60 overflow-y-auto">
-                    <table className="w-full text-xs">
+                  <div className="rounded-md border border-border overflow-hidden max-h-[22rem] overflow-y-auto">
+                    <table className="w-full text-sm">
                       <thead className="bg-card sticky top-0">
                         <tr>
                           <th className="px-2 py-1.5 text-start">{t("projects.paymentDate")}</th>
@@ -442,7 +442,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                             <td className="px-1 py-1 text-xs">{p.freelancerName}
                               <div className="mt-1"><MethodSelect value={frEditRow.paymentMethod} onChange={(v) => setFrEditRow({ ...frEditRow, paymentMethod: v })} lang={lang} /></div></td>
                             <td className="px-1 py-1"><Input className="h-7 text-xs" value={frEditRow.notes} onChange={(e) => setFrEditRow({ ...frEditRow, notes: e.target.value })} data-testid="input-fr-edit-notes" /></td>
-                            <td className="px-1 py-1"><Input type="number" className="h-7 text-xs text-end" value={frEditRow.amount} onChange={(e) => setFrEditRow({ ...frEditRow, amount: e.target.value })} data-testid="input-fr-edit-amount" /></td>
+                            <td className="px-1 py-1"><Input type="number" className="h-7 text-xs text-end min-w-24" value={frEditRow.amount} onChange={(e) => setFrEditRow({ ...frEditRow, amount: e.target.value })} data-testid="input-fr-edit-amount" /></td>
                             <td className="px-1 whitespace-nowrap">
                               <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.save")} disabled={saving || !Number(frEditRow.amount) || !frEditRow.paidAt} onClick={saveFrEdit} data-testid="button-save-fr-edit"><Check className="h-3.5 w-3.5 text-green-500" /></Button>
                               <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.cancel")} onClick={() => setFrEditRow(null)}><X className="h-3.5 w-3.5" /></Button>
@@ -453,7 +453,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                             <td className="px-2 py-1.5 text-muted-foreground">{p.paidAt ?? p.createdAt.slice(0, 10)}</td>
                             <td className="px-2 py-1.5">{p.freelancerName}</td>
                             <td className="px-2 py-1.5 text-muted-foreground">{p.notes ?? paymentMethodLabel(p.paymentMethod, lang)}</td>
-                            <td className="px-2 py-1.5 text-end"><PrivacyWrapper value={p.amount} /></td>
+                            <td className="px-2 py-1.5 text-end whitespace-nowrap"><PrivacyWrapper value={p.amount} /></td>
                             <td className="px-1 whitespace-nowrap">
                               <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.printVoucher")} onClick={() => printVoucher(p)} data-testid={`button-voucher-${p.id}`}><Printer className="h-3 w-3 text-primary" /></Button>
                               <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.voucherWord")} onClick={() => wordVoucher(p)}><FileDown className="h-3 w-3" /></Button>
