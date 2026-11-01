@@ -15,7 +15,7 @@ import { downloadContractWord } from "@/lib/contract-document";
 import { useDocAssets } from "@/lib/doc-assets";
 import { MarksControl } from "@/components/doc-marks-card";
 import type { MarksChoice } from "@/lib/contract-document";
-import { buildReceiptHtml, buildVoucherHtml, paidUpTo, printHtmlInFrame, receiptNo, voucherNo } from "@/lib/receipt-document";
+import { buildReceiptHtml, buildVoucherHtml, paidUpTo, printHtmlInFrame, receiptFileName, voucherFileName } from "@/lib/receipt-document";
 
 export type ProjectPaymentRow = {
   id: number;
@@ -133,8 +133,9 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
     clientName: project?.clientName ?? "", projectName: project?.projectName ?? "",
     projectTotal: Number(project?.clientPrice) || 0, paidToDate: paidUpTo(all, p.id), marks,
   }, { logoDataUrl, assets: docAssets });
-  const printReceipt = (p: ProjectPaymentRow, all = payments) => printHtmlInFrame(receiptHtml(p, all));
-  const wordReceipt = (p: ProjectPaymentRow) => downloadContractWord(receiptHtml(p, payments), receiptNo({ paymentId: p.id, paidAt: p.paidAt ?? p.createdAt }));
+  const receiptName = (p: ProjectPaymentRow) => receiptFileName({ clientName: project?.clientName ?? "", projectName: project?.projectName ?? "", paymentId: p.id, paidAt: p.paidAt ?? p.createdAt });
+  const printReceipt = (p: ProjectPaymentRow, all = payments) => printHtmlInFrame(receiptHtml(p, all), receiptName(p));
+  const wordReceipt = (p: ProjectPaymentRow) => downloadContractWord(receiptHtml(p, payments), receiptName(p));
 
   const addClientPayment = async (withReceipt = false) => {
     if (!project || !amount) return;
@@ -225,8 +226,9 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
       agreedTotal: Number(member?.commission) || 0, paidToDate: paidUpTo(all.filter((x) => x.freelancerName === p.freelancerName), p.id), marks,
     }, { logoDataUrl, assets: docAssets });
   };
-  const printVoucher = (p: FreelancerPaymentRow) => printHtmlInFrame(voucherHtml(p));
-  const wordVoucher = (p: FreelancerPaymentRow) => downloadContractWord(voucherHtml(p), voucherNo({ paymentId: p.id, paidAt: p.paidAt ?? p.createdAt }));
+  const voucherName = (p: FreelancerPaymentRow) => voucherFileName({ freelancerName: p.freelancerName, projectName: project?.projectName ?? "", paymentId: p.id, paidAt: p.paidAt ?? p.createdAt });
+  const printVoucher = (p: FreelancerPaymentRow) => printHtmlInFrame(voucherHtml(p), voucherName(p));
+  const wordVoucher = (p: FreelancerPaymentRow) => downloadContractWord(voucherHtml(p), voucherName(p));
 
   /** Correcting money given to a freelancer, in its row. */
   const [frEditRow, setFrEditRow] = useState<{ id: number; paidAt: string; amount: string; paymentMethod: string; notes: string } | null>(null);

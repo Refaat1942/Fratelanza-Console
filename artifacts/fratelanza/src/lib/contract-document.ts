@@ -485,6 +485,9 @@ export function downloadContractWord(html: string, fileName: string) {
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = fileName.endsWith(".doc") ? fileName : `${fileName}.doc`;
+  // The link must be in the page and stay valid until the download starts, or the name is lost
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
 }

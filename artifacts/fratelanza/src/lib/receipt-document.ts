@@ -85,7 +85,17 @@ export function buildReceiptHtml(d: ReceiptData, opts: ContractHtmlOptions = {})
     <div><b>المسدِّد (العميل)</b>الاسم: ${esc(d.clientName) || "................................"}<br>التوقيع: ................................</div>
   </div>
   <p class="rc-note">هذا السند إثبات لاستلام المبلغ المذكور فقط، ولا يُعد مخالصة نهائية إلا بسداد كامل قيمة المشروع. ${d.paymentMethod !== "cash" ? "في حالة الشيك أو التحويل يُعتبر السداد تامّاً بعد تحصيل المبلغ فعلياً." : ""}</p>`;
-  return shell(`سند استلام نقدية ${receiptNo(d)}`, body, opts, CSS);
+  return shell(receiptFileName(d), body, opts, CSS);
+}
+
+/** A file name without characters Windows / macOS refuse. */
+function safeName(parts: (string | null | undefined)[]): string {
+  return parts.map((x) => String(x ?? "").replace(/[\\/:*?"<>|\r\n\t]+/g, " ").replace(/\s+/g, " ").trim()).filter(Boolean).join(" - ").slice(0, 150);
+}
+
+/** Saved / downloaded name of a receipt: its type, the client, the project and its number. */
+export function receiptFileName(d: Pick<ReceiptData, "clientName" | "projectName" | "paymentId" | "paidAt">): string {
+  return safeName(["سند استلام نقدية", d.clientName, d.projectName, receiptNo(d)]);
 }
 
 /** One payment given to a freelancer, with their position on the project after it. */
@@ -109,6 +119,11 @@ export type VoucherData = {
 export function voucherNo(d: Pick<VoucherData, "paymentId" | "paidAt">): string {
   const year = /^\d{4}/.exec(d.paidAt)?.[0] ?? String(new Date().getFullYear());
   return `PV-${year}-${String(d.paymentId).padStart(5, "0")}`;
+}
+
+/** Saved / downloaded name of a voucher: its type, the freelancer, the project and its number. */
+export function voucherFileName(d: Pick<VoucherData, "freelancerName" | "projectName" | "paymentId" | "paidAt">): string {
+  return safeName(["سند صرف نقدية", d.freelancerName, d.projectName, voucherNo(d)]);
 }
 
 /** سند صرف نقدية: money given to a freelancer, signed by the freelancer on receipt. */
@@ -140,14 +155,15 @@ export function buildVoucherHtml(d: VoucherData, opts: ContractHtmlOptions = {})
     <div><b>المستلم (منفذ العمل)</b>الاسم: ${esc(d.freelancerName) || "................................"}<br>الرقم القومي: ................................<br>التوقيع: ................................</div>
   </div>
   <p class="rc-note">يقر المستلم باستلام المبلغ المذكور أعلاه كاملاً، وأنه دفعة من مستحقاته عن المشروع المذكور ولا يُعد مخالصة نهائية إلا بصرف كامل المستحقات.</p>`;
-  return shell(`سند صرف نقدية ${voucherNo(d)}`, body, opts, CSS);
+  return shell(voucherFileName(d), body, opts, CSS);
 }
 
 /**
  * Print a document from a hidden frame: works after an async save, where a
- * new window would be blocked as a pop-up.
+ * new window would be blocked as a pop-up. "Save as PDF" suggests the page's
+ * title as the file name, so the title is the document's name while printing.
  */
-export function printHtmlInFrame(html: string) {
+export function printHtmlInFrame(html: string, fileName?: string) {
   const frame = document.createElement("iframe");
   frame.setAttribute("aria-hidden", "true");
   Object.assign(frame.style, { position: "fixed", right: "0", bottom: "0", width: "0", height: "0", border: "0" });
@@ -160,8 +176,13 @@ export function printHtmlInFrame(html: string) {
     const w = frame.contentWindow!;
     const ready = (doc as Document & { fonts?: FontFaceSet }).fonts?.ready ?? Promise.resolve();
     ready.then(() => setTimeout(() => {
+      const pageTitle = document.title;
+      if (fileName) document.title = fileName;
+      const restore = () => { document.title = pageTitle; };
+      w.addEventListener("afterprint", restore, { once: true });
       w.focus();
       w.print();
+      setTimeout(restore, 1000);
       setTimeout(() => frame.remove(), 60_000);
     }, 250));
   };
