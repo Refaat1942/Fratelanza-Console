@@ -12,7 +12,7 @@ router.get("/healthz", (_req, res) => {
 router.get("/version", (_req, res) => {
   res.json({
     status: "ok",
-    consoleVersion: "2026.11.01",
+    consoleVersion: "2026.11.02",
     api: "fratelanza-console",
   });
 });
