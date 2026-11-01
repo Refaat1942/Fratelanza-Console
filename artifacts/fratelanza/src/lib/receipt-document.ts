@@ -88,6 +88,61 @@ export function buildReceiptHtml(d: ReceiptData, opts: ContractHtmlOptions = {})
   return shell(`سند استلام نقدية ${receiptNo(d)}`, body, opts, CSS);
 }
 
+/** One payment given to a freelancer, with their position on the project after it. */
+export type VoucherData = {
+  paymentId: number;
+  amount: number;
+  paymentMethod: string;
+  /** yyyy-mm-dd */
+  paidAt: string;
+  notes?: string | null;
+  freelancerName: string;
+  projectName: string;
+  /** The freelancer's agreed amount on the project; 0 = unknown (balance lines left out) */
+  agreedTotal: number;
+  /** Everything paid to this freelancer up to and including this payment */
+  paidToDate: number;
+  marks?: MarksChoice;
+};
+
+/** Voucher serial, e.g. PV-2026-00007 (from the payment's id). */
+export function voucherNo(d: Pick<VoucherData, "paymentId" | "paidAt">): string {
+  const year = /^\d{4}/.exec(d.paidAt)?.[0] ?? String(new Date().getFullYear());
+  return `PV-${year}-${String(d.paymentId).padStart(5, "0")}`;
+}
+
+/** سند صرف نقدية: money given to a freelancer, signed by the freelancer on receipt. */
+export function buildVoucherHtml(d: VoucherData, opts: ContractHtmlOptions = {}): string {
+  const marks = resolveMarks(opts.assets, "receipts", d.marks);
+  const amount = Number(d.amount) || 0;
+  const remaining = Math.max(0, (Number(d.agreedTotal) || 0) - (Number(d.paidToDate) || 0));
+  const money = (n: number) => `${formatMoney(n)} ج.م`;
+  const forWhat = d.projectName ? `دفعة من مستحقاته عن تنفيذ أعمال مشروع «${d.projectName}»` : "دفعة من مستحقاته";
+  const balance = d.agreedTotal > 0 ? `
+      <tr><th>إجمالي المستحق عن المشروع</th><td>${money(d.agreedTotal)}</td></tr>
+      <tr><th>إجمالي المصروف حتى تاريخه</th><td>${money(d.paidToDate)}</td></tr>
+      <tr class="bal"><th>المتبقي له</th><td>${remaining > 0 ? money(remaining) : "لا يوجد – تم صرف كامل المستحقات"}</td></tr>` : "";
+  const body = `
+  <div class="rc-head">
+    <h1>سند صرف نقدية</h1>
+    <div class="rc-no">رقم السند: <b>${esc(voucherNo(d))}</b><br>التاريخ: ${esc(formatDateAr(d.paidAt))}</div>
+  </div>
+  <p>صرفت ${esc(COMPANY.name)} إلى السيد / <b>${esc(d.freelancerName || "................................")}</b> المبلغ الموضح أدناه، وذلك ${esc(forWhat)}.</p>
+  <div class="rc-amount"><span class="lbl">المبلغ المصروف</span><span class="val">${money(amount)}</span></div>
+  <table class="rc"><tbody>
+    <tr><th>المبلغ كتابةً</th><td class="rc-words">فقط ${esc(amountToArabicWords(amount))} جنيهاً مصرياً لا غير</td></tr>
+    <tr><th>طريقة الصرف</th><td>${esc(paymentMethodLabel(d.paymentMethod, "ar"))}</td></tr>
+    ${d.notes?.trim() ? `<tr><th>ملاحظات</th><td>${esc(d.notes)}</td></tr>` : ""}
+    ${balance}
+  </tbody></table>
+  <div class="sign rc-sign">
+    <div><b>المُسلِّم (عن الشركة)</b>الاسم: ${marks.signature ? esc(COMPANY.manager) : "................................"}<br>التوقيع: ${signatureMark(marks.signature, "................................")}${marks.stamp ? `<div class="rc-stamp"><img class="mk-stamp" src="${marks.stamp}" alt=""></div>` : `<div class="stamp">ختم الشركة</div>`}</div>
+    <div><b>المستلم (منفذ العمل)</b>الاسم: ${esc(d.freelancerName) || "................................"}<br>الرقم القومي: ................................<br>التوقيع: ................................</div>
+  </div>
+  <p class="rc-note">يقر المستلم باستلام المبلغ المذكور أعلاه كاملاً، وأنه دفعة من مستحقاته عن المشروع المذكور ولا يُعد مخالصة نهائية إلا بصرف كامل المستحقات.</p>`;
+  return shell(`سند صرف نقدية ${voucherNo(d)}`, body, opts, CSS);
+}
+
 /**
  * Print a document from a hidden frame: works after an async save, where a
  * new window would be blocked as a pop-up.
