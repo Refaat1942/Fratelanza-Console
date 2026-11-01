@@ -2,7 +2,7 @@ import {
   db, projectsTable, projectPaymentsTable, projectTeamTable, freelancerPaymentsTable,
   expensesTable, equityEntriesTable, appSettingsTable,
 } from "@workspace/db";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { acquisitionMetrics, cashReceipts, freelancerPayables, nameKey, projectCommitments, projectDate } from "./financials.js";
 
 /**
@@ -54,8 +54,8 @@ const dayBefore = (date: string) => {
 };
 
 export async function getUsefulLifeMonths(): Promise<number> {
-  const rows = await db.select().from(appSettingsTable);
-  const v = Number(rows.find((r) => r.key === "equipment_useful_life_months")?.value);
+  const rows = await db.select().from(appSettingsTable).where(eq(appSettingsTable.key, "equipment_useful_life_months"));
+  const v = Number(rows[0]?.value);
   return Number.isFinite(v) && v >= 1 ? Math.round(v) : DEFAULT_USEFUL_LIFE_MONTHS;
 }
 

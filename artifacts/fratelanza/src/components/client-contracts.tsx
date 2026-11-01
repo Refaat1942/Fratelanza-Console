@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { useListContracts, useListProjects, type Contract } from "@workspace/api-client-react";
 import { useBranding } from "@/lib/branding-context";
+import { useDocAssets } from "@/lib/doc-assets";
 import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +16,7 @@ export function ClientContracts({ clientName }: { clientName?: string }) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const branding = useBranding();
+  const { data: docAssets } = useDocAssets();
   const { data: contracts = [] } = useListContracts();
   const { data: projects = [] } = useListProjects();
   const key = norm(clientName);
@@ -27,7 +29,7 @@ export function ClientContracts({ clientName }: { clientName?: string }) {
 
   const print = (c: Contract) => {
     const d = { ...defaultClientContract(), ...(c.data as Partial<ClientContractData>) } as ClientContractData;
-    if (!printContractHtml(buildClientContractHtml(d, { logoDataUrl: branding.logoDataUrl }))) {
+    if (!printContractHtml(buildClientContractHtml(d, { logoDataUrl: branding.logoDataUrl, assets: docAssets }))) {
       toast({ title: t("contracts.popupBlocked"), variant: "destructive" });
     }
   };

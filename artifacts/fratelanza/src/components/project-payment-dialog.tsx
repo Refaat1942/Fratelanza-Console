@@ -12,6 +12,9 @@ import { useTranslation } from "react-i18next";
 import { Trash2, Printer, FileDown } from "lucide-react";
 import { useBranding } from "@/lib/branding-context";
 import { downloadContractWord } from "@/lib/contract-document";
+import { useDocAssets } from "@/lib/doc-assets";
+import { MarksControl } from "@/components/doc-marks-card";
+import type { MarksChoice } from "@/lib/contract-document";
 import { buildReceiptHtml, paidUpTo, printHtmlInFrame, receiptNo } from "@/lib/receipt-document";
 
 export type ProjectPaymentRow = {
@@ -84,6 +87,8 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
   const [nextDate, setNextDate] = useState("");
   const [notes, setNotes] = useState("");
   const { logoDataUrl } = useBranding();
+  const { data: docAssets } = useDocAssets();
+  const [marks, setMarks] = useState<MarksChoice | undefined>(undefined);
 
   // Freelancer payments
   const [fr, setFr] = useState<FreelancerSummary | null>(null);
@@ -126,8 +131,8 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
   const receiptHtml = (p: ProjectPaymentRow, all: ProjectPaymentRow[]) => buildReceiptHtml({
     paymentId: p.id, amount: Number(p.amount), paymentMethod: p.paymentMethod, paidAt: p.paidAt ?? p.createdAt.slice(0, 10), notes: p.notes,
     clientName: project?.clientName ?? "", projectName: project?.projectName ?? "",
-    projectTotal: Number(project?.clientPrice) || 0, paidToDate: paidUpTo(all, p.id),
-  }, { logoDataUrl });
+    projectTotal: Number(project?.clientPrice) || 0, paidToDate: paidUpTo(all, p.id), marks,
+  }, { logoDataUrl, assets: docAssets });
   const printReceipt = (p: ProjectPaymentRow, all = payments) => printHtmlInFrame(receiptHtml(p, all));
   const wordReceipt = (p: ProjectPaymentRow) => downloadContractWord(receiptHtml(p, payments), receiptNo({ paymentId: p.id, paidAt: p.paidAt ?? p.createdAt }));
 
@@ -303,6 +308,7 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                 <Label>{t("payments.notes")}</Label>
                 <Input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("payments.receiptNotesHint")} data-testid="input-payment-notes" />
               </div>
+              <div className="col-span-2"><MarksControl kind="receipts" value={marks} onChange={setMarks} /></div>
               <Button variant="outline" data-testid="button-confirm-payment" onClick={() => addClientPayment(false)} disabled={saving || !amount}>
                 {saving ? t("common.saving") : t("projects.confirmPayment")}
               </Button>
