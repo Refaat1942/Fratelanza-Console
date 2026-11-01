@@ -605,4 +605,59 @@ router.delete("/projects/:id/payments/:paymentId", async (req, res): Promise<voi
   });
 });
 
+/** Correct a logged client payment (date, amount, method, notes); the project's paid total follows. */
+router.patch("/projects/:id/payments/:paymentId", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const paymentId = parseInt(Array.isArray(req.params.paymentId) ? req.params.paymentId[0] : req.params.paymentId, 10);
+  const { amount, paymentMethod, paidAt, notes } = req.body ?? {};
+  const patch: Partial<typeof projectPaymentsTable.$inferInsert> = {};
+  if (amount !== undefined) {
+    const n = Number(amount);
+    if (!n || n <= 0) {
+      res.status(400).json({ error: "Payment amount must be greater than zero" });
+      return;
+    }
+    patch.amount = String(n);
+  }
+  if (paymentMethod !== undefined) {
+    if (!PAYMENT_METHODS.has(paymentMethod)) {
+      res.status(400).json({ error: "Invalid payment method" });
+      return;
+    }
+    patch.paymentMethod = paymentMethod;
+  }
+  if (paidAt !== undefined) {
+    if (typeof paidAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+      res.status(400).json({ error: "Invalid payment date" });
+      return;
+    }
+    patch.paidAt = paidAt;
+  }
+  if (notes !== undefined) patch.notes = typeof notes === "string" && notes.trim() ? notes.trim() : null;
+  if (!Object.keys(patch).length) {
+    res.status(400).json({ error: "Nothing to update" });
+    return;
+  }
+  const [updatedPayment] = await db
+    .update(projectPaymentsTable)
+    .set(patch)
+    .where(and(eq(projectPaymentsTable.id, paymentId), eq(projectPaymentsTable.projectId, id)))
+    .returning();
+  if (!updatedPayment) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+  const updated = await syncPaidFromHistory(id);
+  const payments = await db
+    .select()
+    .from(projectPaymentsTable)
+    .where(eq(projectPaymentsTable.projectId, id))
+    .orderBy(oldestPaymentFirst);
+  const teamMap = await teamMapForProjects([id]);
+  res.json({
+    project: toProjectShape(updated!, teamMap.get(id) ?? []),
+    payments: payments.map(toPaymentShape),
+  });
+});
+
 export default router;
