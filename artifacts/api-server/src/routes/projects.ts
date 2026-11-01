@@ -575,6 +575,51 @@ router.delete("/projects/:id/freelancer-payments/:paymentId", async (req, res): 
   res.json(await freelancerPaymentsSummary(id));
 });
 
+/** Correct money given to a freelancer (date, amount, method, notes). */
+router.patch("/projects/:id/freelancer-payments/:paymentId", async (req, res): Promise<void> => {
+  const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);
+  const paymentId = parseInt(Array.isArray(req.params.paymentId) ? req.params.paymentId[0] : req.params.paymentId, 10);
+  const { amount, paymentMethod, paidAt, notes } = req.body ?? {};
+  const patch: Partial<typeof freelancerPaymentsTable.$inferInsert> = {};
+  if (amount !== undefined) {
+    const n = Number(amount);
+    if (!n || n <= 0) {
+      res.status(400).json({ error: "Payment amount must be greater than zero" });
+      return;
+    }
+    patch.amount = String(n);
+  }
+  if (paymentMethod !== undefined) {
+    if (!PAYMENT_METHODS.has(paymentMethod)) {
+      res.status(400).json({ error: "Invalid payment method" });
+      return;
+    }
+    patch.paymentMethod = paymentMethod;
+  }
+  if (paidAt !== undefined) {
+    if (typeof paidAt !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) {
+      res.status(400).json({ error: "Invalid payment date" });
+      return;
+    }
+    patch.paidAt = paidAt;
+  }
+  if (notes !== undefined) patch.notes = typeof notes === "string" && notes.trim() ? notes.trim() : null;
+  if (!Object.keys(patch).length) {
+    res.status(400).json({ error: "Nothing to update" });
+    return;
+  }
+  const [updated] = await db
+    .update(freelancerPaymentsTable)
+    .set(patch)
+    .where(and(eq(freelancerPaymentsTable.id, paymentId), eq(freelancerPaymentsTable.projectId, id)))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Payment not found" });
+    return;
+  }
+  res.json(await freelancerPaymentsSummary(id));
+});
+
 /** Undo a client payment logged by mistake; paid / remaining are adjusted. */
 router.delete("/projects/:id/payments/:paymentId", async (req, res): Promise<void> => {
   const id = parseInt(Array.isArray(req.params.id) ? req.params.id[0] : req.params.id, 10);

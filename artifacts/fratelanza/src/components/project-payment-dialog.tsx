@@ -15,7 +15,7 @@ import { downloadContractWord } from "@/lib/contract-document";
 import { useDocAssets } from "@/lib/doc-assets";
 import { MarksControl } from "@/components/doc-marks-card";
 import type { MarksChoice } from "@/lib/contract-document";
-import { buildReceiptHtml, paidUpTo, printHtmlInFrame, receiptNo } from "@/lib/receipt-document";
+import { buildReceiptHtml, buildVoucherHtml, paidUpTo, printHtmlInFrame, receiptNo, voucherNo } from "@/lib/receipt-document";
 
 export type ProjectPaymentRow = {
   id: number;
@@ -215,6 +215,39 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
     }
   };
 
+  /** سند صرف نقدية for money given to a freelancer (as of that payment). */
+  const voucherHtml = (p: FreelancerPaymentRow) => {
+    const all = fr?.payments ?? [];
+    const member = fr?.members.find((m) => m.freelancerName === p.freelancerName);
+    return buildVoucherHtml({
+      paymentId: p.id, amount: Number(p.amount), paymentMethod: p.paymentMethod, paidAt: p.paidAt ?? p.createdAt.slice(0, 10), notes: p.notes,
+      freelancerName: p.freelancerName, projectName: project?.projectName ?? "",
+      agreedTotal: Number(member?.commission) || 0, paidToDate: paidUpTo(all.filter((x) => x.freelancerName === p.freelancerName), p.id), marks,
+    }, { logoDataUrl, assets: docAssets });
+  };
+  const printVoucher = (p: FreelancerPaymentRow) => printHtmlInFrame(voucherHtml(p));
+  const wordVoucher = (p: FreelancerPaymentRow) => downloadContractWord(voucherHtml(p), voucherNo({ paymentId: p.id, paidAt: p.paidAt ?? p.createdAt }));
+
+  /** Correcting money given to a freelancer, in its row. */
+  const [frEditRow, setFrEditRow] = useState<{ id: number; paidAt: string; amount: string; paymentMethod: string; notes: string } | null>(null);
+  const saveFrEdit = async () => {
+    if (!project || !frEditRow) return;
+    setSaving(true);
+    try {
+      setFr(await call(`${apiBase()}/projects/${project.id}/freelancer-payments/${frEditRow.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ paidAt: frEditRow.paidAt, amount: Number(frEditRow.amount), paymentMethod: frEditRow.paymentMethod, notes: frEditRow.notes }),
+      }));
+      setFrEditRow(null);
+      onSuccess();
+      toast({ title: t("payments.paymentUpdated") });
+    } catch (err) {
+      toast({ title: (err as Error).message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const deleteFreelancerPayment = async (paymentId: number) => {
     if (!project || !window.confirm(t("payments.confirmDelete"))) return;
     try {
@@ -385,25 +418,49 @@ export function ProjectPaymentDialog({ project, open, onOpenChange, onSuccess, i
                 </div>
 
                 {fr.payments.length > 0 && (
-                  <div className="rounded-md border border-border overflow-hidden max-h-40 overflow-y-auto">
+                  <div className="space-y-1">
+                    <MarksControl kind="receipts" value={marks} onChange={setMarks} />
+                    <p className="text-[11px] text-muted-foreground">{t("payments.voucherHint")}</p>
+                  </div>
+                )}
+                {fr.payments.length > 0 && (
+                  <div className="rounded-md border border-border overflow-hidden max-h-60 overflow-y-auto">
                     <table className="w-full text-xs">
-                      <thead className="bg-card/80 sticky top-0">
+                      <thead className="bg-card sticky top-0">
                         <tr>
                           <th className="px-2 py-1.5 text-start">{t("projects.paymentDate")}</th>
                           <th className="px-2 py-1.5 text-start">{t("payments.freelancer")}</th>
                           <th className="px-2 py-1.5 text-start">{t("payments.notes")}</th>
                           <th className="px-2 py-1.5 text-end">{t("payments.amount")}</th>
-                          <th className="w-8" />
+                          <th className="w-28" />
                         </tr>
                       </thead>
                       <tbody>
-                        {fr.payments.map((p) => (
+                        {fr.payments.map((p) => frEditRow?.id === p.id ? (
+                          <tr key={p.id} className="border-t border-border/40 bg-primary/5" data-testid={`fr-payment-edit-${p.id}`}>
+                            <td className="px-1 py-1"><Input type="date" className="h-7 text-xs px-1" value={frEditRow.paidAt} onChange={(e) => setFrEditRow({ ...frEditRow, paidAt: e.target.value })} data-testid="input-fr-edit-paid-at" /></td>
+                            <td className="px-1 py-1 text-xs">{p.freelancerName}
+                              <div className="mt-1"><MethodSelect value={frEditRow.paymentMethod} onChange={(v) => setFrEditRow({ ...frEditRow, paymentMethod: v })} lang={lang} /></div></td>
+                            <td className="px-1 py-1"><Input className="h-7 text-xs" value={frEditRow.notes} onChange={(e) => setFrEditRow({ ...frEditRow, notes: e.target.value })} data-testid="input-fr-edit-notes" /></td>
+                            <td className="px-1 py-1"><Input type="number" className="h-7 text-xs text-end" value={frEditRow.amount} onChange={(e) => setFrEditRow({ ...frEditRow, amount: e.target.value })} data-testid="input-fr-edit-amount" /></td>
+                            <td className="px-1 whitespace-nowrap">
+                              <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.save")} disabled={saving || !Number(frEditRow.amount) || !frEditRow.paidAt} onClick={saveFrEdit} data-testid="button-save-fr-edit"><Check className="h-3.5 w-3.5 text-green-500" /></Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.cancel")} onClick={() => setFrEditRow(null)}><X className="h-3.5 w-3.5" /></Button>
+                            </td>
+                          </tr>
+                        ) : (
                           <tr key={p.id} className="border-t border-border/40">
                             <td className="px-2 py-1.5 text-muted-foreground">{p.paidAt ?? p.createdAt.slice(0, 10)}</td>
                             <td className="px-2 py-1.5">{p.freelancerName}</td>
                             <td className="px-2 py-1.5 text-muted-foreground">{p.notes ?? paymentMethodLabel(p.paymentMethod, lang)}</td>
                             <td className="px-2 py-1.5 text-end"><PrivacyWrapper value={p.amount} /></td>
-                            <td className="px-1"><Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.delete")} onClick={() => deleteFreelancerPayment(p.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button></td>
+                            <td className="px-1 whitespace-nowrap">
+                              <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.printVoucher")} onClick={() => printVoucher(p)} data-testid={`button-voucher-${p.id}`}><Printer className="h-3 w-3 text-primary" /></Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" title={t("payments.voucherWord")} onClick={() => wordVoucher(p)}><FileDown className="h-3 w-3" /></Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.edit")} data-testid={`button-edit-fr-payment-${p.id}`}
+                                onClick={() => setFrEditRow({ id: p.id, paidAt: p.paidAt ?? p.createdAt.slice(0, 10), amount: String(p.amount), paymentMethod: p.paymentMethod, notes: p.notes ?? "" })}><Pencil className="h-3 w-3" /></Button>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" title={t("common.delete")} onClick={() => deleteFreelancerPayment(p.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
