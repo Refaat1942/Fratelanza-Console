@@ -41,6 +41,7 @@ export const en = {
     test: "Test connection", testOk: "Connection works ({{model}})", remove: "Remove key", removed: "Key removed", saved: "AI settings saved",
   },
   marks: {
+    notUploaded: "The stamp and signature have not been uploaded yet, so they will not appear on the document.", loadFailed: "Could not load the stamp and signature from the server.", goToSettings: "Upload them in Settings → Company stamp & signature",
     title: "Company stamp & signature", intro: "Upload the company stamp and your signature (Arabic and/or English) once; they print automatically on contracts and receipts. A phone photo works – the paper background is removed automatically.",
     stamp: "Stamp", signature: "Signature", signatureAr: "Arabic signature", signatureEn: "English signature", none: "Not uploaded yet",
     upload: "Upload image", replace: "Replace", uploaded: "Saved", removed: "Removed", prefsSaved: "Default saved",

@@ -9,7 +9,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth-context";
 import { useDocAssets, useSaveDocAssets, inkImage } from "@/lib/doc-assets";
 import { DEFAULT_MARK_PREFS, type DocMarkPrefs, type MarksChoice, type SignatureChoice } from "@/lib/contract-document";
-import { Stamp, Upload, Trash2, Loader2 } from "lucide-react";
+import { Stamp, Upload, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { Link } from "wouter";
 
 type Slot = "stamp" | "signatureAr" | "signatureEn";
 
@@ -106,7 +107,7 @@ export function DocMarksCard() {
 /** On one contract / receipt: print the stamp? which signature? (starts from the Settings default) */
 export function MarksControl({ kind, value, onChange }: { kind: "contracts" | "receipts"; value?: MarksChoice; onChange: (v: MarksChoice) => void }) {
   const { t } = useTranslation();
-  const { data } = useDocAssets();
+  const { data, isError, isLoading } = useDocAssets();
   const prefs = { ...DEFAULT_MARK_PREFS, ...data?.prefs };
   const stamp = value?.stamp ?? (kind === "contracts" ? prefs.contractsStamp : prefs.receiptsStamp);
   const signature = value?.signature ?? (kind === "contracts" ? prefs.contractsSignature : prefs.receiptsSignature);
@@ -114,6 +115,13 @@ export function MarksControl({ kind, value, onChange }: { kind: "contracts" | "r
   const hasSig = !!(data?.signatureAr || data?.signatureEn);
   return (
     <div className="rounded border border-border p-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" data-testid={`marks-control-${kind}`}>
+      {!isLoading && (isError || (!hasStamp && !hasSig)) && (
+        <div className="w-full flex items-start gap-1.5 text-xs text-amber-500" data-testid={`marks-${kind}-missing`}>
+          <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{isError ? t("marks.loadFailed") : t("marks.notUploaded")}{" "}
+            <Link href="/settings" className="underline font-semibold">{t("marks.goToSettings")}</Link></span>
+        </div>
+      )}
       <span className="flex items-center gap-1 text-xs font-semibold text-muted-foreground"><Stamp className="h-3.5 w-3.5" />{t("marks.onDocument")}</span>
       <label className={`flex items-center gap-2 ${hasStamp ? "" : "opacity-50"}`} title={hasStamp ? undefined : t("marks.uploadFirst")}>
         <Switch checked={stamp && hasStamp} disabled={!hasStamp} onCheckedChange={(v) => onChange({ ...value, stamp: v, signature })} data-testid={`marks-${kind}-stamp`} />
