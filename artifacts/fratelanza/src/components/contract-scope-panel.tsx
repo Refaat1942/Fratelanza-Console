@@ -22,7 +22,13 @@ type Duration = { mode: "normal" | "compressed"; weeks: string; delivery: string
 type WeekRange = { from: number; to: number } | null;
 type Item = { title: string; detail: string; normal?: WeekRange; compressed?: WeekRange };
 type Pkg = { number: number; name: string; includesPrevious: boolean; durations: Duration[]; items: Item[]; statedCount?: number; expectedOwn?: number };
-type Phase = { title: string; period: string; fromWeek: number; toWeek: number; deliverables: string[]; packageNumber: number; mode: "normal" | "compressed" | "" };
+type PhaseDuration = { weeks: string; delivery: string } | null;
+/** A delivery phase of the proposal: what is delivered (every requirement), when, and the payment tied to it */
+type Phase = {
+  number?: number; title: string; summary?: string; period: string; fromWeek: number; toWeek: number; statedCount?: number;
+  normal?: PhaseDuration; compressed?: PhaseDuration; payment?: string;
+  deliverables: Item[]; packageNumber: number; mode: "normal" | "compressed" | "";
+};
 /** A technical proposal read into its packages (by AI from a file, or from a proposal saved here). */
 type Analysis = {
   source: string;
@@ -41,15 +47,28 @@ type Analysis = {
 export type Plan = { label: string; items: string[] }[];
 const PERIOD = (a: number, b: number) => (a === b ? `الأسبوع ${a}` : `الأسابيع ${a} – ${b}`);
 
+/** The proposal's phases that apply to the chosen package(s) and delivery mode. */
+function phasesOf(a: Analysis, included: Pkg[], mode: Duration["mode"] | ""): Phase[] {
+  const pkgNos = new Set(included.map((p) => p.number));
+  return (a.phases ?? []).filter((x) => (!x.packageNumber || pkgNos.has(x.packageNumber)) && (!x.mode || !mode || x.mode === mode));
+}
+
+/** "المرحلة 1: الأساس والتجربة والأمان — حتى الأسبوع 8 (28 يناير 2027)" */
+function phaseLabel(x: Phase, mode: Duration["mode"] | ""): string {
+  const d = (mode === "compressed" ? x.compressed : x.normal) ?? x.normal ?? x.compressed;
+  const when = d?.weeks ? `حتى الأسبوع ${d.weeks}${d.delivery ? ` (${d.delivery})` : ""}` : x.period || (x.toWeek ? PERIOD(x.fromWeek || 1, x.toWeek) : "");
+  const name = x.number && !/المرحلة|phase/i.test(x.title) ? `المرحلة ${x.number}: ${x.title}` : x.title;
+  return [name, when].filter(Boolean).join(" — ");
+}
+
 /**
  * What is delivered / received when, for the chosen package and delivery mode:
  * the document's own phases if it defines them, else its requirements grouped by the week they finish in.
  */
 function deliveryPlan(a: Analysis, included: Pkg[], mode: Duration["mode"] | "", every: number | "phases"): Plan {
-  const pkgNos = new Set(included.map((p) => p.number));
-  const phases = (a.phases ?? []).filter((x) => (!x.packageNumber || pkgNos.has(x.packageNumber)) && (!x.mode || !mode || x.mode === mode));
+  const phases = phasesOf(a, included, mode);
   if (every === "phases" && phases.length) {
-    return phases.map((x) => ({ label: [x.title, x.period].filter(Boolean).join(" — ") || PERIOD(x.fromWeek, x.toWeek), items: x.deliverables }));
+    return phases.map((x) => ({ label: phaseLabel(x, mode), items: x.deliverables.map((d) => d.title) }));
   }
   const m = mode || "normal";
   const dated = included.flatMap((p) => p.items).map((x) => ({ title: x.title, end: (m === "compressed" ? x.compressed : x.normal) ?? x.normal ?? x.compressed }))
@@ -206,8 +225,13 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   const plan = analysis && chosenPkg ? deliveryPlan(analysis, included, mode, every) : [];
   const agreed = chosenPkg ? `الباقة المتفق عليها: ${chosenPkg.name}${analysis!.packages.length > 1 ? ` (باقة ${chosenPkg.number})` : ""}${deliveryText ? ` — ${deliveryText}` : ""}` : "";
 
-  /** Every requirement of the chosen package (and those it builds on), word for word */
-  const annexSections = () => included.map((p, i) => ({
+  /** The proposal's phases, when the plan follows them and they hold the requirements */
+  const docPhases = analysis && chosenPkg && every === "phases" ? phasesOf(analysis, included, mode).filter((x) => x.deliverables.length) : [];
+  /** Every requirement of the chosen package (and those it builds on), word for word — by phase when the proposal is phased */
+  const annexSections = () => docPhases.length ? docPhases.map((x) => ({
+    title: `${phaseLabel(x, mode)} (${x.deliverables.length} متطلب)`,
+    items: x.deliverables.map((d) => d.title),
+  })) : included.map((p, i) => ({
     title: included.length === 1 ? (analysis!.packages.length > 1 ? `متطلبات باقة ${p.name}` : "نطاق العمل والمتطلبات") : i === 0 ? `متطلبات باقة ${p.name}` : `المتطلبات المضافة في باقة ${p.name}`,
     items: p.items.map((x) => (x.detail ? `${x.title} (${x.detail})` : x.title)),
   }));
@@ -218,7 +242,11 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
 
   const merge = async (withAi: boolean) => {
     if (!analysis || !chosenPkg) return;
-    const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule: plan, notes: analysis.notes ?? [], placement: value?.placement };
+    // Phased proposal: the annex lists each phase's requirements, the plan says what each phase delivers and the payment due
+    const schedule = docPhases.length
+      ? docPhases.map((x) => ({ label: phaseLabel(x, mode), items: [x.summary || `جميع متطلبات المرحلة الواردة في الملحق (${x.deliverables.length} متطلب)`, ...(x.payment ? [`بعد تسليم المرحلة وقبولها تُستحق ${x.payment}`] : [])] }))
+      : plan;
+    const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule, notes: analysis.notes ?? [], placement: value?.placement };
     if (!withAi) {
       onChange(base);
       toast({ title: t("contractScope.merged", { count: itemCount }) });
@@ -336,7 +364,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
               </div>
               {plan.length ? (
                 <div className="max-h-48 overflow-y-auto rounded bg-muted/30 p-2 text-[11px] space-y-1">
-                  {plan.map((x, i) => <div key={i}><span className="font-semibold text-primary">{x.label}:</span> {x.items.join("، ")}</div>)}
+                  {plan.map((x, i) => <div key={i}><span className="font-semibold text-primary">{x.label}{every === "phases" ? ` (${x.items.length})` : ""}:</span> {x.items.join("، ")}</div>)}
                 </div>
               ) : <p className="text-[11px] text-muted-foreground">{t("contractScope.noPlan")}</p>}
             </div>
