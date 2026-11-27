@@ -19,7 +19,10 @@ import { FileText, Upload, Sparkles, Wand2, Loader2, Plus, X, Trash2, CheckCircl
 const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
 
 type Duration = { mode: "normal" | "compressed"; weeks: string; delivery: string };
-type Pkg = { number: number; name: string; includesPrevious: boolean; durations: Duration[]; items: { title: string; detail: string }[] };
+type WeekRange = { from: number; to: number } | null;
+type Item = { title: string; detail: string; normal?: WeekRange; compressed?: WeekRange };
+type Pkg = { number: number; name: string; includesPrevious: boolean; durations: Duration[]; items: Item[]; statedCount?: number; expectedOwn?: number };
+type Phase = { title: string; period: string; fromWeek: number; toWeek: number; deliverables: string[]; packageNumber: number; mode: "normal" | "compressed" | "" };
 /** A technical proposal read into its packages (by AI from a file, or from a proposal saved here). */
 type Analysis = {
   source: string;
@@ -30,7 +33,36 @@ type Analysis = {
   chosen: { number: number; reason: string } | null;
   /** The proposal as text, for drafting the clauses */
   text: string;
+  /** Milestones the document defines (what is received when) */
+  phases?: Phase[];
+  notes?: string[];
 };
+
+export type Plan = { label: string; items: string[] }[];
+const PERIOD = (a: number, b: number) => (a === b ? `الأسبوع ${a}` : `الأسابيع ${a} – ${b}`);
+
+/**
+ * What is delivered / received when, for the chosen package and delivery mode:
+ * the document's own phases if it defines them, else its requirements grouped by the week they finish in.
+ */
+function deliveryPlan(a: Analysis, included: Pkg[], mode: Duration["mode"] | "", every: number | "phases"): Plan {
+  const pkgNos = new Set(included.map((p) => p.number));
+  const phases = (a.phases ?? []).filter((x) => (!x.packageNumber || pkgNos.has(x.packageNumber)) && (!x.mode || !mode || x.mode === mode));
+  if (every === "phases" && phases.length) {
+    return phases.map((x) => ({ label: [x.title, x.period].filter(Boolean).join(" — ") || PERIOD(x.fromWeek, x.toWeek), items: x.deliverables }));
+  }
+  const m = mode || "normal";
+  const dated = included.flatMap((p) => p.items).map((x) => ({ title: x.title, end: (m === "compressed" ? x.compressed : x.normal) ?? x.normal ?? x.compressed }))
+    .filter((x) => x.end && x.end.to > 0) as { title: string; end: { from: number; to: number } }[];
+  if (!dated.length) return [];
+  const step = typeof every === "number" ? every : 4;
+  const groups = new Map<number, string[]>();
+  for (const x of dated) {
+    const k = Math.max(1, Math.ceil(x.end.to / step));
+    groups.set(k, [...(groups.get(k) ?? []), x.title]);
+  }
+  return [...groups].sort((x, y) => x[0] - y[0]).map(([k, items]) => ({ label: PERIOD((k - 1) * step + 1, k * step), items }));
+}
 
 /** A proposal saved in the system: its packages are already known. */
 function analysisFromSaved(label: string, d: ProposalData): Analysis {
@@ -84,10 +116,12 @@ type Props = {
   partyName: string;
   /** Client whose technical proposals are listed first */
   clientName?: string;
+  /** Turn the delivery plan into the contract's payment schedule */
+  onFillStages?: (plan: Plan) => void;
 };
 
 /** Contract editor: read a technical proposal, pick the client's package, merge every requirement and the project clauses into the contract. */
-export function ContractScopePanel({ type, value, onChange, projectName, partyName, clientName }: Props) {
+export function ContractScopePanel({ type, value, onChange, projectName, partyName, clientName, onFillStages }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { data: aiStatus } = useAiStatus();
@@ -98,6 +132,8 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   const [pkgNo, setPkgNo] = useState(0);
   const [mode, setMode] = useState<Duration["mode"] | "">("");
   const [showItems, setShowItems] = useState(false);
+  const [every, setEvery] = useState<number | "phases">("phases");
+  const [lastFile, setLastFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<"" | "file" | "ai">("");
 
   const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
@@ -114,6 +150,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
     setPkgNo(first);
     setMode(a.packages.find((p) => p.number === first)?.durations[0]?.mode ?? "");
     setShowItems(false);
+    setEvery(a.phases?.length ? "phases" : 4);
   };
   const pickProposal = (v: string) => {
     setPick(v);
@@ -122,6 +159,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   };
 
   const upload = async (f: File) => {
+    setLastFile(f);
     setBusy("file");
     setPick("");
     try {
@@ -165,6 +203,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   const itemCount = included.reduce((s, p) => s + p.items.length, 0);
   const duration = chosenPkg?.durations.find((d) => d.mode === mode);
   const deliveryText = duration ? `${modeLabel(duration.mode)} ${duration.weeks} أسبوعاً${duration.delivery ? `، التسليم المتوقع ${duration.delivery}` : ""}` : "";
+  const plan = analysis && chosenPkg ? deliveryPlan(analysis, included, mode, every) : [];
   const agreed = chosenPkg ? `الباقة المتفق عليها: ${chosenPkg.name}${analysis!.packages.length > 1 ? ` (باقة ${chosenPkg.number})` : ""}${deliveryText ? ` — ${deliveryText}` : ""}` : "";
 
   /** Every requirement of the chosen package (and those it builds on), word for word */
@@ -179,7 +218,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
 
   const merge = async (withAi: boolean) => {
     if (!analysis || !chosenPkg) return;
-    const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause() };
+    const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule: plan, notes: analysis.notes ?? [], placement: value?.placement };
     if (!withAi) {
       onChange(base);
       toast({ title: t("contractScope.merged", { count: itemCount }) });
@@ -196,7 +235,8 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
         analysis.text.slice(0, 30_000)].filter(Boolean).join("\n\n");
       const r = await fetch(`${apiBase()}/ai/contract-scope`, {
         method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, projectName: projectName || analysis.projectTitle, partyName, packageName: analysis.packages.length > 1 ? chosenPkg.name : undefined, delivery: deliveryText || undefined, startDate: analysis.startDate || undefined, annexProvided: true, text }),
+        body: JSON.stringify({ type, projectName: projectName || analysis.projectTitle, partyName, packageName: analysis.packages.length > 1 ? chosenPkg.name : undefined, delivery: deliveryText || undefined, startDate: analysis.startDate || undefined, annexProvided: true, text,
+          schedule: plan.map((x) => `${x.label}: ${x.items.join("، ")}`).join("\n") || undefined }),
       });
       const body = await r.json().catch(() => ({})) as ContractScope & { error?: string };
       if (!r.ok) throw new Error(body.error ?? t("common.error"));
@@ -262,6 +302,9 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
                     {t("contractScope.itemsCount", { count: all })}{p.includesPrevious ? ` (${t("contractScope.withPrevious", { count: p.items.length })})` : ""}
                     {p.durations.map((d) => ` · ${modeLabel(d.mode)} ${d.weeks} أسبوعاً${d.delivery ? ` (${d.delivery})` : ""}`).join("")}
                   </div>
+                  {!!p.expectedOwn && p.items.length < p.expectedOwn && (
+                    <div className="text-[11px] text-amber-500" data-testid={`scope-short-${p.number}`}>{t("contractScope.short", { got: p.items.length, want: p.expectedOwn })}</div>
+                  )}
                 </button>
               );
             })}
@@ -275,6 +318,27 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
                   {modeLabel(d.mode)} {d.weeks} أسبوعاً
                 </label>
               ))}
+            </div>
+          )}
+          {lastFile && analysis.packages.some((p) => !!p.expectedOwn && p.items.length < p.expectedOwn) && (
+            <Button size="sm" variant="outline" className="h-7 text-xs border-amber-500/40 text-amber-500" onClick={() => upload(lastFile)} disabled={!!busy} data-testid="button-scope-reanalyze">
+              <Sparkles className="h-3.5 w-3.5 me-1" />{t("contractScope.reanalyze")}
+            </Button>
+          )}
+          {chosenPkg && (analysis.phases?.length || included.some((p) => p.items.some((x) => x.normal || x.compressed))) && (
+            <div className="space-y-1" data-testid="scope-plan">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
+                <span className="font-semibold">{t("contractScope.plan")}</span>
+                <select className="h-7 rounded border border-border bg-background px-1 text-xs" value={String(every)} onChange={(e) => setEvery(e.target.value === "phases" ? "phases" : Number(e.target.value))} data-testid="select-scope-every">
+                  {!!analysis.phases?.length && <option value="phases">{t("contractScope.byDocPhases")}</option>}
+                  {[2, 3, 4, 6].map((n) => <option key={n} value={n}>{t("contractScope.everyWeeks", { n })}</option>)}
+                </select>
+              </div>
+              {plan.length ? (
+                <div className="max-h-48 overflow-y-auto rounded bg-muted/30 p-2 text-[11px] space-y-1">
+                  {plan.map((x, i) => <div key={i}><span className="font-semibold text-primary">{x.label}:</span> {x.items.join("، ")}</div>)}
+                </div>
+              ) : <p className="text-[11px] text-muted-foreground">{t("contractScope.noPlan")}</p>}
             </div>
           )}
           {chosenPkg && (
@@ -347,6 +411,24 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
             ))}
             <Button size="sm" variant="ghost" className="h-8" onClick={() => onChange({ ...scope, sections: [...scope.sections, { title: "", items: [] }] })}><Plus className="h-4 w-4 me-1" />{t("contractScope.addSection")}</Button>
           </div>
+          {!!scope.schedule?.length && (
+            <div className="space-y-2" data-testid="scope-schedule">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <Label className="text-xs">{t("contractScope.planInContract")}</Label>
+                {onFillStages && <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { onFillStages(scope.schedule!); toast({ title: t("contractScope.stagesFilled", { count: scope.schedule!.length }) }); }} data-testid="button-fill-stages">
+                  <Wand2 className="h-3.5 w-3.5 me-1" />{t("contractScope.fillStages")}</Button>}
+              </div>
+              {scope.schedule.map((x, i) => (
+                <div key={i} className="rounded border border-border p-2 space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <Input className="h-8 text-sm" value={x.label} onChange={(e) => onChange({ ...scope, schedule: scope.schedule!.map((y, j) => (j === i ? { ...y, label: e.target.value } : y)) })} />
+                    <button type="button" onClick={() => onChange({ ...scope, schedule: scope.schedule!.filter((_, j) => j !== i) })} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
+                  </div>
+                  <Textarea rows={Math.min(6, Math.max(2, x.items.length))} className="text-xs" value={x.items.join("\n")} onChange={(e) => onChange({ ...scope, schedule: scope.schedule!.map((y, j) => (j === i ? { ...y, items: e.target.value.split("\n") } : y)) })} />
+                </div>
+              ))}
+            </div>
+          )}
           <div className="space-y-2">
             <Label className="text-xs">{t("contractScope.clauses")}</Label>
             {scope.clauses.map((c, i) => (

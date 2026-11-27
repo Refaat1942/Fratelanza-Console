@@ -50,6 +50,9 @@ export const en = {
     perDocument: "This is the default; you can change it on each contract or receipt before printing.", adminOnly: "Only an admin can change the stamp and signature.",
   },
   contractScope: {
+    short: "Read {{got}} of the {{want}} requirements the proposal states – press \"Re-analyse\"", reanalyze: "Re-analyse to complete the requirements",
+    plan: "Delivery plan:", byDocPhases: "The proposal's phases", everyWeeks: "Every {{n}} weeks", noPlan: "The proposal gives no dates for this package",
+    planInContract: "Delivery plan (shown in the contract)", fillStages: "Fill the payment schedule from the delivery plan", stagesFilled: "{{count}} payments created from the delivery plan – review the percentages",
     placement: "Where the scope goes in the contract", placement_annex: "Separate annex", placement_annex_hint: "An \"Annex (1)\" page after the signatures, signed by both parties",
     placement_clause: "Clause in the contract", placement_clause_hint: "A numbered clause among the contract's clauses, before the signatures, with no annex page",
     analyzing: "Analysing the proposal…", noAiUpload: "Without an AI key the file is read as one list.", analyzed: "Proposal analysed: {{count}} packages",

@@ -10,7 +10,7 @@ import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { SearchSelect } from "@/components/search-select";
 import { useDocAssets } from "@/lib/doc-assets";
 import { MarksControl } from "@/components/doc-marks-card";
-import { ContractScopePanel } from "@/components/contract-scope-panel";
+import { ContractScopePanel, type Plan } from "@/components/contract-scope-panel";
 import { ContractClausesEditor } from "@/components/contract-clauses-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +42,14 @@ type Editing = {
   client: ClientContractData;
   freelancer: FreelancerContractData;
 };
+
+const STAGE_ORDINALS = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة", "الحادية عشرة", "الثانية عشرة"];
+
+/** Equal percentages that add up to 100 (the last one takes the rounding). */
+function equalPcts(n: number): number[] {
+  const each = Math.floor(100 / n);
+  return Array.from({ length: n }, (_, i) => (i === n - 1 ? 100 - each * (n - 1) : each));
+}
 
 function fromSaved(c: Contract): Editing {
   const data = (c.data ?? {}) as Record<string, unknown>;
@@ -266,8 +274,13 @@ export default function Contracts() {
                     : <MarksControl kind="contracts" value={editing.freelancer.marks} onChange={(marks) => setFreelancer({ marks })} />}
                   {editing.type === "client"
                     ? <ContractScopePanel type="client" value={editing.client.scope} onChange={(scope) => setClient({ scope })}
+                        onFillStages={(plan: Plan) => { const pcts = equalPcts(plan.length); setClient({ stages: plan.map((x, i) => ({ label: `عند تسليم ${x.label}`, pct: pcts[i]! })) }); }}
                         projectName={editing.client.projectName} partyName={editing.client.clientName} clientName={editing.client.clientName} />
                     : <ContractScopePanel type="freelancer" value={editing.freelancer.scope} onChange={(scope) => setFreelancer({ scope })}
+                        onFillStages={(plan: Plan) => {
+                          const pcts = equalPcts(plan.length);
+                          setFreelancer({ stages: plan.map((x, i) => ({ label: STAGE_ORDINALS[i] ?? `الدفعة ${i + 1}`, pct: pcts[i]!, due: `عند تسليم وقبول مخرجات ${x.label}`, deliverable: x.items.filter((y) => y.trim()).join("، ") })) });
+                        }}
                         projectName={editing.freelancer.projectName} partyName={editing.freelancer.freelancerName}
                         clientName={projectList.find((p) => p.id === editing.projectId)?.clientName ?? undefined} />}
                   {editing.type === "client"

@@ -47,7 +47,7 @@ export class AiError extends Error {
 export type ContentPart = { type: "text"; text: string } | { type: "file"; file: { filename: string; file_data: string } };
 
 /** One chat completion that must answer with a JSON object. */
-export async function chatJson<T>(cfg: AiConfig, system: string, user: string | ContentPart[], override?: { apiKey?: string; model?: string; timeoutMs?: number }): Promise<T> {
+export async function chatJson<T>(cfg: AiConfig, system: string, user: string | ContentPart[], override?: { apiKey?: string; model?: string; timeoutMs?: number; maxTokens?: number }): Promise<T> {
   const apiKey = override?.apiKey || cfg.apiKey;
   if (!apiKey) throw new AiError("AI is not set up: add an OpenAI API key in Settings.", 400);
   const baseUrl = (process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
@@ -57,6 +57,7 @@ export async function chatJson<T>(cfg: AiConfig, system: string, user: string | 
     body: JSON.stringify({
       model: override?.model || cfg.model,
       temperature: 0.2,
+      ...(override?.maxTokens ? { max_completion_tokens: override.maxTokens } : {}),
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
     }),
