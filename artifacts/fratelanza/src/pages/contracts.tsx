@@ -10,6 +10,7 @@ import { PrivacyWrapper } from "@/components/privacy-wrapper";
 import { SearchSelect } from "@/components/search-select";
 import { useDocAssets } from "@/lib/doc-assets";
 import { MarksControl } from "@/components/doc-marks-card";
+import { ContractScopePanel } from "@/components/contract-scope-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -254,6 +255,12 @@ export default function Contracts() {
                   {editing.type === "client"
                     ? <MarksControl kind="contracts" value={editing.client.marks} onChange={(marks) => setClient({ marks })} />
                     : <MarksControl kind="contracts" value={editing.freelancer.marks} onChange={(marks) => setFreelancer({ marks })} />}
+                  {editing.type === "client"
+                    ? <ContractScopePanel type="client" value={editing.client.scope} onChange={(scope) => setClient({ scope })}
+                        projectName={editing.client.projectName} partyName={editing.client.clientName} clientName={editing.client.clientName} />
+                    : <ContractScopePanel type="freelancer" value={editing.freelancer.scope} onChange={(scope) => setFreelancer({ scope })}
+                        projectName={editing.freelancer.projectName} partyName={editing.freelancer.freelancerName}
+                        clientName={projectList.find((p) => p.id === editing.projectId)?.clientName ?? undefined} />}
                   {editing.type === "client"
                     ? <ClientForm d={editing.client} set={setClient} />
                     : <FreelancerForm d={editing.freelancer} set={setFreelancer} members={members} pickFreelancer={pickFreelancer} />}
