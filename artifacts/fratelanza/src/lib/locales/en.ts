@@ -50,6 +50,8 @@ export const en = {
     perDocument: "This is the default; you can change it on each contract or receipt before printing.", adminOnly: "Only an admin can change the stamp and signature.",
   },
   contractScope: {
+    placement: "Where the scope goes in the contract", placement_annex: "Separate annex", placement_annex_hint: "An \"Annex (1)\" page after the signatures, signed by both parties",
+    placement_clause: "Clause in the contract", placement_clause_hint: "A numbered clause among the contract's clauses, before the signatures, with no annex page",
     analyzing: "Analysing the proposal…", noAiUpload: "Without an AI key the file is read as one list.", analyzed: "Proposal analysed: {{count}} packages",
     start: "Start", chosenByDoc: "The proposal itself says the client chose: {{name}}", pickPackage: "Choose the package the client takes:",
     packageN: "Package {{n}}", itemsCount: "{{count}} requirements", withPrevious: "{{count}} added to the previous package", delivery: "Delivery:",

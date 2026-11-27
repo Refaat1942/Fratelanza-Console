@@ -16,6 +16,8 @@ export type ContractScope = {
   summary?: string;
   sections: { title: string; items: string[] }[];
   clauses: { title: string; text: string }[];
+  /** "annex" (default): a separate annex page signed by both parties; "clause": a clause inside the contract */
+  placement?: "annex" | "clause";
 };
 
 export function hasScope(s?: ContractScope | null): s is ContractScope {
@@ -31,10 +33,27 @@ function scopeClauses(scope: ContractScope | undefined, ordinal: string): string
   <ol>${clauses.map((c) => `<li>${c.title.trim() ? `<b>${esc(c.title)}:</b> ` : ""}${esc(c.text)}</li>`).join("")}</ol>`;
 }
 
+function scopeSections(scope: ContractScope) {
+  return scope.sections.map((x) => ({ ...x, items: x.items.filter((i) => i.trim()) })).filter((x) => x.items.length);
+}
+
+/** The scope as a clause of the contract itself (instead of a separate annex). */
+function scopeAsClause(scope: ContractScope | undefined, freelancer: boolean): string {
+  if (!hasScope(scope) || scope.placement !== "clause") return "";
+  const sections = scopeSections(scope);
+  if (!sections.length && !scope.summary?.trim()) return "";
+  return `
+  <h2>البند المضاف: ${freelancer ? "نطاق أعمال منفذ العمل ومخرجاته" : "نطاق العمل والمواصفات الفنية"}</h2>
+  <p>${freelancer ? "يلتزم الطرف الثاني بتنفيذ وتسليم" : "يلتزم الطرف الأول بتنفيذ وتسليم"} نطاق العمل والمخرجات الموضحة في هذا البند، وأي عنصر غير وارد به يُعد خارج نطاق العقد ويخضع لأحكام التعديلات والإضافات.</p>
+  ${scope.summary?.trim() ? `<p><b>وصف المشروع:</b> ${esc(scope.summary)}</p>` : ""}
+  ${scope.agreed?.trim() ? `<p><b>${esc(scope.agreed)}</b></p>` : ""}
+  ${sections.map((x, i) => `<h3>${i + 1}. ${esc(x.title || "نطاق العمل")}</h3><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}`;
+}
+
 /** The technical annex on its own page after the signatures. */
 function scopeAnnex(scope: ContractScope | undefined, title: string, projectName: string): string {
-  if (!hasScope(scope)) return "";
-  const sections = scope.sections.map((x) => ({ ...x, items: x.items.filter((i) => i.trim()) })).filter((x) => x.items.length);
+  if (!hasScope(scope) || scope.placement === "clause") return "";
+  const sections = scopeSections(scope);
   if (!sections.length && !scope.summary?.trim()) return "";
   return `
   <div class="annex">
@@ -407,6 +426,7 @@ export function shell(title: string, body: string, opts: ContractHtmlOptions, ex
   header .ref b { color: #0a192f; }
   .accent { height: 3px; background: linear-gradient(90deg, #00bfff, #0a192f); margin-bottom: 14px; }
   h1 { text-align: center; font-size: 17pt; margin: 6px 0 12px; color: #0a192f; }
+  h3 { font-size: 12pt; margin: 8px 0 2px; color: #0a192f; page-break-after: avoid; }
   h2 { font-size: 13pt; margin: 14px 0 4px; color: #0a192f; border-right: 4px solid #00bfff; padding-right: 8px; page-break-after: avoid; }
   p { margin: 4px 0; text-align: justify; }
   ol { margin: 4px 0; padding-right: 22px; }
@@ -522,6 +542,7 @@ export function buildClientContractHtml(d: ClientContractData, opts: ContractHtm
     <li>الاعتمادات والموافقات الكتابية: تكون أي موافقات أو اعتمادات لمراحل المشروع أو طلبات إضافية أو تغييرات في نطاق العمل بموافقة كتابية من الطرف الثاني عبر وسيلة التواصل المعتمدة بين الطرفين، ويُعتد بها في تحديد نطاق العمل والمدة والتكلفة عند الحاجة.</li>
   </ol>
   <p>ويعتبر هذا البند مكملاً لبنود العقد دون إلغاء أو حذف أو تعديل أي من النصوص الواردة فيه، مع الالتزام بما هو متفق عليه في العرض الفني الخاص بالمشروع والتطبيق وملحق المواصفات الفنية.</p>
+${scopeAsClause(d.scope, false)}
 ${scopeClauses(d.scope, "الثاني عشر")}
 
   <div class="sign">
@@ -579,6 +600,7 @@ export function buildFreelancerContractHtml(d: FreelancerContractData, opts: Con
   <p>تكون مدة كل مرحلة من مراحل المشروع والمواعيد التقديرية الخاصة بها وفقًا لما ورد تفصيلًا في العرض الفني المرفق بالعقد الأصلي، والذي أرسله الطرف الأول إلى الطرف الثاني واطلع عليه الطرف الثاني ووافق عليه، ويُعد العرض الفني المرجع المعتمد في تحديد مدد المراحل ومخرجاتها. ويجوز التسليم المبكر لأي مرحلة متى اكتملت متطلباتها الفنية وأصبحت جاهزة للاختبار، ولا يُعد التسليم المبكر إخلالًا بالجدول الزمني أو التزامًا بتسليم باقي المراحل قبل اكتمال متطلباتها. ولا يجوز تمديد مدة أي مرحلة أو تعديل موعدها إلا بسبب راجع إلى الطرف الأول أو المدخلات أو الاعتمادات أو الخدمات الخارجية أو طلب تغيير مكتوب، وبقدر الأثر الفعلي لذلك السبب.</p>
   <p>أي طلب أو خاصية أو تعديل خارج نطاق العقد الأصلي وملحق المشروع لا ينفذ إلا بموافقة كتابية من الطرف الأول تحدد الوصف والتكلفة والأثر على المدة. ولا تُعد مناقشة الطلب أو طلب تقدير تكلفته موافقة على تنفيذه.</p>
 
+${scopeAsClause(d.scope, true)}
 ${scopeClauses(d.scope, "الثامن")}
   <h2>البند ${hasScope(d.scope) && d.scope.clauses.some((c) => c.text.trim()) ? "التاسع" : "الثامن"}: استمرار باقي الأحكام والتوقيع</h2>
   <p>تظل جميع بنود العقد الأصلي، وبالأخص السرية وحماية بيانات العملاء والملكية الفكرية وعدم التعامل المباشر مع العملاء وأمن المعلومات والإنهاء والمسؤولية، سارية وملزمة للطرفين. يقر الطرفان بقراءة هذا الملحق وفهمه والموافقة عليه، ويحرر من نسختين أصليتين بيد كل طرف نسخة.</p>

@@ -53,6 +53,8 @@ export const ar: Translations = {
     perDocument: "ده الافتراضي؛ وتقدر تغيّره في كل عقد أو سند على حدة قبل الطباعة.", adminOnly: "تعديل الختم والتوقيع متاح للمدير فقط.",
   },
   contractScope: {
+    placement: "مكان نطاق العمل في العقد", placement_annex: "ملحق منفصل", placement_annex_hint: "صفحة «ملحق رقم (1)» بعد التوقيعات، عليها توقيع الطرفين",
+    placement_clause: "بند داخل العقد", placement_clause_hint: "بند مرقّم ضمن بنود العقد قبل التوقيعات، بدون صفحة ملحق",
     analyzing: "جارٍ تحليل العرض…", noAiUpload: "بدون مفتاح الذكاء الاصطناعي يُقرأ الملف كقائمة واحدة.", analyzed: "تم تحليل العرض: {{count}} باقات",
     start: "بدء العمل", chosenByDoc: "العرض نفسه يحدد أن العميل اختار: {{name}}", pickPackage: "اختر الباقة التي سيأخذها العميل:",
     packageN: "باقة {{n}}", itemsCount: "{{count}} متطلب", withPrevious: "منها {{count}} مضافة على الباقة السابقة", delivery: "مدة التنفيذ:",
