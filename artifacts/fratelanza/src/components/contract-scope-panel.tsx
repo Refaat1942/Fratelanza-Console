@@ -6,56 +6,75 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchSelect } from "@/components/search-select";
 import { useToast } from "@/hooks/use-toast";
 import { useAiStatus } from "@/lib/ai-client";
 import { normalizeProposal, packageContents, hasSpecTiers, type ProposalData } from "@/lib/proposal-document";
-import { TIERS, TIER_NAME, type Tier } from "@/lib/service-catalog";
+import { TIERS, TIER_NAME } from "@/lib/service-catalog";
 import { htmlToMarkdown, specItems } from "@/lib/spec-document";
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
 import type { ContractScope } from "@/lib/contract-document";
-import { FileText, Upload, Sparkles, Wand2, Loader2, Plus, X, Trash2 } from "lucide-react";
+import { FileText, Upload, Sparkles, Wand2, Loader2, Plus, X, Trash2, CheckCircle2, ChevronDown, ChevronUp } from "lucide-react";
 
 const apiBase = () => `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api`;
-type Source = { label: string; text: string; data?: ProposalData };
 
-/** The packages up to and including `tier` (cumulative), or all of them. */
-const tiersUpTo = (tier: Tier | "all") => (tier === "all" ? TIERS : TIERS.slice(0, TIERS.indexOf(tier) + 1));
+type Duration = { mode: "normal" | "compressed"; weeks: string; delivery: string };
+type Pkg = { number: number; name: string; includesPrevious: boolean; durations: Duration[]; items: { title: string; detail: string }[] };
+/** A technical proposal read into its packages (by AI from a file, or from a proposal saved here). */
+type Analysis = {
+  source: string;
+  projectTitle: string;
+  summary: string;
+  startDate: string;
+  packages: Pkg[];
+  chosen: { number: number; reason: string } | null;
+  /** The proposal as text, for drafting the clauses */
+  text: string;
+};
 
-/** A technical proposal as text for the AI: its specification, and the chosen packages' items. */
-function technicalText(d: ProposalData, tier: Tier | "all"): string {
-  const parts: string[] = [];
-  if (d.projectTitle?.trim()) parts.push(`# ${d.projectTitle.trim()}`);
-  if (d.customer.needs.trim()) parts.push(d.customer.needs.trim());
-  if (d.requirementsText.trim()) parts.push(d.requirementsText.trim());
-  else if (d.requirements.length) parts.push(d.requirements.map((r) => `- ${r.group ? `${r.group}: ` : ""}${r.text}`).join("\n"));
-  if (hasSpecTiers(d)) {
-    for (const t of tiersUpTo(tier)) {
-      const items = packageContents(d, t);
-      if (items.length) parts.push(`## ${TIER_NAME[t]}\n${items.map((x) => `- ${x.title}${x.detail ? ` — ${x.detail}` : ""}`).join("\n")}`);
-    }
+/** A proposal saved in the system: its packages are already known. */
+function analysisFromSaved(label: string, d: ProposalData): Analysis {
+  const text = [d.projectTitle, d.customer.needs, d.requirementsText || d.requirements.map((r) => `- ${r.text}`).join("\n")].filter((x) => x?.trim()).join("\n\n");
+  let packages: Pkg[] = [];
+  if (hasSpecTiers(d) || !d.requirementsText.trim()) {
+    packages = TIERS.map((t, i) => ({
+      number: i + 1, name: TIER_NAME[t], includesPrevious: i > 0, durations: [],
+      items: packageContents(d, t).map((x) => ({ title: x.title, detail: x.detail })),
+    })).filter((p) => p.items.length);
   }
-  return parts.join("\n\n");
+  if (!packages.length) {
+    const items = specItems(d.requirementsText).map((x) => ({ title: x.text, detail: x.section !== x.text ? x.section : "" }));
+    const reqs = d.requirements.map((r) => ({ title: r.text, detail: r.group ?? "" }));
+    packages = [{ number: 1, name: d.projectTitle || label, includesPrevious: false, durations: [], items: items.length ? items : reqs }].filter((p) => p.items.length);
+  }
+  const chosenIdx = d.tier ? TIERS.indexOf(d.tier) : -1;
+  const chosen = chosenIdx >= 0 && packages.some((p) => p.number === chosenIdx + 1) ? { number: chosenIdx + 1, reason: "" } : null;
+  return { source: label, projectTitle: d.projectTitle ?? "", summary: d.customer.needs, startDate: "", packages, chosen, text };
 }
 
-/** Without AI: the deliverables grouped by section (package items, else the specification's sections). */
-function plainScope(src: Source, tier: Tier | "all"): ContractScope {
-  const groups = new Map<string, string[]>();
-  const add = (title: string, item: string) => {
-    const k = title.trim() || "نطاق العمل";
-    groups.set(k, [...(groups.get(k) ?? []), item]);
-  };
-  const d = src.data;
-  if (d && hasSpecTiers(d)) {
-    for (const t of tiersUpTo(tier)) for (const x of d.tierItems ?? []) if (x.tier === t) add(x.section, x.detail?.trim() ? `${x.text}: ${x.detail}` : x.text);
-  } else if (d && !d.requirementsText.trim() && d.requirements.length) {
-    for (const r of d.requirements) add(r.group ?? "", r.text);
-  } else {
-    for (const x of specItems(src.text)) add(x.section === x.text ? "" : x.section, x.text);
-  }
-  return { source: src.label, sections: [...groups].map(([title, items]) => ({ title, items })), clauses: [] };
+/** Without AI: one package holding the document's deliverables. */
+function analysisFromText(source: string, text: string): Analysis {
+  const items = specItems(text).map((x) => ({ title: x.text, detail: x.section !== x.text ? x.section : "" }));
+  const lines = items.length ? items : text.split("\n").map((l) => l.replace(/^[-•*\d.)\s]+/, "").trim()).filter((l) => l.length > 3).slice(0, 150).map((title) => ({ title, detail: "" }));
+  return { source, projectTitle: "", summary: "", startDate: "", packages: [{ number: 1, name: source, includesPrevious: false, durations: [], items: lines }], chosen: null, text };
 }
+
+/** The chosen package with the ones it builds on (when it "includes everything before it"). */
+function packagesUpTo(a: Analysis, number: number): Pkg[] {
+  const chosen = a.packages.find((p) => p.number === number);
+  if (!chosen) return [];
+  const out: Pkg[] = [chosen];
+  let cur = chosen;
+  while (cur.includesPrevious) {
+    const prev = [...a.packages].filter((p) => p.number < cur.number).sort((x, y) => y.number - x.number)[0];
+    if (!prev) break;
+    out.unshift(prev);
+    cur = prev;
+  }
+  return out;
+}
+
+const modeLabel = (m: Duration["mode"]) => (m === "compressed" ? "إنجاز مضغوط" : "إنجاز عادي");
 
 type Props = {
   type: "client" | "freelancer";
@@ -67,7 +86,7 @@ type Props = {
   clientName?: string;
 };
 
-/** Contract editor: read a technical proposal (saved or uploaded) into the contract's annex and project clauses. */
+/** Contract editor: read a technical proposal, pick the client's package, merge every requirement and the project clauses into the contract. */
 export function ContractScopePanel({ type, value, onChange, projectName, partyName, clientName }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
@@ -75,8 +94,10 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   const { data: proposals = [] } = useListProposals();
   const fileRef = useRef<HTMLInputElement>(null);
   const [pick, setPick] = useState("");
-  const [file, setFile] = useState<Source | null>(null);
-  const [tier, setTier] = useState<Tier | "all">("all");
+  const [analysis, setAnalysis] = useState<Analysis | null>(null);
+  const [pkgNo, setPkgNo] = useState(0);
+  const [mode, setMode] = useState<Duration["mode"] | "">("");
+  const [showItems, setShowItems] = useState(false);
   const [busy, setBusy] = useState<"" | "file" | "ai">("");
 
   const norm = (s: unknown) => String(s ?? "").trim().toLowerCase();
@@ -86,37 +107,51 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
       const d = normalizeProposal(p.data as unknown as ProposalData);
       return { p, d, label: `${p.clientName}${d.projectTitle ? ` — ${d.projectTitle}` : ""}`, mine: !!clientName && norm(p.clientName) === norm(clientName) };
     }), [proposals, clientName]);
-  const chosen = technical.find((x) => String(x.p.id) === pick);
-  const source: Source | null = file ?? (chosen ? { label: chosen.label, text: technicalText(chosen.d, tier), data: chosen.d } : null);
 
+  const applyAnalysis = (a: Analysis) => {
+    setAnalysis(a);
+    const first = a.chosen?.number ?? (a.packages.length === 1 ? a.packages[0]!.number : 0);
+    setPkgNo(first);
+    setMode(a.packages.find((p) => p.number === first)?.durations[0]?.mode ?? "");
+    setShowItems(false);
+  };
   const pickProposal = (v: string) => {
     setPick(v);
-    setFile(null);
-    const d = technical.find((x) => String(x.p.id) === v)?.d;
-    // The package the client chose in the proposal, else all of them
-    setTier(d?.tier || "all");
+    const x = technical.find((y) => String(y.p.id) === v);
+    if (x) applyAnalysis(analysisFromSaved(x.label, x.d));
   };
+
   const upload = async (f: File) => {
     setBusy("file");
+    setPick("");
     try {
-      let text = "";
-      if (/\.(docx|pdf|xlsx?|txt)$/i.test(f.name)) {
+      if (aiStatus?.configured) {
+        // AI reads the file (a PDF page by page) into its packages, durations and requirements
         const fd = new FormData();
         fd.append("file", f);
-        const r = await fetch(`${apiBase()}/proposals/parse-document`, { method: "POST", credentials: "include", body: fd });
-        const body = await r.json().catch(() => ({})) as { html?: string; text?: string; error?: string };
+        const r = await fetch(`${apiBase()}/ai/analyze-proposal`, { method: "POST", credentials: "include", body: fd });
+        const body = await r.json().catch(() => ({})) as Omit<Analysis, "source"> & { error?: string };
         if (!r.ok) throw new Error(body.error ?? t("common.error"));
-        text = body.html ? htmlToMarkdown(body.html) : body.text ?? "";
-      } else if (/\.md$/i.test(f.name)) {
-        text = await f.text();
+        applyAnalysis({ ...body, source: f.name });
+        toast({ title: t("contractScope.analyzed", { count: body.packages.length }) });
       } else {
-        text = (await extractOutlineFromFile(f)).text;
+        let text = "";
+        if (/\.(docx|pdf|xlsx?|txt)$/i.test(f.name)) {
+          const fd = new FormData();
+          fd.append("file", f);
+          const r = await fetch(`${apiBase()}/proposals/parse-document`, { method: "POST", credentials: "include", body: fd });
+          const body = await r.json().catch(() => ({})) as { html?: string; text?: string; error?: string };
+          if (!r.ok) throw new Error(body.error ?? t("common.error"));
+          text = body.html ? htmlToMarkdown(body.html) : body.text ?? "";
+        } else if (/\.md$/i.test(f.name)) {
+          text = await f.text();
+        } else {
+          text = (await extractOutlineFromFile(f)).text;
+        }
+        if (!text.trim()) throw new Error(t("contractScope.emptyFile"));
+        applyAnalysis(analysisFromText(f.name, text));
+        toast({ title: t("contractScope.fileRead", { name: f.name }) });
       }
-      if (!text.trim()) throw new Error(t("contractScope.emptyFile"));
-      setFile({ label: f.name, text });
-      setPick("");
-      setTier("all");
-      toast({ title: t("contractScope.fileRead", { name: f.name }) });
     } catch (err) {
       toast({ title: t("common.error"), description: (err as Error).message, variant: "destructive" });
     } finally {
@@ -125,36 +160,53 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
     }
   };
 
-  const withAi = async () => {
-    if (!source) return;
+  const chosenPkg = analysis?.packages.find((p) => p.number === pkgNo);
+  const included = analysis && chosenPkg ? packagesUpTo(analysis, chosenPkg.number) : [];
+  const itemCount = included.reduce((s, p) => s + p.items.length, 0);
+  const duration = chosenPkg?.durations.find((d) => d.mode === mode);
+  const deliveryText = duration ? `${modeLabel(duration.mode)} ${duration.weeks} أسبوعاً${duration.delivery ? `، التسليم المتوقع ${duration.delivery}` : ""}` : "";
+  const agreed = chosenPkg ? `الباقة المتفق عليها: ${chosenPkg.name}${analysis!.packages.length > 1 ? ` (باقة ${chosenPkg.number})` : ""}${deliveryText ? ` — ${deliveryText}` : ""}` : "";
+
+  /** Every requirement of the chosen package (and those it builds on), word for word */
+  const annexSections = () => included.map((p, i) => ({
+    title: included.length === 1 ? (analysis!.packages.length > 1 ? `متطلبات باقة ${p.name}` : "نطاق العمل والمتطلبات") : i === 0 ? `متطلبات باقة ${p.name}` : `المتطلبات المضافة في باقة ${p.name}`,
+    items: p.items.map((x) => (x.detail ? `${x.title} (${x.detail})` : x.title)),
+  }));
+  const durationClause = () => (duration ? [{
+    title: "الباقة ومدة التنفيذ",
+    text: `${type === "client" ? "يلتزم الطرف الأول" : "يلتزم الطرف الثاني"} بتنفيذ جميع متطلبات باقة «${chosenPkg!.name}» الواردة في الملحق رقم (1) خلال ${duration.weeks} أسبوعاً (${modeLabel(duration.mode)})${analysis!.startDate ? ` تبدأ من ${analysis!.startDate}` : " من تاريخ بدء العمل"}${duration.delivery ? `، ويكون التسليم المتوقع في ${duration.delivery}` : ""}، وتشمل المدة أسبوع القبول والتسليم الأخير.`,
+  }] : []);
+
+  const merge = async (withAi: boolean) => {
+    if (!analysis || !chosenPkg) return;
+    const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause() };
+    if (!withAi) {
+      onChange(base);
+      toast({ title: t("contractScope.merged", { count: itemCount }) });
+      return;
+    }
     if (!aiStatus?.configured) {
       toast({ title: t("proposals.aiNotSetUp"), description: t("proposals.aiNotSetUpHint"), variant: "destructive" });
       return;
     }
     setBusy("ai");
     try {
+      const text = [analysis.projectTitle, analysis.summary,
+        ...included.map((p) => `## ${p.name}\n${p.items.map((x) => `- ${x.title}${x.detail ? ` (${x.detail})` : ""}`).join("\n")}`),
+        analysis.text.slice(0, 30_000)].filter(Boolean).join("\n\n");
       const r = await fetch(`${apiBase()}/ai/contract-scope`, {
         method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, projectName, partyName, packageName: tier === "all" ? undefined : TIER_NAME[tier], text: source.text }),
+        body: JSON.stringify({ type, projectName: projectName || analysis.projectTitle, partyName, packageName: analysis.packages.length > 1 ? chosenPkg.name : undefined, delivery: deliveryText || undefined, startDate: analysis.startDate || undefined, annexProvided: true, text }),
       });
       const body = await r.json().catch(() => ({})) as ContractScope & { error?: string };
       if (!r.ok) throw new Error(body.error ?? t("common.error"));
-      onChange({ source: source.label, summary: body.summary, sections: body.sections ?? [], clauses: body.clauses ?? [] });
-      toast({ title: t("contractScope.aiDone", { sections: body.sections?.length ?? 0, clauses: body.clauses?.length ?? 0 }) });
+      onChange({ ...base, summary: body.summary || base.summary, clauses: body.clauses?.length ? body.clauses : base.clauses });
+      toast({ title: t("contractScope.aiDone", { sections: base.sections.length, clauses: body.clauses?.length ?? 0 }) });
     } catch (err) {
       toast({ title: t("proposals.aiFailed"), description: (err as Error).message, variant: "destructive" });
     } finally {
       setBusy("");
     }
-  };
-  const withoutAi = () => {
-    if (!source) return;
-    const s = plainScope(source, tier);
-    if (!s.sections.length) {
-      toast({ title: t("contractScope.nothingFound"), variant: "destructive" });
-      return;
-    }
-    onChange({ ...s, clauses: value?.clauses ?? [] });
   };
 
   const scope = value;
@@ -168,50 +220,99 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
       <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary"><FileText className="h-4 w-4" />{t("contractScope.title")}</div>
       <p className="text-[11px] text-muted-foreground">{t(type === "client" ? "contractScope.introClient" : "contractScope.introFreelancer")}</p>
 
+      {/* 1. The technical proposal */}
       <div className="space-y-1">
         <Label className="text-xs">{t("contractScope.fromProposal")}</Label>
         <SearchSelect value={pick} onChange={pickProposal} testId="select-scope-proposal" placeholder={t("contractScope.chooseProposal")}
           options={[...technical].sort((a, b) => Number(b.mine) - Number(a.mine)).map((x) => ({ value: String(x.p.id), label: x.label, hint: x.mine ? t("contractScope.thisClient") : x.p.createdAt.slice(0, 10) }))} />
       </div>
-      <div className="flex items-center gap-2">
-        <input ref={fileRef} type="file" accept=".docx,.pdf,.md,.txt,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} data-testid="input-scope-file" />
-        <Button size="sm" variant="outline" className="h-8" onClick={() => fileRef.current?.click()} disabled={!!busy}>
-          {busy === "file" ? <Loader2 className="h-4 w-4 me-1 animate-spin" /> : <Upload className="h-4 w-4 me-1" />}{t("contractScope.uploadFile")}
+      <div className="flex items-center gap-2 flex-wrap">
+        <input ref={fileRef} type="file" accept=".pdf,.docx,.md,.txt,.xlsx,.xls" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }} data-testid="input-scope-file" />
+        <Button size="sm" variant="outline" className="h-8" onClick={() => fileRef.current?.click()} disabled={!!busy} data-testid="button-scope-upload">
+          {busy === "file" ? <Loader2 className="h-4 w-4 me-1 animate-spin" /> : <Upload className="h-4 w-4 me-1" />}
+          {busy === "file" ? t("contractScope.analyzing") : t("contractScope.uploadFile")}
         </Button>
-        {file && <span className="text-xs text-muted-foreground truncate" title={file.label}>{file.label}</span>}
+        {!aiStatus?.configured && <span className="text-[11px] text-muted-foreground">{t("contractScope.noAiUpload")} <Link href="/settings" className="text-primary underline">{t("proposals.aiOpenSettings")}</Link></span>}
       </div>
 
-      {source && (
-        <div className="space-y-2">
-          {chosen && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-muted-foreground">{t("contractScope.package")}</span>
-              <Select value={tier} onValueChange={(v) => setTier(v as Tier | "all")}>
-                <SelectTrigger className="h-8 w-44" data-testid="select-scope-tier"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">{t("contractScope.allPackages")}</SelectItem>
-                  {TIERS.map((x) => <SelectItem key={x} value={x}>{TIER_NAME[x]}</SelectItem>)}
-                </SelectContent>
-              </Select>
+      {/* 2. Its packages: which one does the client take? */}
+      {analysis && (
+        <div className="space-y-2 rounded border border-border bg-background/40 p-2" data-testid="scope-analysis">
+          <div className="text-xs">
+            <span className="font-semibold">{analysis.projectTitle || analysis.source}</span>
+            {analysis.startDate && <span className="text-muted-foreground"> · {t("contractScope.start")}: {analysis.startDate}</span>}
+          </div>
+          {analysis.summary && <p className="text-[11px] text-muted-foreground">{analysis.summary}</p>}
+          {analysis.chosen ? (
+            <p className="text-[11px] text-green-500 flex items-start gap-1" data-testid="scope-chosen-hint"><CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+              {t("contractScope.chosenByDoc", { name: analysis.packages.find((p) => p.number === analysis.chosen!.number)?.name ?? "" })}{analysis.chosen.reason ? ` — ${analysis.chosen.reason}` : ""}</p>
+          ) : analysis.packages.length > 1 && <p className="text-[11px] text-amber-500">{t("contractScope.pickPackage")}</p>}
+          <div className="grid gap-2">
+            {analysis.packages.map((p) => {
+              const all = packagesUpTo(analysis, p.number).reduce((s, x) => s + x.items.length, 0);
+              const on = p.number === pkgNo;
+              return (
+                <button key={p.number} type="button" onClick={() => { setPkgNo(p.number); setMode(p.durations[0]?.mode ?? ""); }}
+                  className={`text-start rounded border p-2 transition-colors ${on ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`} data-testid={`scope-package-${p.number}`}>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold">{analysis.packages.length > 1 ? `${t("contractScope.packageN", { n: p.number })}: ` : ""}{p.name}</span>
+                    {on && <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    {t("contractScope.itemsCount", { count: all })}{p.includesPrevious ? ` (${t("contractScope.withPrevious", { count: p.items.length })})` : ""}
+                    {p.durations.map((d) => ` · ${modeLabel(d.mode)} ${d.weeks} أسبوعاً${d.delivery ? ` (${d.delivery})` : ""}`).join("")}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {chosenPkg && chosenPkg.durations.length > 1 && (
+            <div className="flex items-center gap-3 text-xs flex-wrap" data-testid="scope-mode">
+              <span className="text-muted-foreground">{t("contractScope.delivery")}</span>
+              {chosenPkg.durations.map((d) => (
+                <label key={d.mode} className="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" name="scope-mode" checked={mode === d.mode} onChange={() => setMode(d.mode)} className="accent-[hsl(var(--primary))]" />
+                  {modeLabel(d.mode)} {d.weeks} أسبوعاً
+                </label>
+              ))}
             </div>
           )}
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" className="h-8" onClick={withAi} disabled={!!busy} data-testid="button-scope-ai">
-              {busy === "ai" ? <Loader2 className="h-4 w-4 me-1 animate-spin" /> : <Sparkles className="h-4 w-4 me-1" />}{busy === "ai" ? t("contractScope.aiWorking") : t("contractScope.withAi")}
-            </Button>
-            <Button size="sm" variant="outline" className="h-8" onClick={withoutAi} disabled={!!busy} data-testid="button-scope-plain">
-              <Wand2 className="h-4 w-4 me-1" />{t("contractScope.withoutAi")}
-            </Button>
-          </div>
-          {!aiStatus?.configured && <p className="text-[11px] text-muted-foreground">{t("proposals.aiNotSetUpHint")} <Link href="/settings" className="text-primary underline">{t("proposals.aiOpenSettings")}</Link></p>}
+          {chosenPkg && (
+            <>
+              <button type="button" className="text-[11px] text-primary flex items-center gap-1" onClick={() => setShowItems((v) => !v)} data-testid="toggle-scope-items">
+                {showItems ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}{t("contractScope.showItems", { count: itemCount })}
+              </button>
+              {showItems && (
+                <div className="max-h-56 overflow-y-auto text-[11px] space-y-1 rounded bg-muted/30 p-2">
+                  {included.map((p) => (
+                    <div key={p.number}><div className="font-semibold">{p.name}</div>
+                      <ol className="list-decimal ps-5">{p.items.map((x, i) => <li key={i}>{x.title}{x.detail ? <span className="text-muted-foreground"> — {x.detail}</span> : null}</li>)}</ol></div>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-2 pt-1">
+                <Button size="sm" className="h-8" onClick={() => merge(true)} disabled={!!busy} data-testid="button-scope-ai">
+                  {busy === "ai" ? <Loader2 className="h-4 w-4 me-1 animate-spin" /> : <Sparkles className="h-4 w-4 me-1" />}{busy === "ai" ? t("contractScope.aiWorking") : t("contractScope.withAi")}
+                </Button>
+                <Button size="sm" variant="outline" className="h-8" onClick={() => merge(false)} disabled={!!busy} data-testid="button-scope-plain">
+                  <Wand2 className="h-4 w-4 me-1" />{t("contractScope.withoutAi")}
+                </Button>
+              </div>
+            </>
+          )}
         </div>
       )}
 
+      {/* 3. What is in the contract (editable) */}
       {scope && (
         <div className="space-y-3 border-t border-border pt-3" data-testid="scope-editor">
           <div className="flex items-center justify-between gap-2">
             <span className="text-xs text-muted-foreground">{scope.source ? t("contractScope.readFrom", { source: scope.source }) : ""}</span>
             <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => onChange(undefined)} data-testid="button-scope-clear"><Trash2 className="h-3.5 w-3.5 me-1" />{t("contractScope.remove")}</Button>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">{t("contractScope.agreed")}</Label>
+            <Input className="h-8 text-sm" value={scope.agreed ?? ""} onChange={(e) => onChange({ ...scope, agreed: e.target.value })} data-testid="input-scope-agreed" />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">{t("contractScope.summary")}</Label>
@@ -225,7 +326,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
                   <Input className="h-8 text-sm" value={x.title} onChange={(e) => setSection(i, { title: e.target.value })} placeholder={t("contractScope.sectionTitle")} />
                   <button type="button" onClick={() => onChange({ ...scope, sections: scope.sections.filter((_, j) => j !== i) })} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
                 </div>
-                <Textarea rows={Math.min(8, Math.max(2, x.items.length + 1))} className="text-xs" value={x.items.join("\n")}
+                <Textarea rows={Math.min(10, Math.max(2, x.items.length + 1))} className="text-xs" value={x.items.join("\n")}
                   onChange={(e) => setSection(i, { items: e.target.value.split("\n") })} placeholder={t("contractScope.itemsHint")} />
               </div>
             ))}

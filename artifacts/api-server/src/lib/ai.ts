@@ -43,8 +43,11 @@ export class AiError extends Error {
   constructor(message: string, public status = 502) { super(message); }
 }
 
+/** A user message part: text, or a file (e.g. a PDF the model reads page by page). */
+export type ContentPart = { type: "text"; text: string } | { type: "file"; file: { filename: string; file_data: string } };
+
 /** One chat completion that must answer with a JSON object. */
-export async function chatJson<T>(cfg: AiConfig, system: string, user: string, override?: { apiKey?: string; model?: string }): Promise<T> {
+export async function chatJson<T>(cfg: AiConfig, system: string, user: string | ContentPart[], override?: { apiKey?: string; model?: string; timeoutMs?: number }): Promise<T> {
   const apiKey = override?.apiKey || cfg.apiKey;
   if (!apiKey) throw new AiError("AI is not set up: add an OpenAI API key in Settings.", 400);
   const baseUrl = (process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1").replace(/\/$/, "");
@@ -57,7 +60,7 @@ export async function chatJson<T>(cfg: AiConfig, system: string, user: string, o
       response_format: { type: "json_object" },
       messages: [{ role: "system", content: system }, { role: "user", content: user }],
     }),
-    signal: AbortSignal.timeout(120_000),
+    signal: AbortSignal.timeout(override?.timeoutMs ?? 120_000),
   });
   const body = await res.json().catch(() => ({})) as { error?: { message?: string }; choices?: { message?: { content?: string } }[] };
   if (!res.ok) {

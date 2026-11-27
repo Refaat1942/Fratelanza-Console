@@ -1,6 +1,9 @@
 import { Router, type IRouter } from "express";
 import { requireAdmin } from "../middlewares/require-auth";
-import { AiError, DEFAULT_MODEL, chatJson, clearAiKey, getAiConfig, keyHint, saveAiConfig } from "../lib/ai";
+import { AiError, DEFAULT_MODEL, chatJson, clearAiKey, getAiConfig, keyHint, saveAiConfig, type ContentPart } from "../lib/ai";
+import multer from "multer";
+import mammoth from "mammoth";
+import { extractTextFromUpload } from "../lib/document-parser.js";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -129,7 +132,7 @@ Write everything in Arabic. Answer with JSON only:
  * and project-specific clauses (client or freelancer contract).
  */
 router.post("/ai/contract-scope", async (req, res): Promise<void> => {
-  const b = (req.body ?? {}) as { type?: string; projectName?: string; partyName?: string; packageName?: string; text?: string };
+  const b = (req.body ?? {}) as { type?: string; projectName?: string; partyName?: string; packageName?: string; text?: string; delivery?: string; startDate?: string; annexProvided?: boolean };
   const text = (typeof b.text === "string" ? b.text : "").slice(0, 60_000);
   if (!text.trim()) {
     res.status(400).json({ error: "Nothing to read: choose a technical proposal or upload a file first." });
@@ -141,6 +144,8 @@ router.post("/ai/contract-scope", async (req, res): Promise<void> => {
     b.projectName ? `Project: ${b.projectName}` : "",
     b.partyName ? `Second party: ${b.partyName}` : "",
     b.packageName ? `Agreed package: ${b.packageName} — include only what this package covers` : "",
+    b.delivery ? `Agreed delivery: ${b.delivery}${b.startDate ? `, work starting ${b.startDate}` : ""} — state this duration and delivery date in a clause` : "",
+    b.annexProvided ? "The technical annex is already written from the proposal with every requirement of the agreed package: return \"sections\": [] and write only the summary and the clauses." : "",
     `Technical proposal / specification:\n"""\n${text}\n"""`,
   ].filter(Boolean).join("\n\n");
   try {
@@ -154,8 +159,77 @@ router.post("/ai/contract-scope", async (req, res): Promise<void> => {
     const clauses = (Array.isArray(out.clauses) ? out.clauses : [])
       .map((x) => ({ title: str(x?.title), text: str(x?.text) }))
       .filter((x) => x.text);
-    if (!sections.length && !clauses.length) throw new AiError("The AI did not return any contract terms. Try again.");
+    if (!sections.length && !clauses.length && !str(out.summary)) throw new AiError("The AI did not return any contract terms. Try again.");
     res.json({ summary: str(out.summary), sections, clauses });
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
+
+const ANALYZE_SYSTEM = `You read a software company's technical proposal (any layout: tables, cards, timelines; Arabic or English) and extract its offer exactly.
+Return JSON only:
+{"projectTitle": string, "summary": string (1-2 sentences: what the system is),
+ "startDate": string ("" if none),
+ "packages": [{"number": number, "name": string, "includesPrevious": boolean (the package contains everything in the one before),
+   "durations": [{"mode": "normal" | "compressed", "weeks": string (e.g. "8" or "8 – 10"), "delivery": string (delivery date as written, "" if none)}],
+   "items": [{"title": string, "detail": string ("" if none)}]}],
+ "phases": [string] (delivery phases / milestones if the proposal describes them, else []),
+ "chosen": {"number": number, "reason": string} or null}
+Rules:
+- "items" lists EVERY requirement / feature row the package adds, copied in full in the proposal's language (keep product names such as Claude, Cloudflare, OWASP, Zotero). Never summarise, merge, skip or invent rows. When a package "includes everything in the previous package", list only the rows it adds and set includesPrevious true.
+- Put per-row durations or notes (e.g. weeks) in "detail".
+- If the proposal has no packages, return one package named after the project holding all its deliverables.
+- "chosen" only when the document itself states which package the client selected or approved; otherwise null.`;
+
+/**
+ * Read a technical proposal file (PDF read by the model page by page; Word / text as text)
+ * into its packages, durations and every requirement, so the user can pick the client's package.
+ */
+router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Promise<void> => {
+  const file = (req as unknown as { file?: Express.Multer.File }).file;
+  const typed = typeof req.body?.text === "string" ? req.body.text : "";
+  try {
+    let text = typed;
+    const parts: ContentPart[] = [];
+    if (file) {
+      if (/\.docx$/i.test(file.originalname)) {
+        text = (await mammoth.extractRawText({ buffer: file.buffer })).value ?? "";
+      } else {
+        text = (await extractTextFromUpload(file.buffer, file.originalname)).text;
+      }
+      // The model reads the PDF itself (layout, tables, Arabic order); the extracted text goes along as a hint
+      if (/\.pdf$/i.test(file.originalname)) {
+        parts.push({ type: "file", file: { filename: file.originalname, file_data: `data:application/pdf;base64,${file.buffer.toString("base64")}` } });
+      }
+    }
+    if (!text.trim() && !parts.length) {
+      res.status(400).json({ error: "Nothing to read: upload the technical proposal file." });
+      return;
+    }
+    parts.push({ type: "text", text: `${parts.length ? "Text extracted from the file (its Arabic word order may be broken; trust the file):\n" : "Technical proposal:\n"}"""\n${text.slice(0, 80_000)}\n"""` });
+    const cfg = await getAiConfig();
+    type Pkg = { number?: unknown; name?: unknown; includesPrevious?: unknown; durations?: { mode?: unknown; weeks?: unknown; delivery?: unknown }[]; items?: { title?: unknown; detail?: unknown }[] };
+    const out = await chatJson<{ projectTitle?: unknown; summary?: unknown; startDate?: unknown; packages?: Pkg[]; phases?: unknown[]; chosen?: { number?: unknown; reason?: unknown } | null }>(cfg, ANALYZE_SYSTEM, parts, { timeoutMs: 240_000 });
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
+    const packages = (Array.isArray(out.packages) ? out.packages : []).map((p, i) => ({
+      number: Number(p.number) || i + 1,
+      name: str(p.name) || `باقة ${i + 1}`,
+      includesPrevious: p.includesPrevious === true,
+      durations: (Array.isArray(p.durations) ? p.durations : [])
+        .map((d) => ({ mode: d.mode === "compressed" ? "compressed" as const : "normal" as const, weeks: str(d.weeks), delivery: str(d.delivery) }))
+        .filter((d) => d.weeks || d.delivery),
+      items: (Array.isArray(p.items) ? p.items : []).map((x) => ({ title: str(x?.title), detail: str(x?.detail) })).filter((x) => x.title),
+    })).filter((p) => p.items.length);
+    if (!packages.length) throw new AiError("The AI could not find packages or requirements in this file.");
+    const chosenNo = Number(out.chosen?.number);
+    res.json({
+      projectTitle: str(out.projectTitle), summary: str(out.summary), startDate: str(out.startDate),
+      packages, phases: (Array.isArray(out.phases) ? out.phases : []).map(str).filter(Boolean),
+      chosen: packages.some((p) => p.number === chosenNo) ? { number: chosenNo, reason: str(out.chosen?.reason) } : null,
+      text,
+    });
   } catch (err) {
     fail(res, err);
   }
