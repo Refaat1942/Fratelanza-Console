@@ -47,10 +47,10 @@ if [[ -f "$REPO_DIR/scripts/vps-migrate.sql" ]] && docker ps --format '{{.Names}
 fi
 
 echo "==> Building API image (fratelanza-console-api:local)"
-docker build --no-cache -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
+docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 
 echo "==> Building web assets (no stale cache)"
-docker build --no-cache --build-arg CACHEBUST="$COMMIT" -f "$REPO_DIR/Dockerfile.web" -t fratelanza-console-web:build "$REPO_DIR"
+docker build --build-arg CACHEBUST="$COMMIT" -f "$REPO_DIR/Dockerfile.web" -t fratelanza-console-web:build "$REPO_DIR"
 docker rm -f fc-web-extract 2>/dev/null || true
 docker create --name fc-web-extract fratelanza-console-web:build
 rm -rf "${APP_DIR:?}/web-static"/*

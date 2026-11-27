@@ -66,15 +66,15 @@ run_migrations() {
 
 build_api_image() {
   echo "==> Building API image..."
-  docker build --no-cache -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
+  docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 }
 
 # Build the frontend and copy it into web-static (bind-mounted by the web container).
 build_web_static() {
   local commit
   commit=$(git -C "$REPO_DIR" rev-parse --short HEAD)
-  echo "==> Building WEB (no stale cache)..."
-  docker build --no-cache \
+  echo "==> Building WEB (source layers rebuilt for this commit)..."
+  docker build \
     --build-arg CACHEBUST="$commit" \
     -f "$REPO_DIR/Dockerfile.web" \
     -t fratelanza-console-web:build \

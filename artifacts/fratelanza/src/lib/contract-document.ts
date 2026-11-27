@@ -45,6 +45,77 @@ function scopeAnnex(scope: ContractScope | undefined, title: string, projectName
   </div>`;
 }
 
+/* ─────────────── Editing the contract's clauses ─────────────── */
+
+/** Per clause (keyed by its title without "البند …:"): hide it, rename it, or replace its text. */
+export type ClauseEdit = { hidden?: boolean; title?: string; text?: string };
+export type ClauseEdits = Record<string, ClauseEdit>;
+
+const ORDINALS = ["الأول", "الثاني", "الثالث", "الرابع", "الخامس", "السادس", "السابع", "الثامن", "التاسع", "العاشر",
+  "الحادي عشر", "الثاني عشر", "الثالث عشر", "الرابع عشر", "الخامس عشر", "السادس عشر", "السابع عشر", "الثامن عشر", "التاسع عشر", "العشرون"];
+const CLAUSE_HEAD = /^البند\s+[^:]+:\s*/;
+
+function decode(s: string) {
+  return s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&amp;/g, "&");
+}
+/** A clause's HTML as editable text: paragraphs on their own lines, list items as "- item". */
+function clausePlainText(html: string): string {
+  return decode(html
+    .replace(/<li[^>]*>/g, "\n- ").replace(/<\/(p|li|ol|ul|div|tr)>/g, "\n").replace(/<br\s*\/?>/g, "\n")
+    .replace(/<[^>]+>/g, ""))
+    .split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
+}
+/** Edited text as HTML: "- " lines become a numbered list, the rest paragraphs. */
+function clauseHtml(text: string): string {
+  const out: string[] = [];
+  let list: string[] = [];
+  const flush = () => { if (list.length) { out.push(`<ol>${list.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>`); list = []; } };
+  for (const line of text.split("\n").map((x) => x.trim()).filter(Boolean)) {
+    const m = /^(?:[-•*]|\d{1,2}[.)])\s*(.+)$/.exec(line);
+    if (m) list.push(m[1]!);
+    else { flush(); out.push(`<p>${esc(line)}</p>`); }
+  }
+  flush();
+  return out.join("");
+}
+
+type ParsedClause = { key: string; title: string; html: string };
+/** The body split into: text before the clauses, the clauses ("<h2>البند …: title</h2>" + its content), and the signatures / annex after them. */
+function splitClauses(body: string): { head: string; clauses: ParsedClause[]; tail: string } {
+  const signAt = body.indexOf('<div class="sign">');
+  const main = signAt >= 0 ? body.slice(0, signAt) : body;
+  const tail = signAt >= 0 ? body.slice(signAt) : "";
+  const parts = main.split(/(<h2>[\s\S]*?<\/h2>)/);
+  const head = parts[0] ?? "";
+  const clauses: ParsedClause[] = [];
+  for (let i = 1; i < parts.length; i += 2) {
+    const heading = decode(parts[i]!.replace(/<[^>]+>/g, "")).trim();
+    const title = heading.replace(CLAUSE_HEAD, "").trim();
+    clauses.push({ key: title, title, html: parts[i + 1] ?? "" });
+  }
+  return { head, clauses, tail };
+}
+
+/** The contract's clauses with their generated title and text (what an edit starts from). */
+export function contractClauses(html: string): { key: string; title: string; text: string }[] {
+  const marker = '<div class="accent"></div>';
+  const body = html.slice(html.indexOf(marker) + marker.length);
+  return splitClauses(body).clauses.map((c) => ({ key: c.key, title: c.title, text: clausePlainText(c.html) }));
+}
+
+/** Apply the edits, then number the remaining clauses in order (البند الأول، الثاني، …). */
+function applyClauseEdits(body: string, edits: ClauseEdits | undefined): string {
+  const { head, clauses, tail } = splitClauses(body);
+  let n = 0;
+  const kept = clauses.filter((c) => !edits?.[c.key]?.hidden).map((c) => {
+    const e = edits?.[c.key];
+    const title = e?.title?.trim() || c.title;
+    const html = e?.text?.trim() ? clauseHtml(e.text) : c.html;
+    return `<h2>البند ${ORDINALS[n++] ?? n}: ${esc(title)}</h2>${html}`;
+  });
+  return `${head}${kept.join("\n")}${tail}`;
+}
+
 export type ClientContractData = {
   contractDate: string;
   clientType: "individual" | "company";
@@ -71,6 +142,8 @@ export type ClientContractData = {
   marks?: MarksChoice;
   /** Technical annex and project clauses read from the technical proposal */
   scope?: ContractScope;
+  /** Clauses hidden, renamed or rewritten for this contract */
+  clauseEdits?: ClauseEdits;
 };
 
 export type FreelancerContractData = {
@@ -89,6 +162,8 @@ export type FreelancerContractData = {
   marks?: MarksChoice;
   /** Technical annex and project clauses read from the technical proposal */
   scope?: ContractScope;
+  /** Clauses hidden, renamed or rewritten for this contract */
+  clauseEdits?: ClauseEdits;
 };
 
 export const today = () => new Date().toISOString().slice(0, 10);
@@ -451,7 +526,7 @@ ${scopeClauses(d.scope, "الثاني عشر")}
     <div><b>الطرف الثاني (العميل)</b>الاسم / ${fill(d.signatoryName || (company ? d.representativeName : d.clientName), "............................")}<br>الصفة / ${fill(d.signatoryTitle, "............................")}<br>التوقيع / ............................<br>&nbsp;</div>
   </div>
 ${scopeAnnex(d.scope, "ملحق رقم (1): المواصفات الفنية ونطاق العمل", d.projectName)}`;
-  return shell("عقد اتفاق على تنفيذ وتطوير مشروع تقني", body, opts);
+  return shell("عقد اتفاق على تنفيذ وتطوير مشروع تقني", applyClauseEdits(body, d.clauseEdits), opts);
 }
 
 export function buildFreelancerContractHtml(d: FreelancerContractData, opts: ContractHtmlOptions = {}): string {
@@ -511,7 +586,7 @@ ${scopeClauses(d.scope, "الثامن")}
   </div>
 ${scopeAnnex(d.scope, "ملحق رقم (1): نطاق أعمال منفذ العمل ومخرجاته", d.projectName)}
 `;
-  return shell("عقد تنفيذ مشروع كمستقل", body, opts);
+  return shell("عقد تنفيذ مشروع كمستقل", applyClauseEdits(body, d.clauseEdits), opts);
 }
 
 /* ───────────────────────── Output ───────────────────────── */

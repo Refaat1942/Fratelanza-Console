@@ -10,7 +10,8 @@ COPY lib/api-client-react/package.json ./lib/api-client-react/
 COPY lib/outline-utils/package.json ./lib/outline-utils/
 COPY lib/db/package.json ./lib/db/
 COPY artifacts/api-server/package.json ./artifacts/api-server/
-RUN pnpm install --frozen-lockfile
+# pnpm's package store is kept between builds, so a deploy only downloads new packages
+RUN --mount=type=cache,id=fc-pnpm-store,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 
 FROM deps AS builder
 COPY lib/ ./lib/
@@ -20,10 +21,12 @@ RUN pnpm --filter @workspace/api-server run build
 
 FROM node:24-alpine AS runner
 WORKDIR /app
-RUN npm install -g pnpm@10
-COPY --from=builder /app/artifacts/api-server/dist ./dist
+# Same layout as the build: packages the bundle leaves out (pdf-parse) are found
+# through artifacts/api-server/node_modules, which links into node_modules/.pnpm
 COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/artifacts/api-server/package.json ./
+COPY --from=builder /app/artifacts/api-server/node_modules ./artifacts/api-server/node_modules
+COPY --from=builder /app/artifacts/api-server/dist ./artifacts/api-server/dist
+COPY --from=builder /app/artifacts/api-server/package.json ./artifacts/api-server/
 ENV NODE_ENV=production
 EXPOSE 8080
-CMD ["node", "--enable-source-maps", "./dist/index.mjs"]
+CMD ["node", "--enable-source-maps", "./artifacts/api-server/dist/index.mjs"]

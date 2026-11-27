@@ -52,10 +52,13 @@ function detectLanguage(text: string): "English" | "Arabic" {
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
   // Lazy load — pdf-parse must not run at startup (v2 pulled pdf.js canvas and crashed Node).
-  const mod = await import("pdf-parse");
+  // The library file itself: pdf-parse's index.js, loaded with import(), thinks it runs as a
+  // script and tries to read its own test PDF (ENOENT ./test/data/05-versions-space.pdf).
+  const mod = await import("pdf-parse/lib/pdf-parse.js");
   const pdfParse = (mod as { default?: (buf: Buffer) => Promise<{ text?: string }> }).default ?? mod;
   const result = await (pdfParse as (buf: Buffer) => Promise<{ text?: string }>)(buffer);
-  return result.text ?? "";
+  // Some PDFs (e.g. printed from a browser) yield NUL characters between glyphs
+  return (result.text ?? "").replace(/\u0000/g, "");
 }
 
 async function extractDocxText(buffer: Buffer): Promise<string> {

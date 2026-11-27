@@ -42,7 +42,7 @@ backup_db
 run_migrations
 
 echo "==> Building WEB (no stale cache)..."
-docker build --no-cache \
+docker build \
   --build-arg CACHEBUST="$COMMIT" \
   -f "$REPO_DIR/Dockerfile.web" \
   -t fratelanza-console-web:build \
@@ -58,7 +58,7 @@ docker rm fc-web-extract
 verify_web_static
 
 echo "==> Building API..."
-docker build --no-cache -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
+docker build -f "$REPO_DIR/Dockerfile.api" -t fratelanza-console-api:local "$REPO_DIR"
 
 sync_host_nginx_static
 restart_console_containers

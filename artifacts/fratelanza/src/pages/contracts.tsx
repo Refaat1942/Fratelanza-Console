@@ -11,6 +11,7 @@ import { SearchSelect } from "@/components/search-select";
 import { useDocAssets } from "@/lib/doc-assets";
 import { MarksControl } from "@/components/doc-marks-card";
 import { ContractScopePanel } from "@/components/contract-scope-panel";
+import { ContractClausesEditor } from "@/components/contract-clauses-editor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,6 +126,14 @@ export default function Contracts() {
     const opts = { logoDataUrl: branding.logoDataUrl, assets: docAssets };
     return editing.type === "client" ? buildClientContractHtml(editing.client, opts) : buildFreelancerContractHtml(editing.freelancer, opts);
   }, [editing, branding.logoDataUrl, docAssets]);
+
+  /** The contract as generated, without clause edits (the clause editor starts from it) */
+  const defaultHtml = useMemo(() => {
+    if (!editing) return "";
+    return editing.type === "client"
+      ? buildClientContractHtml({ ...editing.client, clauseEdits: undefined })
+      : buildFreelancerContractHtml({ ...editing.freelancer, clauseEdits: undefined });
+  }, [editing]);
 
   const calc = editing
     ? editing.type === "client"
@@ -264,6 +273,9 @@ export default function Contracts() {
                   {editing.type === "client"
                     ? <ClientForm d={editing.client} set={setClient} />
                     : <FreelancerForm d={editing.freelancer} set={setFreelancer} members={members} pickFreelancer={pickFreelancer} />}
+                  <ContractClausesEditor defaultHtml={defaultHtml}
+                    edits={editing.type === "client" ? editing.client.clauseEdits : editing.freelancer.clauseEdits}
+                    onChange={(clauseEdits) => (editing.type === "client" ? setClient({ clauseEdits }) : setFreelancer({ clauseEdits }))} />
                   {calc && <MoneySummary calc={calc} paidLabel={editing.type === "client" ? t("contracts.paidByClient") : t("contracts.paidToFreelancer")} />}
                 </div>
                 <div className={`bg-muted/40 min-h-0 ${mobileView === "form" ? "hidden lg:block" : ""}`}>
