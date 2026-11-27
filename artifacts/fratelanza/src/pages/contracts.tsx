@@ -284,7 +284,7 @@ export default function Contracts() {
                           const pcts = keptPcts(editing.client.stages, plan.length, opts?.keepPcts);
                           setClient({ stages: plan.map((x, i) => ({ label: `الدفعة ${STAGE_ORDINALS[i] ?? i + 1}: عند تسليم وقبول ${x.label}`, pct: pcts[i]! })) });
                         }}
-                        onDuration={(weeks) => { if (!editing.client.durationDays.trim()) setClient({ durationDays: String(weeks * 5) }); }}
+                        onDuration={(weeks) => { if (!String(editing.client.durationDays ?? "").trim()) setClient({ durationDays: String(weeks * 5) }); }}
                         projectName={editing.client.projectName} partyName={editing.client.clientName} clientName={editing.client.clientName} />
                     : <ContractScopePanel type="freelancer" value={editing.freelancer.scope} onChange={(scope) => setFreelancer({ scope })}
                         onFillStages={(plan: Plan, opts) => {
