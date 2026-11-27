@@ -48,12 +48,37 @@ export type Plan = { label: string; items: string[] }[];
 const PERIOD = (a: number, b: number) => (a === b ? `الأسبوع ${a}` : `الأسابيع ${a} – ${b}`);
 
 /** The proposal's phases that apply to the chosen package(s) and delivery mode. */
-function phasesOf(a: Analysis, included: Pkg[], mode: Duration["mode"] | ""): Phase[] {
+function phasesOf(a: Analysis, included: Pkg[], _mode?: Duration["mode"] | ""): Phase[] {
+  // The phases are the same in both delivery modes (only their dates differ): never filter them by mode
+  const all = mergePhases(a.phases ?? []);
+  const known = new Set(a.packages.map((p) => p.number));
   const pkgNos = new Set(included.map((p) => p.number));
-  const ofPackage = (a.phases ?? []).filter((x) => !x.packageNumber || pkgNos.has(x.packageNumber));
-  // A phase with its own normal and compressed dates applies to both modes; only phases written for one mode are filtered
-  const forMode = ofPackage.filter((x) => !mode || !x.mode || x.mode === mode || !!(x.normal && x.compressed));
-  return forMode.length ? forMode : ofPackage;
+  // Package numbers that match no package (phase and package numbers mixed up) apply to every package
+  if (all.some((x) => x.packageNumber && !known.has(x.packageNumber))) return all;
+  const ofPackage = all.filter((x) => !x.packageNumber || pkgNos.has(x.packageNumber));
+  return ofPackage.length ? ofPackage : all;
+}
+
+/** One entry per phase, with both its normal and compressed dates (a model may list the phases once per mode). */
+function mergePhases(list: Phase[]): Phase[] {
+  const out = new Map<string, Phase>();
+  for (const raw of list) {
+    const x = { ...raw };
+    if (x.mode === "compressed" && !x.compressed && x.normal) { x.compressed = x.normal; x.normal = null; }
+    if (x.mode === "normal" && !x.normal && x.compressed) { x.normal = x.compressed; x.compressed = null; }
+    const key = x.number ? `n${x.number}` : `t${x.title}`;
+    const prev = out.get(key);
+    if (!prev) { out.set(key, { ...x, mode: "" }); continue; }
+    out.set(key, {
+      ...prev,
+      title: prev.title || x.title, summary: prev.summary || x.summary, period: prev.period || x.period, payment: prev.payment || x.payment,
+      statedCount: Math.max(prev.statedCount ?? 0, x.statedCount ?? 0),
+      normal: prev.normal ?? x.normal, compressed: prev.compressed ?? x.compressed,
+      deliverables: x.deliverables.length > prev.deliverables.length ? x.deliverables : prev.deliverables,
+      packageNumber: prev.packageNumber || x.packageNumber,
+    });
+  }
+  return [...out.values()].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
 }
 
 /** Arabic-Indic digits (٠-٩ / ۰-۹) as 0-9, like the rest of the contract (mixed digits turn dates around in RTL) */
@@ -76,7 +101,8 @@ function phaseLabel(x: Phase, mode: Duration["mode"] | ""): string {
 function deliveryPlan(a: Analysis, included: Pkg[], mode: Duration["mode"] | "", every: number | "phases"): Plan {
   const phases = phasesOf(a, included, mode);
   if (every === "phases" && phases.length) {
-    return phases.map((x) => ({ label: phaseLabel(x, mode), items: x.deliverables.map((d) => d.title) }));
+    return phases.map((x) => ({ label: phaseLabel(x, mode), items: x.deliverables.length ? x.deliverables.map((d) => d.title)
+      : included.flatMap((p) => p.items).filter((i) => i.detail && x.title && i.detail.includes(x.title)).map((i) => i.title) }));
   }
   const m = mode || "normal";
   const dated = included.flatMap((p) => p.items).map((x) => ({ title: x.title, end: (m === "compressed" ? x.compressed : x.normal) ?? x.normal ?? x.compressed }))
@@ -235,12 +261,16 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   const agreed = chosenPkg ? `الباقة المتفق عليها: ${chosenPkg.name}${analysis!.packages.length > 1 ? ` (باقة ${chosenPkg.number})` : ""}${deliveryText ? ` — ${deliveryText}` : ""}` : "";
 
   /** The proposal's phases, when the plan follows them and they hold the requirements */
-  const docPhases = analysis && chosenPkg && every === "phases" ? phasesOf(analysis, included, mode).filter((x) => x.deliverables.length) : [];
+  // Every phase counts (a payment each), also one the model returned without its own list of requirements
+  const docPhases = analysis && chosenPkg && every === "phases" ? phasesOf(analysis, included, mode) : [];
+  /** A phase's requirements: its own list, else the package requirements tagged with the phase's name */
+  const phaseItems = (x: Phase) => (x.deliverables.length ? x.deliverables.map((d) => d.title)
+    : included.flatMap((p) => p.items).filter((i) => i.detail && x.title && i.detail.includes(x.title)).map((i) => i.title));
   /** Every requirement of the chosen package (and those it builds on), word for word — by phase when the proposal is phased */
-  const annexSections = () => docPhases.length ? docPhases.map((x) => ({
-    title: `${phaseLabel(x, mode)} (${x.deliverables.length} متطلب)`,
-    items: x.deliverables.map((d) => d.title),
-  })) : included.map((p, i) => ({
+  const annexSections = () => docPhases.length ? docPhases.map((x) => {
+    const items = phaseItems(x);
+    return { title: `${phaseLabel(x, mode)}${items.length ? ` (${items.length} متطلب)` : ""}`, items: items.length ? items : [x.summary || x.title] };
+  }) : included.map((p, i) => ({
     title: included.length === 1 ? (analysis!.packages.length > 1 ? `متطلبات باقة ${p.name}` : "نطاق العمل والمتطلبات") : i === 0 ? `متطلبات باقة ${p.name}` : `المتطلبات المضافة في باقة ${p.name}`,
     items: p.items.map((x) => (x.detail ? `${x.title} (${x.detail})` : x.title)),
   }));
@@ -253,7 +283,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
     if (!analysis || !chosenPkg) return;
     // Phased proposal: the annex lists each phase's requirements, the plan says what each phase delivers and the payment due
     const schedule = docPhases.length
-      ? docPhases.map((x) => ({ label: phaseLabel(x, mode), items: [x.summary || `جميع متطلبات المرحلة الواردة في الملحق (${x.deliverables.length} متطلب)`, ...(x.payment ? [`بعد تسليم المرحلة وقبولها تُستحق ${x.payment}`] : [])] }))
+      ? docPhases.map((x) => ({ label: phaseLabel(x, mode), items: [x.summary || `جميع متطلبات المرحلة الواردة في الملحق (${phaseItems(x).length} متطلب)`, ...(x.payment ? [`بعد تسليم المرحلة وقبولها تُستحق ${x.payment}`] : [])] }))
       : plan;
     const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule, notes: analysis.notes ?? [], placement: value?.placement };
     // The proposal ties a payment to each phase: the contract's payment schedule follows the phases

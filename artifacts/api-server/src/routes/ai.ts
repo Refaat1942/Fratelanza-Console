@@ -214,6 +214,38 @@ const toItems = (list: unknown) => (Array.isArray(list) ? list as RawItem[] : []
   .map((x) => ({ title: str(x?.title), detail: str(x?.detail), normal: range(x?.normal), compressed: range(x?.compressed) }))
   .filter((x) => x.title);
 
+type ParsedPhase = {
+  number: number; title: string; summary: string; period: string; statedCount: number; fromWeek: number; toWeek: number;
+  normal: { weeks: string; delivery: string } | null; compressed: { weeks: string; delivery: string } | null; payment: string;
+  deliverables: { title: string; detail: string; normal: Range; compressed: Range }[]; packageNumber: number; mode: "normal" | "compressed" | "";
+};
+
+/**
+ * One entry per phase. The phases are the same in both delivery modes (only their dates differ), but a model
+ * may list them once per mode, or put a compressed date in "normal" on an entry tagged "compressed".
+ */
+function mergePhases(list: ParsedPhase[]): ParsedPhase[] {
+  const out = new Map<string, ParsedPhase>();
+  for (const raw of list) {
+    const x = { ...raw };
+    if (x.mode === "compressed" && !x.compressed && x.normal) { x.compressed = x.normal; x.normal = null; }
+    if (x.mode === "normal" && !x.normal && x.compressed) { x.normal = x.compressed; x.compressed = null; }
+    const key = x.number ? `n${x.number}` : `t${x.title}`;
+    const prev = out.get(key);
+    if (!prev) { out.set(key, x); continue; }
+    out.set(key, {
+      ...prev,
+      title: prev.title || x.title, summary: prev.summary || x.summary, period: prev.period || x.period, payment: prev.payment || x.payment,
+      statedCount: Math.max(prev.statedCount, x.statedCount),
+      normal: prev.normal ?? x.normal, compressed: prev.compressed ?? x.compressed,
+      deliverables: x.deliverables.length > prev.deliverables.length ? x.deliverables : prev.deliverables,
+      packageNumber: prev.packageNumber || x.packageNumber,
+    });
+  }
+  // Every phase covers both modes now
+  return [...out.values()].map((x) => ({ ...x, mode: "" as const })).sort((a, b) => a.number - b.number);
+}
+
 /**
  * Read a technical proposal file (PDF read by the model page by page; Word / text as text) into
  * its packages, every requirement with its weeks, the delivery phases and notes, so the user can
@@ -249,7 +281,7 @@ router.post("/ai/analyze-proposal", upload.single("file"), jobbable(async (req, 
       const d = v as { weeks?: unknown; delivery?: unknown } | null;
       return d && (str(d.weeks) || str(d.delivery)) ? { weeks: str(d.weeks), delivery: str(d.delivery) } : null;
     };
-    const phases = (Array.isArray(out.phases) ? out.phases : []).map((x, i) => ({
+    const phases = mergePhases((Array.isArray(out.phases) ? out.phases : []).map((x, i) => ({
       number: Number(x.number) || i + 1,
       title: str(x.title), summary: str(x.summary), period: str(x.period),
       statedCount: Math.max(0, Math.round(Number(x.statedCount) || 0)),
@@ -259,8 +291,8 @@ router.post("/ai/analyze-proposal", upload.single("file"), jobbable(async (req, 
       deliverables: (Array.isArray(x.deliverables) ? x.deliverables : []).map((d) => (typeof d === "string" ? { title: d.trim(), detail: "", normal: null, compressed: null } : toItems([d])[0]))
         .filter((d): d is NonNullable<typeof d> => !!d && !!d.title),
       packageNumber: Number(x.packageNumber) || 0,
-      mode: x.mode === "compressed" || x.mode === "normal" ? x.mode : "",
-    })).filter((x) => x.title || x.deliverables.length);
+      mode: x.mode === "compressed" || x.mode === "normal" ? x.mode as "compressed" | "normal" : "" as const,
+    })).filter((x) => x.title || x.deliverables.length));
     const packages = (Array.isArray(out.packages) ? out.packages : []).map((p, i) => ({
       number: Number(p.number) || i + 1,
       name: str(p.name) || `باقة ${i + 1}`,
@@ -272,6 +304,9 @@ router.post("/ai/analyze-proposal", upload.single("file"), jobbable(async (req, 
       items: toItems(p.items),
       itemsFromPhases: p.itemsFromPhases === true,
     }));
+    // Phase numbers that point at no package (the model mixed up phase and package numbers) apply to every package
+    const pkgNos = new Set(packages.map((p) => p.number));
+    if (phases.some((x) => x.packageNumber && !pkgNos.has(x.packageNumber))) for (const x of phases) x.packageNumber = 0;
     // A package delivered in phases: its requirements are the phases' rows
     for (const p of packages) {
       const own = phases.filter((x) => x.packageNumber === p.number || (!x.packageNumber && packages.length === 1));
