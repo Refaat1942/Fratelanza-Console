@@ -11,6 +11,8 @@ export type FreelancerStage = { label: string; pct: number; due: string; deliver
 export type ContractScope = {
   /** Where it was read from, e.g. the technical proposal or file name */
   source?: string;
+  /** The agreed package and delivery, e.g. "الباقة المتفق عليها: الأساس — إنجاز عادي 8 أسابيع، التسليم 28 يناير 2027" */
+  agreed?: string;
   summary?: string;
   sections: { title: string; items: string[] }[];
   clauses: { title: string; text: string }[];
@@ -40,6 +42,7 @@ function scopeAnnex(scope: ContractScope | undefined, title: string, projectName
   ${projectName.trim() ? `<p style="text-align:center"><b>مشروع: ${esc(projectName)}</b></p>` : ""}
   <p>يُعد هذا الملحق جزءاً لا يتجزأ من العقد ومكملاً ومفسراً لبنوده، ويحدد نطاق العمل والمخرجات المطلوب تنفيذها وتسليمها، وأي عنصر غير وارد به يُعد خارج نطاق العقد ويخضع لأحكام التعديلات والإضافات.</p>
   ${scope.summary?.trim() ? `<p><b>وصف المشروع:</b> ${esc(scope.summary)}</p>` : ""}
+  ${scope.agreed?.trim() ? `<p><b>${esc(scope.agreed)}</b></p>` : ""}
   ${sections.map((x, i) => `<h2>${i + 1}. ${esc(x.title || "نطاق العمل")}</h2><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}
   <p style="margin-top:18px">توقيع الطرف الأول: ............................ &nbsp;&nbsp;&nbsp; توقيع الطرف الثاني: ............................</p>
   </div>`;
