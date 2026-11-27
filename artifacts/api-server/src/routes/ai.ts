@@ -5,6 +5,7 @@ import multer from "multer";
 import mammoth from "mammoth";
 import { extractTextFromUpload } from "../lib/document-parser.js";
 import { logger } from "../lib/logger";
+import { jobbable, jobStatus } from "../lib/jobs";
 
 const router: IRouter = Router();
 
@@ -77,7 +78,7 @@ Answer with JSON only: {"projectTitle": string, "packages": {"starter": [{"title
  * Split a technical proposal's specification / requirements into the three
  * packages with AI. Returns the items as the editor stores them (tierItems).
  */
-router.post("/ai/split-packages", async (req, res): Promise<void> => {
+router.post("/ai/split-packages", jobbable(async (req, res): Promise<void> => {
   const b = (req.body ?? {}) as { language?: string; serviceName?: string; projectTitle?: string; text?: string; requirements?: string[]; customer?: string };
   const lang = b.language === "en" ? "English" : "Arabic (Egyptian business Arabic, formal)";
   const reqs = Array.isArray(b.requirements) ? b.requirements.filter((x) => typeof x === "string" && x.trim()).slice(0, 300) : [];
@@ -107,7 +108,7 @@ router.post("/ai/split-packages", async (req, res): Promise<void> => {
   } catch (err) {
     fail(res, err);
   }
-});
+}));
 
 const CONTRACT_SYSTEM = `You are a senior Egyptian contracts lawyer and software delivery manager at Fratelanza, a software company.
 From a client's technical proposal / specification you write the project-specific parts of a contract, in formal Egyptian legal Arabic.
@@ -131,7 +132,7 @@ Write everything in Arabic. Answer with JSON only:
  * Turn a technical proposal / specification into a contract's technical annex
  * and project-specific clauses (client or freelancer contract).
  */
-router.post("/ai/contract-scope", async (req, res): Promise<void> => {
+router.post("/ai/contract-scope", jobbable(async (req, res): Promise<void> => {
   const b = (req.body ?? {}) as { type?: string; projectName?: string; partyName?: string; packageName?: string; text?: string; delivery?: string; startDate?: string; annexProvided?: boolean; schedule?: string };
   const text = (typeof b.text === "string" ? b.text : "").slice(0, 60_000);
   if (!text.trim()) {
@@ -165,7 +166,7 @@ router.post("/ai/contract-scope", async (req, res): Promise<void> => {
   } catch (err) {
     fail(res, err);
   }
-});
+}));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
@@ -217,7 +218,7 @@ const toItems = (list: unknown) => (Array.isArray(list) ? list as RawItem[] : []
  * pick the client's package. A package that comes back with fewer rows than the document states
  * is asked for again, completely.
  */
-router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Promise<void> => {
+router.post("/ai/analyze-proposal", upload.single("file"), jobbable(async (req, res): Promise<void> => {
   const file = (req as unknown as { file?: Express.Multer.File }).file;
   const typed = typeof req.body?.text === "string" ? req.body.text : "";
   try {
@@ -329,6 +330,9 @@ router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Pro
   } catch (err) {
     fail(res, err);
   }
-});
+}));
+
+/** Result of a long AI request started with ?async=1 */
+router.get("/ai/jobs/:id", jobStatus);
 
 export default router;

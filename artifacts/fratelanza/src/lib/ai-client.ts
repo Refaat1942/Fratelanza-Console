@@ -19,6 +19,39 @@ async function call<T>(path: string, method = "GET", body?: unknown): Promise<T>
 
 const KEY = ["ai-settings"];
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * A long AI request (reading a proposal, drafting a contract): it runs on the server as a
+ * background job and this waits for its result, so no proxy timeout can cut it off.
+ * `body` is JSON or a FormData (file upload).
+ */
+export async function aiRequest<T>(path: string, body: unknown): Promise<T> {
+  const form = body instanceof FormData;
+  const r = await fetch(`${base()}${path}?async=1`, {
+    method: "POST",
+    credentials: "include",
+    headers: form ? undefined : { "Content-Type": "application/json" },
+    body: form ? body : JSON.stringify(body),
+  });
+  type Reply = { jobId?: string; status?: string; error?: string };
+  const started = await r.json().catch(() => ({})) as Reply;
+  if (!r.ok) throw new Error(started.error ?? (r.status === 413 ? "The file is too large." : `Error ${r.status}`));
+  const jobId = started.jobId;
+  if (!jobId) return started as T;
+  const until = Date.now() + 10 * 60_000;
+  while (Date.now() < until) {
+    await sleep(2500);
+    const p = await fetch(`${base()}/ai/jobs/${jobId}`, { credentials: "include" });
+    if (p.status >= 500 && p.status !== 502) continue; // a hiccup while waiting: ask again
+    const json = await p.json().catch(() => ({ status: "running" })) as Reply;
+    if (json.status === "running") continue;
+    if (!p.ok) throw new Error(json.error ?? `Error ${p.status}`);
+    return json as T;
+  }
+  throw new Error("The AI is taking too long. Please try again.");
+}
+
 /** Whether an OpenAI key is set up (the AI buttons depend on it). */
 export function useAiStatus() {
   return useQuery({ queryKey: KEY, queryFn: () => call<AiStatus>("/ai/settings"), staleTime: 60_000 });
@@ -47,5 +80,5 @@ export type AiSplitRequest = {
 
 /** Split a specification / requirement list into the three packages with AI. */
 export function aiSplitPackages(req: AiSplitRequest) {
-  return call<{ projectTitle: string; items: SpecItem[] }>("/ai/split-packages", "POST", req);
+  return aiRequest<{ projectTitle: string; items: SpecItem[] }>("/ai/split-packages", req);
 }
