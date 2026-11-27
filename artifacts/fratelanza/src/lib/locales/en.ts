@@ -49,6 +49,16 @@ export const en = {
     sigNone: "No signature", sigAr: "Arabic", sigEn: "English", onDocument: "On this document:", uploadFirst: "Upload it in Settings first",
     perDocument: "This is the default; you can change it on each contract or receipt before printing.", adminOnly: "Only an admin can change the stamp and signature.",
   },
+  contractScope: {
+    title: "Technical proposal & scope", introClient: "Choose the saved technical proposal or upload its file (Word / PDF); AI writes the technical annex and project-specific clauses into the contract. You can edit everything before printing.",
+    introFreelancer: "Choose the project's technical proposal or upload its file; AI writes the freelancer's scope-of-work annex and the clauses binding them to it. You can edit everything before printing.",
+    fromProposal: "From a saved technical proposal", chooseProposal: "Choose a technical proposal…", thisClient: "This client's proposal", uploadFile: "or upload the technical proposal file", emptyFile: "No text could be read from the file.",
+    fileRead: "{{name}} read", package: "Agreed package:", allPackages: "All packages / the whole proposal",
+    withAi: "Write the terms with AI", aiWorking: "Reading and writing…", withoutAi: "Add the terms without AI",
+    aiDone: "Done: {{sections}} annex sections and {{clauses}} project clauses – review them in the preview", nothingFound: "No deliverables were found in the technical proposal",
+    readFrom: "Read from: {{source}}", remove: "Remove from the contract", summary: "Project description in the annex", annex: "Technical annex (one item per line)",
+    sectionTitle: "Section title", itemsHint: "Each line = one item in the annex", addSection: "Add section", clauses: "Project clauses (added before the signatures)", clauseTitle: "Clause title", addClause: "Add clause",
+  },
   branding: {
     settings: "Branding & Settings", logo: "Company Logo", uploadLogo: "Upload Logo",
     removeLogo: "Remove Logo", brandName: "Brand Name", tagline: "Tagline",

@@ -7,6 +7,44 @@ export type ContractType = "client" | "freelancer";
 export type ClientStage = { label: string; pct: number };
 export type FreelancerStage = { label: string; pct: number; due: string; deliverable: string };
 
+/** Project scope from the technical proposal: annex of deliverables and project-specific clauses. */
+export type ContractScope = {
+  /** Where it was read from, e.g. the technical proposal or file name */
+  source?: string;
+  summary?: string;
+  sections: { title: string; items: string[] }[];
+  clauses: { title: string; text: string }[];
+};
+
+export function hasScope(s?: ContractScope | null): s is ContractScope {
+  return !!s && (s.sections.some((x) => x.items.some((i) => i.trim())) || s.clauses.some((c) => c.text.trim()) || !!s.summary?.trim());
+}
+
+/** "البند الثاني عشر: بنود خاصة بالمشروع" before the signatures. */
+function scopeClauses(scope: ContractScope | undefined, ordinal: string): string {
+  const clauses = (scope?.clauses ?? []).filter((c) => c.text.trim());
+  if (!clauses.length) return "";
+  return `
+  <h2>البند ${ordinal}: بنود خاصة بالمشروع</h2>
+  <ol>${clauses.map((c) => `<li>${c.title.trim() ? `<b>${esc(c.title)}:</b> ` : ""}${esc(c.text)}</li>`).join("")}</ol>`;
+}
+
+/** The technical annex on its own page after the signatures. */
+function scopeAnnex(scope: ContractScope | undefined, title: string, projectName: string): string {
+  if (!hasScope(scope)) return "";
+  const sections = scope.sections.map((x) => ({ ...x, items: x.items.filter((i) => i.trim()) })).filter((x) => x.items.length);
+  if (!sections.length && !scope.summary?.trim()) return "";
+  return `
+  <div class="annex">
+  <h1>${esc(title)}</h1>
+  ${projectName.trim() ? `<p style="text-align:center"><b>مشروع: ${esc(projectName)}</b></p>` : ""}
+  <p>يُعد هذا الملحق جزءاً لا يتجزأ من العقد ومكملاً ومفسراً لبنوده، ويحدد نطاق العمل والمخرجات المطلوب تنفيذها وتسليمها، وأي عنصر غير وارد به يُعد خارج نطاق العقد ويخضع لأحكام التعديلات والإضافات.</p>
+  ${scope.summary?.trim() ? `<p><b>وصف المشروع:</b> ${esc(scope.summary)}</p>` : ""}
+  ${sections.map((x, i) => `<h2>${i + 1}. ${esc(x.title || "نطاق العمل")}</h2><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}
+  <p style="margin-top:18px">توقيع الطرف الأول: ............................ &nbsp;&nbsp;&nbsp; توقيع الطرف الثاني: ............................</p>
+  </div>`;
+}
+
 export type ClientContractData = {
   contractDate: string;
   clientType: "individual" | "company";
@@ -31,6 +69,8 @@ export type ClientContractData = {
   paidSoFar: number;
   /** Company stamp / manager's signature on this contract (missing = Settings default) */
   marks?: MarksChoice;
+  /** Technical annex and project clauses read from the technical proposal */
+  scope?: ContractScope;
 };
 
 export type FreelancerContractData = {
@@ -47,6 +87,8 @@ export type FreelancerContractData = {
   paidSoFar: number;
   /** Company stamp / manager's signature on this contract (missing = Settings default) */
   marks?: MarksChoice;
+  /** Technical annex and project clauses read from the technical proposal */
+  scope?: ContractScope;
 };
 
 export const today = () => new Date().toISOString().slice(0, 10);
@@ -311,6 +353,7 @@ export function shell(title: string, body: string, opts: ContractHtmlOptions, ex
   .mk-stamp-wrap { display: inline-block; vertical-align: middle; margin: 4px 2px -6px; }
   img.mk-stamp { width: 150px; transform: rotate(-4deg); opacity: .92; mix-blend-mode: multiply; display: block; }
   img.mk-sig, img.mk-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .annex { page-break-before: always; break-before: page; }
   footer { display: none; }
   @media screen { body { background: #e5e7eb; } .page { background: #fff; padding: 14mm 16mm; margin: 12px auto; box-shadow: 0 2px 10px rgba(0,0,0,.15); max-width: 210mm; } footer { display: block; text-align: center; font-size: 8.5pt; color: #6b7280; max-width: 210mm; margin: 0 auto 12px; } }
 ${extraCss}
@@ -401,11 +444,13 @@ export function buildClientContractHtml(d: ClientContractData, opts: ContractHtm
     <li>الاعتمادات والموافقات الكتابية: تكون أي موافقات أو اعتمادات لمراحل المشروع أو طلبات إضافية أو تغييرات في نطاق العمل بموافقة كتابية من الطرف الثاني عبر وسيلة التواصل المعتمدة بين الطرفين، ويُعتد بها في تحديد نطاق العمل والمدة والتكلفة عند الحاجة.</li>
   </ol>
   <p>ويعتبر هذا البند مكملاً لبنود العقد دون إلغاء أو حذف أو تعديل أي من النصوص الواردة فيه، مع الالتزام بما هو متفق عليه في العرض الفني الخاص بالمشروع والتطبيق وملحق المواصفات الفنية.</p>
+${scopeClauses(d.scope, "الثاني عشر")}
 
   <div class="sign">
     <div><b>الطرف الأول (الشركة المنفذة)</b>الاسم / ${COMPANY.manager}<br>الصفة / المدير المسئول<br>التوقيع / ${signatureMark(marks.signature)}<br>الختم / ${stampMark(marks.stamp)}</div>
     <div><b>الطرف الثاني (العميل)</b>الاسم / ${fill(d.signatoryName || (company ? d.representativeName : d.clientName), "............................")}<br>الصفة / ${fill(d.signatoryTitle, "............................")}<br>التوقيع / ............................<br>&nbsp;</div>
-  </div>`;
+  </div>
+${scopeAnnex(d.scope, "ملحق رقم (1): المواصفات الفنية ونطاق العمل", d.projectName)}`;
   return shell("عقد اتفاق على تنفيذ وتطوير مشروع تقني", body, opts);
 }
 
@@ -456,13 +501,15 @@ export function buildFreelancerContractHtml(d: FreelancerContractData, opts: Con
   <p>تكون مدة كل مرحلة من مراحل المشروع والمواعيد التقديرية الخاصة بها وفقًا لما ورد تفصيلًا في العرض الفني المرفق بالعقد الأصلي، والذي أرسله الطرف الأول إلى الطرف الثاني واطلع عليه الطرف الثاني ووافق عليه، ويُعد العرض الفني المرجع المعتمد في تحديد مدد المراحل ومخرجاتها. ويجوز التسليم المبكر لأي مرحلة متى اكتملت متطلباتها الفنية وأصبحت جاهزة للاختبار، ولا يُعد التسليم المبكر إخلالًا بالجدول الزمني أو التزامًا بتسليم باقي المراحل قبل اكتمال متطلباتها. ولا يجوز تمديد مدة أي مرحلة أو تعديل موعدها إلا بسبب راجع إلى الطرف الأول أو المدخلات أو الاعتمادات أو الخدمات الخارجية أو طلب تغيير مكتوب، وبقدر الأثر الفعلي لذلك السبب.</p>
   <p>أي طلب أو خاصية أو تعديل خارج نطاق العقد الأصلي وملحق المشروع لا ينفذ إلا بموافقة كتابية من الطرف الأول تحدد الوصف والتكلفة والأثر على المدة. ولا تُعد مناقشة الطلب أو طلب تقدير تكلفته موافقة على تنفيذه.</p>
 
-  <h2>البند الثامن: استمرار باقي الأحكام والتوقيع</h2>
+${scopeClauses(d.scope, "الثامن")}
+  <h2>البند ${hasScope(d.scope) && d.scope.clauses.some((c) => c.text.trim()) ? "التاسع" : "الثامن"}: استمرار باقي الأحكام والتوقيع</h2>
   <p>تظل جميع بنود العقد الأصلي، وبالأخص السرية وحماية بيانات العملاء والملكية الفكرية وعدم التعامل المباشر مع العملاء وأمن المعلومات والإنهاء والمسؤولية، سارية وملزمة للطرفين. يقر الطرفان بقراءة هذا الملحق وفهمه والموافقة عليه، ويحرر من نسختين أصليتين بيد كل طرف نسخة.</p>
 
   <div class="sign">
     <div><b>الطرف الأول – شركة فراتيلانزا</b>الاسم: ${COMPANY.manager}<br>الصفة: المدير المسؤول<br>التوقيع: ${signatureMark(marks.signature, "........................")}<br>الختم: ${stampMark(marks.stamp, "........................")}<br>التاريخ: ${dateFill(d.contractDate)}</div>
     <div><b>الطرف الثاني – منفذ العمل</b>الاسم: ${fill(d.freelancerName)}<br>الرقم القومي: ${fill(d.freelancerNationalId)}<br>التوقيع: ........................<br>&nbsp;<br>التاريخ: ${dateFill(d.contractDate)}</div>
   </div>
+${scopeAnnex(d.scope, "ملحق رقم (1): نطاق أعمال منفذ العمل ومخرجاته", d.projectName)}
 `;
   return shell("عقد تنفيذ مشروع كمستقل", body, opts);
 }

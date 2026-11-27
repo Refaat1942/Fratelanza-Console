@@ -106,4 +106,59 @@ router.post("/ai/split-packages", async (req, res): Promise<void> => {
   }
 });
 
+const CONTRACT_SYSTEM = `You are a senior Egyptian contracts lawyer and software delivery manager at Fratelanza, a software company.
+From a client's technical proposal / specification you write the project-specific parts of a contract, in formal Egyptian legal Arabic.
+The contract already contains general clauses for: preamble, subject, duration, total price and payment schedule, change requests, free support,
+confidentiality and IP, termination and penalties, jurisdiction, copies (client contract) — or project value, payment schedule, inspection and
+acceptance, final delivery and source code, free maintenance, duration and change requests (freelancer contract). Do NOT repeat those.
+Write:
+1. "summary": one or two sentences describing the project and its scope as a contract would state it.
+2. "sections": the technical annex — the deliverables grouped by module / section of the system. Each item is one concrete, verifiable
+   deliverable taken from the document (screens, functions, reports, integrations, user roles, platforms), written as a contractual obligation
+   ("توفير شاشة ... تتيح ..."). Keep the document's real specifics (numbers, names, rules). Leave out marketing text, objectives, timelines,
+   prices and payment terms. 3–12 sections, 2–12 items each.
+3. "clauses": 3–7 project-specific clauses that the general contract lacks and this project needs, e.g. acceptance criteria for the
+   deliverables, the client's inputs and data the work depends on, third-party services / integrations and who pays for them, hosting and
+   deployment, data migration, training and handover documents, what is explicitly out of scope. Each has a short "title" and a "text"
+   paragraph. For a freelancer contract, write them as the freelancer's obligations towards Fratelanza (the first party) for this scope.
+Write everything in Arabic. Answer with JSON only:
+{"summary": string, "sections": [{"title": string, "items": [string]}], "clauses": [{"title": string, "text": string}]}`;
+
+/**
+ * Turn a technical proposal / specification into a contract's technical annex
+ * and project-specific clauses (client or freelancer contract).
+ */
+router.post("/ai/contract-scope", async (req, res): Promise<void> => {
+  const b = (req.body ?? {}) as { type?: string; projectName?: string; partyName?: string; packageName?: string; text?: string };
+  const text = (typeof b.text === "string" ? b.text : "").slice(0, 60_000);
+  if (!text.trim()) {
+    res.status(400).json({ error: "Nothing to read: choose a technical proposal or upload a file first." });
+    return;
+  }
+  const freelancer = b.type === "freelancer";
+  const user = [
+    `Contract: ${freelancer ? "freelancer (executor) contract — the second party is the freelancer who builds this scope for Fratelanza" : "client contract — the second party is the client"}`,
+    b.projectName ? `Project: ${b.projectName}` : "",
+    b.partyName ? `Second party: ${b.partyName}` : "",
+    b.packageName ? `Agreed package: ${b.packageName} — include only what this package covers` : "",
+    `Technical proposal / specification:\n"""\n${text}\n"""`,
+  ].filter(Boolean).join("\n\n");
+  try {
+    const cfg = await getAiConfig();
+    type Answer = { summary?: unknown; sections?: { title?: unknown; items?: unknown }[]; clauses?: { title?: unknown; text?: unknown }[] };
+    const out = await chatJson<Answer>(cfg, CONTRACT_SYSTEM, user);
+    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const sections = (Array.isArray(out.sections) ? out.sections : [])
+      .map((x) => ({ title: str(x?.title), items: (Array.isArray(x?.items) ? x.items : []).map(str).filter(Boolean) }))
+      .filter((x) => x.items.length);
+    const clauses = (Array.isArray(out.clauses) ? out.clauses : [])
+      .map((x) => ({ title: str(x?.title), text: str(x?.text) }))
+      .filter((x) => x.text);
+    if (!sections.length && !clauses.length) throw new AiError("The AI did not return any contract terms. Try again.");
+    res.json({ summary: str(out.summary), sections, clauses });
+  } catch (err) {
+    fail(res, err);
+  }
+});
+
 export default router;

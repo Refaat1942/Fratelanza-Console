@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useTranslation } from "react-i18next";
 import { Upload, Download, FileText, Link2, Check } from "lucide-react";
 import { extractOutlineFromFile } from "@/lib/outline-file-parser";
+import { displayProjectName } from "@/lib/quote-line-items";
 
 export type ClientQuoteSummary = {
   id: number;
@@ -242,7 +243,7 @@ export function ProjectDocumentsPanel({
               <tbody>
                 {quotes.map((q) => (
                   <tr key={q.id} className={`border-t border-border/40 ${quoteId === q.id ? "bg-primary/5" : ""}`}>
-                    <td className="px-2 py-1.5 font-medium max-w-[140px] truncate">{q.projectName ?? "—"}</td>
+                    <td className="px-2 py-1.5 font-medium max-w-[260px] truncate" title={displayProjectName(q.projectName)}>{displayProjectName(q.projectName)}</td>
                     <td className="px-2 py-1.5 text-primary"><PrivacyWrapper value={q.price} /></td>
                     <td className="px-2 py-1.5 text-muted-foreground">{q.date ?? "—"}</td>
                     <td className="px-2 py-1.5 text-right">
