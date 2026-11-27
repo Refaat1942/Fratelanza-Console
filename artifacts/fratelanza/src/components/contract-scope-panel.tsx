@@ -310,6 +310,21 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
             <span className="text-xs text-muted-foreground">{scope.source ? t("contractScope.readFrom", { source: scope.source }) : ""}</span>
             <Button size="sm" variant="ghost" className="h-7 text-destructive" onClick={() => onChange(undefined)} data-testid="button-scope-clear"><Trash2 className="h-3.5 w-3.5 me-1" />{t("contractScope.remove")}</Button>
           </div>
+          <div className="space-y-1" data-testid="scope-placement">
+            <Label className="text-xs">{t("contractScope.placement")}</Label>
+            <div className="grid grid-cols-2 gap-2">
+              {(["annex", "clause"] as const).map((pl) => {
+                const on = (scope.placement ?? "annex") === pl;
+                return (
+                  <button key={pl} type="button" onClick={() => onChange({ ...scope, placement: pl })} data-testid={`scope-placement-${pl}`}
+                    className={`text-start rounded border p-2 text-xs ${on ? "border-primary bg-primary/10" : "border-border hover:border-primary/50"}`}>
+                    <div className="font-semibold flex items-center gap-1">{on && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}{t(`contractScope.placement_${pl}`)}</div>
+                    <div className="text-[11px] text-muted-foreground">{t(`contractScope.placement_${pl}_hint`)}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="space-y-1">
             <Label className="text-xs">{t("contractScope.agreed")}</Label>
             <Input className="h-8 text-sm" value={scope.agreed ?? ""} onChange={(e) => onChange({ ...scope, agreed: e.target.value })} data-testid="input-scope-agreed" />
