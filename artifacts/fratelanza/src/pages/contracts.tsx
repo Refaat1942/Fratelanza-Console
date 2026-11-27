@@ -51,6 +51,12 @@ function equalPcts(n: number): number[] {
   return Array.from({ length: n }, (_, i) => (i === n - 1 ? 100 - each * (n - 1) : each));
 }
 
+/** The stages' own percentages when they are as many as the new stages (and still add up to 100), else equal ones. */
+function keptPcts(stages: { pct: number }[], n: number, keep?: boolean): number[] {
+  const sum = stages.reduce((s, x) => s + (Number(x.pct) || 0), 0);
+  return keep && stages.length === n && Math.round(sum) === 100 ? stages.map((x) => Number(x.pct) || 0) : equalPcts(n);
+}
+
 function fromSaved(c: Contract): Editing {
   const data = (c.data ?? {}) as Record<string, unknown>;
   return {
@@ -274,11 +280,15 @@ export default function Contracts() {
                     : <MarksControl kind="contracts" value={editing.freelancer.marks} onChange={(marks) => setFreelancer({ marks })} />}
                   {editing.type === "client"
                     ? <ContractScopePanel type="client" value={editing.client.scope} onChange={(scope) => setClient({ scope })}
-                        onFillStages={(plan: Plan) => { const pcts = equalPcts(plan.length); setClient({ stages: plan.map((x, i) => ({ label: `عند تسليم ${x.label}`, pct: pcts[i]! })) }); }}
+                        onFillStages={(plan: Plan, opts) => {
+                          const pcts = keptPcts(editing.client.stages, plan.length, opts?.keepPcts);
+                          setClient({ stages: plan.map((x, i) => ({ label: `الدفعة ${STAGE_ORDINALS[i] ?? i + 1}: عند تسليم وقبول ${x.label}`, pct: pcts[i]! })) });
+                        }}
+                        onDuration={(weeks) => { if (!editing.client.durationDays.trim()) setClient({ durationDays: String(weeks * 5) }); }}
                         projectName={editing.client.projectName} partyName={editing.client.clientName} clientName={editing.client.clientName} />
                     : <ContractScopePanel type="freelancer" value={editing.freelancer.scope} onChange={(scope) => setFreelancer({ scope })}
-                        onFillStages={(plan: Plan) => {
-                          const pcts = equalPcts(plan.length);
+                        onFillStages={(plan: Plan, opts) => {
+                          const pcts = keptPcts(editing.freelancer.stages, plan.length, opts?.keepPcts);
                           setFreelancer({ stages: plan.map((x, i) => ({ label: STAGE_ORDINALS[i] ?? `الدفعة ${i + 1}`, pct: pcts[i]!, due: `عند تسليم وقبول مخرجات ${x.label}`, deliverable: x.items.filter((y) => y.trim()).join("، ") })) });
                         }}
                         projectName={editing.freelancer.projectName} partyName={editing.freelancer.freelancerName}
