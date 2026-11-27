@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SearchSelect } from "@/components/search-select";
 import { useToast } from "@/hooks/use-toast";
-import { useAiStatus } from "@/lib/ai-client";
+import { useAiStatus, aiRequest } from "@/lib/ai-client";
 import { normalizeProposal, packageContents, hasSpecTiers, type ProposalData } from "@/lib/proposal-document";
 import { TIERS, TIER_NAME } from "@/lib/service-catalog";
 import { htmlToMarkdown, specItems } from "@/lib/spec-document";
@@ -186,9 +186,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
         // AI reads the file (a PDF page by page) into its packages, durations and requirements
         const fd = new FormData();
         fd.append("file", f);
-        const r = await fetch(`${apiBase()}/ai/analyze-proposal`, { method: "POST", credentials: "include", body: fd });
-        const body = await r.json().catch(() => ({})) as Omit<Analysis, "source"> & { error?: string };
-        if (!r.ok) throw new Error(body.error ?? t("common.error"));
+        const body = await aiRequest<Omit<Analysis, "source">>("/ai/analyze-proposal", fd);
         applyAnalysis({ ...body, source: f.name });
         toast({ title: t("contractScope.analyzed", { count: body.packages.length }) });
       } else {
@@ -261,13 +259,10 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
       const text = [analysis.projectTitle, analysis.summary,
         ...included.map((p) => `## ${p.name}\n${p.items.map((x) => `- ${x.title}${x.detail ? ` (${x.detail})` : ""}`).join("\n")}`),
         analysis.text.slice(0, 30_000)].filter(Boolean).join("\n\n");
-      const r = await fetch(`${apiBase()}/ai/contract-scope`, {
-        method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type, projectName: projectName || analysis.projectTitle, partyName, packageName: analysis.packages.length > 1 ? chosenPkg.name : undefined, delivery: deliveryText || undefined, startDate: analysis.startDate || undefined, annexProvided: true, text,
-          schedule: plan.map((x) => `${x.label}: ${x.items.join("، ")}`).join("\n") || undefined }),
+      const body = await aiRequest<ContractScope>("/ai/contract-scope", {
+        type, projectName: projectName || analysis.projectTitle, partyName, packageName: analysis.packages.length > 1 ? chosenPkg.name : undefined, delivery: deliveryText || undefined, startDate: analysis.startDate || undefined, annexProvided: true, text,
+        schedule: plan.map((x) => `${x.label}: ${x.items.join("، ")}`).join("\n") || undefined,
       });
-      const body = await r.json().catch(() => ({})) as ContractScope & { error?: string };
-      if (!r.ok) throw new Error(body.error ?? t("common.error"));
       onChange({ ...base, summary: body.summary || base.summary, clauses: body.clauses?.length ? body.clauses : base.clauses });
       toast({ title: t("contractScope.aiDone", { sections: base.sections.length, clauses: body.clauses?.length ?? 0 }) });
     } catch (err) {
