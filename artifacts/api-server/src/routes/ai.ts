@@ -154,7 +154,7 @@ router.post("/ai/contract-scope", jobbable(async (req, res): Promise<void> => {
     const cfg = await getAiConfig();
     type Answer = { summary?: unknown; sections?: { title?: unknown; items?: unknown }[]; clauses?: { title?: unknown; text?: unknown }[] };
     const out = await chatJson<Answer>(cfg, CONTRACT_SYSTEM, user);
-    const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+    const str = (v: unknown) => (typeof v === "string" ? latinDigits(v.trim()) : "");
     const sections = (Array.isArray(out.sections) ? out.sections : [])
       .map((x) => ({ title: str(x?.title), items: (Array.isArray(x?.items) ? x.items : []).map(str).filter(Boolean) }))
       .filter((x) => x.items.length);
@@ -203,7 +203,9 @@ type Range = { from: number; to: number } | null;
 type RawItem = { title?: unknown; detail?: unknown; normal?: { from?: unknown; to?: unknown } | null; compressed?: { from?: unknown; to?: unknown } | null };
 type RawPkg = { number?: unknown; name?: unknown; statedCount?: unknown; includesPrevious?: unknown; itemsFromPhases?: unknown; durations?: { mode?: unknown; weeks?: unknown; delivery?: unknown }[]; items?: RawItem[] };
 
-const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
+/** Arabic-Indic digits as 0-9 like the rest of the documents (mixed digits turn dates around in RTL text) */
+const latinDigits = (s: string) => s.replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x6f0)).replace(/٫/g, ".");
+const str = (v: unknown) => (typeof v === "string" ? latinDigits(v.trim()) : typeof v === "number" ? String(v) : "");
 const range = (r: RawItem["normal"]): Range => {
   const from = Number(r?.from), to = Number(r?.to);
   return r && Number.isFinite(from) && Number.isFinite(to) && to > 0 ? { from, to } : null;

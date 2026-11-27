@@ -50,7 +50,15 @@ const PERIOD = (a: number, b: number) => (a === b ? `الأسبوع ${a}` : `ا�
 /** The proposal's phases that apply to the chosen package(s) and delivery mode. */
 function phasesOf(a: Analysis, included: Pkg[], mode: Duration["mode"] | ""): Phase[] {
   const pkgNos = new Set(included.map((p) => p.number));
-  return (a.phases ?? []).filter((x) => (!x.packageNumber || pkgNos.has(x.packageNumber)) && (!x.mode || !mode || x.mode === mode));
+  const ofPackage = (a.phases ?? []).filter((x) => !x.packageNumber || pkgNos.has(x.packageNumber));
+  // A phase with its own normal and compressed dates applies to both modes; only phases written for one mode are filtered
+  const forMode = ofPackage.filter((x) => !mode || !x.mode || x.mode === mode || !!(x.normal && x.compressed));
+  return forMode.length ? forMode : ofPackage;
+}
+
+/** Arabic-Indic digits (٠-٩ / ۰-۹) as 0-9, like the rest of the contract (mixed digits turn dates around in RTL) */
+function latinDigits<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v).replace(/[٠-٩]/g, (d) => String(d.charCodeAt(0) - 0x660)).replace(/[۰-۹]/g, (d) => String(d.charCodeAt(0) - 0x6f0)).replace(/٫/g, ".")) as T;
 }
 
 /** "المرحلة 1: الأساس والتجربة والأمان — حتى الأسبوع 8 (28 يناير 2027)" */
@@ -136,11 +144,13 @@ type Props = {
   /** Client whose technical proposals are listed first */
   clientName?: string;
   /** Turn the delivery plan into the contract's payment schedule */
-  onFillStages?: (plan: Plan) => void;
+  onFillStages?: (plan: Plan, opts?: { keepPcts?: boolean }) => void;
+  /** The agreed duration in weeks (client contract: fills its execution period when empty) */
+  onDuration?: (weeks: number) => void;
 };
 
 /** Contract editor: read a technical proposal, pick the client's package, merge every requirement and the project clauses into the contract. */
-export function ContractScopePanel({ type, value, onChange, projectName, partyName, clientName, onFillStages }: Props) {
+export function ContractScopePanel({ type, value, onChange, projectName, partyName, clientName, onFillStages, onDuration }: Props) {
   const { t } = useTranslation();
   const { toast } = useToast();
   const { data: aiStatus } = useAiStatus();
@@ -163,7 +173,8 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
       return { p, d, label: `${p.clientName}${d.projectTitle ? ` — ${d.projectTitle}` : ""}`, mine: !!clientName && norm(p.clientName) === norm(clientName) };
     }), [proposals, clientName]);
 
-  const applyAnalysis = (a: Analysis) => {
+  const applyAnalysis = (raw: Analysis) => {
+    const a = latinDigits(raw);
     setAnalysis(a);
     const first = a.chosen?.number ?? (a.packages.length === 1 ? a.packages[0]!.number : 0);
     setPkgNo(first);
@@ -245,8 +256,18 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
       ? docPhases.map((x) => ({ label: phaseLabel(x, mode), items: [x.summary || `جميع متطلبات المرحلة الواردة في الملحق (${x.deliverables.length} متطلب)`, ...(x.payment ? [`بعد تسليم المرحلة وقبولها تُستحق ${x.payment}`] : [])] }))
       : plan;
     const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule, notes: analysis.notes ?? [], placement: value?.placement };
+    // The proposal ties a payment to each phase: the contract's payment schedule follows the phases
+    const followPhases = () => {
+      if (docPhases.length && docPhases.some((x) => x.payment) && onFillStages) {
+        onFillStages(schedule, { keepPcts: true });
+        toast({ title: t("contractScope.stagesFilled", { count: schedule.length }) });
+      }
+      const weeks = Number(duration?.weeks);
+      if (onDuration && Number.isFinite(weeks) && weeks > 0) onDuration(weeks);
+    };
     if (!withAi) {
       onChange(base);
+      followPhases();
       toast({ title: t("contractScope.merged", { count: itemCount }) });
       return;
     }
@@ -264,6 +285,7 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
         schedule: plan.map((x) => `${x.label}: ${x.items.join("، ")}`).join("\n") || undefined,
       });
       onChange({ ...base, summary: body.summary || base.summary, clauses: body.clauses?.length ? body.clauses : base.clauses });
+      followPhases();
       toast({ title: t("contractScope.aiDone", { sections: base.sections.length, clauses: body.clauses?.length ?? 0 }) });
     } catch (err) {
       toast({ title: t("proposals.aiFailed"), description: (err as Error).message, variant: "destructive" });

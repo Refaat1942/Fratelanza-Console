@@ -67,7 +67,7 @@ function scopeAsClause(scope: ContractScope | undefined, freelancer: boolean): s
 }
 
 /** The technical annex on its own page after the signatures. */
-function scopeAnnex(scope: ContractScope | undefined, title: string, projectName: string): string {
+function scopeAnnex(scope: ContractScope | undefined, title: string, projectName: string, marks: { stamp: string; signature: string }, secondParty: string): string {
   if (!hasScope(scope) || scope.placement === "clause") return "";
   const sections = scopeSections(scope);
   if (!sections.length && !scope.summary?.trim()) return "";
@@ -80,7 +80,10 @@ function scopeAnnex(scope: ContractScope | undefined, title: string, projectName
   ${scope.agreed?.trim() ? `<p><b>${esc(scope.agreed)}</b></p>` : ""}
   ${sections.map((x, i) => `<h2>${i + 1}. ${esc(x.title || "نطاق العمل")}</h2><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}
   ${scopeExtras(scope, "h2", sections.length + 1)}
-  <p style="margin-top:18px">توقيع الطرف الأول: ............................ &nbsp;&nbsp;&nbsp; توقيع الطرف الثاني: ............................</p>
+  <div class="sign">
+    <div><b>الطرف الأول</b>الاسم / ${COMPANY.manager}<br>التوقيع / ${signatureMark(marks.signature)}<br>الختم / ${stampMark(marks.stamp)}</div>
+    <div><b>${esc(secondParty)}</b>الاسم / ............................<br>التوقيع / ............................<br>&nbsp;</div>
+  </div>
   </div>`;
 }
 
@@ -432,7 +435,7 @@ export function shell(title: string, body: string, opts: ContractHtmlOptions, ex
     @bottom-left { content: "صفحة " counter(page) " من " counter(pages); font-family: 'Noto Naskh Arabic', Tahoma, sans-serif; font-size: 8.5pt; color: #6b7280; vertical-align: top; padding-top: 3mm; } }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #fff; }
-  body { font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', Tahoma, sans-serif; color: #111827; font-size: 12.5pt; line-height: 1.95; }
+  body { font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', Tahoma, sans-serif; color: #111827; font-size: 12.5pt; line-height: 1.95; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .page { max-width: 178mm; margin: 0 auto; padding: 6mm 0; }
   header { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #0a192f; padding-bottom: 8px; margin-bottom: 4px; }
   header img { width: 74px; height: 74px; object-fit: contain; border-radius: 50%; }
@@ -566,7 +569,7 @@ ${scopeClauses(d.scope, "الثاني عشر")}
     <div><b>الطرف الأول (الشركة المنفذة)</b>الاسم / ${COMPANY.manager}<br>الصفة / المدير المسئول<br>التوقيع / ${signatureMark(marks.signature)}<br>الختم / ${stampMark(marks.stamp)}</div>
     <div><b>الطرف الثاني (العميل)</b>الاسم / ${fill(d.signatoryName || (company ? d.representativeName : d.clientName), "............................")}<br>الصفة / ${fill(d.signatoryTitle, "............................")}<br>التوقيع / ............................<br>&nbsp;</div>
   </div>
-${scopeAnnex(d.scope, "ملحق رقم (1): المواصفات الفنية ونطاق العمل", d.projectName)}`;
+${scopeAnnex(d.scope, "ملحق رقم (1): المواصفات الفنية ونطاق العمل", d.projectName, marks, "الطرف الثاني (العميل)")}`;
   return shell("عقد اتفاق على تنفيذ وتطوير مشروع تقني", applyClauseEdits(body, d.clauseEdits), opts);
 }
 
@@ -626,7 +629,7 @@ ${scopeClauses(d.scope, "الثامن")}
     <div><b>الطرف الأول – شركة فراتيلانزا</b>الاسم: ${COMPANY.manager}<br>الصفة: المدير المسؤول<br>التوقيع: ${signatureMark(marks.signature, "........................")}<br>الختم: ${stampMark(marks.stamp, "........................")}<br>التاريخ: ${dateFill(d.contractDate)}</div>
     <div><b>الطرف الثاني – منفذ العمل</b>الاسم: ${fill(d.freelancerName)}<br>الرقم القومي: ${fill(d.freelancerNationalId)}<br>التوقيع: ........................<br>&nbsp;<br>التاريخ: ${dateFill(d.contractDate)}</div>
   </div>
-${scopeAnnex(d.scope, "ملحق رقم (1): نطاق أعمال منفذ العمل ومخرجاته", d.projectName)}
+${scopeAnnex(d.scope, "ملحق رقم (1): نطاق أعمال منفذ العمل ومخرجاته", d.projectName, marks, "الطرف الثاني (منفذ العمل)")}
 `;
   return shell("عقد تنفيذ مشروع كمستقل", applyClauseEdits(body, d.clauseEdits), opts);
 }
