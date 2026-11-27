@@ -132,7 +132,7 @@ Write everything in Arabic. Answer with JSON only:
  * and project-specific clauses (client or freelancer contract).
  */
 router.post("/ai/contract-scope", async (req, res): Promise<void> => {
-  const b = (req.body ?? {}) as { type?: string; projectName?: string; partyName?: string; packageName?: string; text?: string; delivery?: string; startDate?: string; annexProvided?: boolean };
+  const b = (req.body ?? {}) as { type?: string; projectName?: string; partyName?: string; packageName?: string; text?: string; delivery?: string; startDate?: string; annexProvided?: boolean; schedule?: string };
   const text = (typeof b.text === "string" ? b.text : "").slice(0, 60_000);
   if (!text.trim()) {
     res.status(400).json({ error: "Nothing to read: choose a technical proposal or upload a file first." });
@@ -145,6 +145,7 @@ router.post("/ai/contract-scope", async (req, res): Promise<void> => {
     b.partyName ? `Second party: ${b.partyName}` : "",
     b.packageName ? `Agreed package: ${b.packageName} — include only what this package covers` : "",
     b.delivery ? `Agreed delivery: ${b.delivery}${b.startDate ? `, work starting ${b.startDate}` : ""} — state this duration and delivery date in a clause` : "",
+    b.schedule ? `Delivery schedule (what is received in each period):\n${b.schedule.slice(0, 8_000)}\n— write a clause tying acceptance${freelancer ? " and the freelancer's payments" : ""} to this schedule` : "",
     b.annexProvided ? "The technical annex is already written from the proposal with every requirement of the agreed package: return \"sections\": [] and write only the summary and the clauses." : "",
     `Technical proposal / specification:\n"""\n${text}\n"""`,
   ].filter(Boolean).join("\n\n");
@@ -168,31 +169,54 @@ router.post("/ai/contract-scope", async (req, res): Promise<void> => {
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } });
 
-const ANALYZE_SYSTEM = `You read a software company's technical proposal (any layout: tables, cards, timelines; Arabic or English) and extract its offer exactly.
+const ANALYZE_SYSTEM = `You read a software company's technical proposal (any layout: tables, cards, timelines; Arabic or English) and extract its offer COMPLETELY and exactly.
 Return JSON only:
 {"projectTitle": string, "summary": string (1-2 sentences: what the system is),
  "startDate": string ("" if none),
- "packages": [{"number": number, "name": string, "includesPrevious": boolean (the package contains everything in the one before),
+ "packages": [{"number": number, "name": string,
+   "statedCount": number (how many features / requirements the document says this package has in total, e.g. "١٩ ميزة ومتطلبًا" -> 19; 0 if not stated),
+   "includesPrevious": boolean (the package contains everything in the one before),
    "durations": [{"mode": "normal" | "compressed", "weeks": string (e.g. "8" or "8 – 10"), "delivery": string (delivery date as written, "" if none)}],
-   "items": [{"title": string, "detail": string ("" if none)}]}],
- "phases": [string] (delivery phases / milestones if the proposal describes them, else []),
+   "items": [{"title": string, "detail": string ("" if none),
+     "normal": {"from": number, "to": number} | null, "compressed": {"from": number, "to": number} | null}]}],
+ "phases": [{"title": string, "period": string (as written, e.g. "الأسابيع 1–4"), "fromWeek": number, "toWeek": number,
+   "deliverables": [string], "packageNumber": number (0 = every package), "mode": "normal" | "compressed" | ""}],
+ "notes": [string],
  "chosen": {"number": number, "reason": string} or null}
 Rules:
-- "items" lists EVERY requirement / feature row the package adds, copied in full in the proposal's language (keep product names such as Claude, Cloudflare, OWASP, Zotero). Never summarise, merge, skip or invent rows. When a package "includes everything in the previous package", list only the rows it adds and set includesPrevious true.
-- Put per-row durations or notes (e.g. weeks) in "detail".
+- "items" lists EVERY requirement / feature row the package adds, one entry per table row, copied in full in the proposal's language (keep product names such as Claude, Cloudflare, OWASP, Zotero). Never summarise, merge, skip or invent rows. Count the rows: a package's items plus those of the packages it includes must match its statedCount.
+- When a package "includes everything in the previous package", list only the rows it adds and set includesPrevious true.
+- Per-row execution weeks such as "٠ ← ١" or "1.5 → 2" go into "normal" / "compressed" as numbers {"from": 0, "to": 1} (Arabic digits converted). Use null when a row has none.
+- "phases": milestones the document defines with what is delivered or received in each (e.g. "first 4 weeks: X and Y"); [] if the document does not define them.
+- "notes": the document's conditions and assumptions that matter for a contract (e.g. how the compressed duration is decided, what each package includes), short sentences; [] if none.
 - If the proposal has no packages, return one package named after the project holding all its deliverables.
 - "chosen" only when the document itself states which package the client selected or approved; otherwise null.`;
 
+type Range = { from: number; to: number } | null;
+type RawItem = { title?: unknown; detail?: unknown; normal?: { from?: unknown; to?: unknown } | null; compressed?: { from?: unknown; to?: unknown } | null };
+type RawPkg = { number?: unknown; name?: unknown; statedCount?: unknown; includesPrevious?: unknown; durations?: { mode?: unknown; weeks?: unknown; delivery?: unknown }[]; items?: RawItem[] };
+
+const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
+const range = (r: RawItem["normal"]): Range => {
+  const from = Number(r?.from), to = Number(r?.to);
+  return r && Number.isFinite(from) && Number.isFinite(to) && to > 0 ? { from, to } : null;
+};
+const toItems = (list: unknown) => (Array.isArray(list) ? list as RawItem[] : [])
+  .map((x) => ({ title: str(x?.title), detail: str(x?.detail), normal: range(x?.normal), compressed: range(x?.compressed) }))
+  .filter((x) => x.title);
+
 /**
- * Read a technical proposal file (PDF read by the model page by page; Word / text as text)
- * into its packages, durations and every requirement, so the user can pick the client's package.
+ * Read a technical proposal file (PDF read by the model page by page; Word / text as text) into
+ * its packages, every requirement with its weeks, the delivery phases and notes, so the user can
+ * pick the client's package. A package that comes back with fewer rows than the document states
+ * is asked for again, completely.
  */
 router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Promise<void> => {
   const file = (req as unknown as { file?: Express.Multer.File }).file;
   const typed = typeof req.body?.text === "string" ? req.body.text : "";
   try {
     let text = typed;
-    const parts: ContentPart[] = [];
+    const fileParts: ContentPart[] = [];
     if (file) {
       if (/\.docx$/i.test(file.originalname)) {
         text = (await mammoth.extractRawText({ buffer: file.buffer })).value ?? "";
@@ -201,32 +225,61 @@ router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Pro
       }
       // The model reads the PDF itself (layout, tables, Arabic order); the extracted text goes along as a hint
       if (/\.pdf$/i.test(file.originalname)) {
-        parts.push({ type: "file", file: { filename: file.originalname, file_data: `data:application/pdf;base64,${file.buffer.toString("base64")}` } });
+        fileParts.push({ type: "file", file: { filename: file.originalname, file_data: `data:application/pdf;base64,${file.buffer.toString("base64")}` } });
       }
     }
-    if (!text.trim() && !parts.length) {
+    if (!text.trim() && !fileParts.length) {
       res.status(400).json({ error: "Nothing to read: upload the technical proposal file." });
       return;
     }
-    parts.push({ type: "text", text: `${parts.length ? "Text extracted from the file (its Arabic word order may be broken; trust the file):\n" : "Technical proposal:\n"}"""\n${text.slice(0, 80_000)}\n"""` });
+    const textPart: ContentPart = { type: "text", text: `${fileParts.length ? "Text extracted from the file (its Arabic word order may be broken; trust the file):\n" : "Technical proposal:\n"}"""\n${text.slice(0, 80_000)}\n"""` };
     const cfg = await getAiConfig();
-    type Pkg = { number?: unknown; name?: unknown; includesPrevious?: unknown; durations?: { mode?: unknown; weeks?: unknown; delivery?: unknown }[]; items?: { title?: unknown; detail?: unknown }[] };
-    const out = await chatJson<{ projectTitle?: unknown; summary?: unknown; startDate?: unknown; packages?: Pkg[]; phases?: unknown[]; chosen?: { number?: unknown; reason?: unknown } | null }>(cfg, ANALYZE_SYSTEM, parts, { timeoutMs: 240_000 });
-    const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
+    const opts = { timeoutMs: 240_000, maxTokens: 16_000 };
+    const out = await chatJson<{ projectTitle?: unknown; summary?: unknown; startDate?: unknown; packages?: RawPkg[]; phases?: Record<string, unknown>[]; notes?: unknown[]; chosen?: { number?: unknown; reason?: unknown } | null }>(cfg, ANALYZE_SYSTEM, [...fileParts, textPart], opts);
     const packages = (Array.isArray(out.packages) ? out.packages : []).map((p, i) => ({
       number: Number(p.number) || i + 1,
       name: str(p.name) || `باقة ${i + 1}`,
+      statedCount: Math.max(0, Math.round(Number(p.statedCount) || 0)),
       includesPrevious: p.includesPrevious === true,
       durations: (Array.isArray(p.durations) ? p.durations : [])
         .map((d) => ({ mode: d.mode === "compressed" ? "compressed" as const : "normal" as const, weeks: str(d.weeks), delivery: str(d.delivery) }))
         .filter((d) => d.weeks || d.delivery),
-      items: (Array.isArray(p.items) ? p.items : []).map((x) => ({ title: str(x?.title), detail: str(x?.detail) })).filter((x) => x.title),
+      items: toItems(p.items),
     })).filter((p) => p.items.length);
     if (!packages.length) throw new AiError("The AI could not find packages or requirements in this file.");
+
+    // Completeness: rows this package adds = its stated total minus the stated total of the package it builds on
+    const expectedOwn = (i: number) => {
+      const p = packages[i]!;
+      if (!p.statedCount) return 0;
+      const prev = p.includesPrevious && i > 0 ? packages[i - 1]!.statedCount : 0;
+      return Math.max(0, p.statedCount - prev);
+    };
+    await Promise.all(packages.map(async (p, i) => {
+      const want = expectedOwn(i);
+      if (!want || p.items.length >= want) return;
+      const ask: ContentPart = { type: "text", text: `Package ${p.number} «${p.name}»${p.includesPrevious ? " (only the rows it adds to the previous package)" : ""} has ${want} requirement rows in the document, but only ${p.items.length} were listed:\n${p.items.map((x) => `- ${x.title}`).join("\n")}\n\nReturn ALL ${want} rows of this package, in the document's order, as {"items": [{"title", "detail", "normal", "compressed"}]} following the same rules.` };
+      try {
+        const more = await chatJson<{ items?: unknown }>(cfg, ANALYZE_SYSTEM, [...fileParts, textPart, ask], opts);
+        const items = toItems(more.items);
+        if (items.length > p.items.length) p.items = items;
+      } catch (err) {
+        logger.warn({ err, package: p.number }, "Completing a package's requirements failed");
+      }
+    }));
+
+    const phases = (Array.isArray(out.phases) ? out.phases : []).map((x) => ({
+      title: str(x.title), period: str(x.period),
+      fromWeek: Number(x.fromWeek) || 0, toWeek: Number(x.toWeek) || 0,
+      deliverables: (Array.isArray(x.deliverables) ? x.deliverables : []).map(str).filter(Boolean),
+      packageNumber: Number(x.packageNumber) || 0,
+      mode: x.mode === "compressed" || x.mode === "normal" ? x.mode : "",
+    })).filter((x) => x.title || x.deliverables.length);
     const chosenNo = Number(out.chosen?.number);
     res.json({
       projectTitle: str(out.projectTitle), summary: str(out.summary), startDate: str(out.startDate),
-      packages, phases: (Array.isArray(out.phases) ? out.phases : []).map(str).filter(Boolean),
+      packages: packages.map((p, i) => ({ ...p, expectedOwn: expectedOwn(i) })),
+      phases, notes: (Array.isArray(out.notes) ? out.notes : []).map(str).filter(Boolean),
       chosen: packages.some((p) => p.number === chosenNo) ? { number: chosenNo, reason: str(out.chosen?.reason) } : null,
       text,
     });

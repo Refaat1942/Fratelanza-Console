@@ -18,10 +18,25 @@ export type ContractScope = {
   clauses: { title: string; text: string }[];
   /** "annex" (default): a separate annex page signed by both parties; "clause": a clause inside the contract */
   placement?: "annex" | "clause";
+  /** What is delivered / received in each period, e.g. "الأسابيع 1 – 4" → its deliverables */
+  schedule?: { label: string; items: string[] }[];
+  /** Conditions and assumptions from the technical proposal */
+  notes?: string[];
 };
 
+/** The delivery plan table and the proposal's notes (inside the annex or the scope clause). */
+function scopeExtras(scope: ContractScope, sub: "h2" | "h3", first: number): string {
+  const schedule = (scope.schedule ?? []).map((x) => ({ ...x, items: x.items.filter((i) => i.trim()) })).filter((x) => x.label.trim() || x.items.length);
+  const notes = (scope.notes ?? []).filter((x) => x.trim());
+  let n = first;
+  return `${schedule.length ? `<${sub}>${n++}. خطة التسليم والاستلام</${sub}>
+  <table class="pay"><thead><tr><th style="width:24%">الفترة / المرحلة</th><th>ما يتم تسليمه واستلامه</th></tr></thead>
+  <tbody>${schedule.map((x) => `<tr><td>${esc(x.label)}</td><td>${x.items.length > 1 ? `<ol style="margin:0">${x.items.map((i) => `<li>${esc(i)}</li>`).join("")}</ol>` : esc(x.items[0] ?? "")}</td></tr>`).join("")}</tbody></table>` : ""}
+  ${notes.length ? `<${sub}>${n}. ملاحظات من العرض الفني</${sub}><ol>${notes.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}`;
+}
+
 export function hasScope(s?: ContractScope | null): s is ContractScope {
-  return !!s && (s.sections.some((x) => x.items.some((i) => i.trim())) || s.clauses.some((c) => c.text.trim()) || !!s.summary?.trim());
+  return !!s && (s.sections.some((x) => x.items.some((i) => i.trim())) || s.clauses.some((c) => c.text.trim()) || !!s.summary?.trim() || !!s.schedule?.length);
 }
 
 /** "البند الثاني عشر: بنود خاصة بالمشروع" before the signatures. */
@@ -47,7 +62,8 @@ function scopeAsClause(scope: ContractScope | undefined, freelancer: boolean): s
   <p>${freelancer ? "يلتزم الطرف الثاني بتنفيذ وتسليم" : "يلتزم الطرف الأول بتنفيذ وتسليم"} نطاق العمل والمخرجات الموضحة في هذا البند، وأي عنصر غير وارد به يُعد خارج نطاق العقد ويخضع لأحكام التعديلات والإضافات.</p>
   ${scope.summary?.trim() ? `<p><b>وصف المشروع:</b> ${esc(scope.summary)}</p>` : ""}
   ${scope.agreed?.trim() ? `<p><b>${esc(scope.agreed)}</b></p>` : ""}
-  ${sections.map((x, i) => `<h3>${i + 1}. ${esc(x.title || "نطاق العمل")}</h3><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}`;
+  ${sections.map((x, i) => `<h3>${i + 1}. ${esc(x.title || "نطاق العمل")}</h3><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}
+  ${scopeExtras(scope, "h3", sections.length + 1)}`;
 }
 
 /** The technical annex on its own page after the signatures. */
@@ -63,6 +79,7 @@ function scopeAnnex(scope: ContractScope | undefined, title: string, projectName
   ${scope.summary?.trim() ? `<p><b>وصف المشروع:</b> ${esc(scope.summary)}</p>` : ""}
   ${scope.agreed?.trim() ? `<p><b>${esc(scope.agreed)}</b></p>` : ""}
   ${sections.map((x, i) => `<h2>${i + 1}. ${esc(x.title || "نطاق العمل")}</h2><ol>${x.items.map((it) => `<li>${esc(it)}</li>`).join("")}</ol>`).join("")}
+  ${scopeExtras(scope, "h2", sections.length + 1)}
   <p style="margin-top:18px">توقيع الطرف الأول: ............................ &nbsp;&nbsp;&nbsp; توقيع الطرف الثاني: ............................</p>
   </div>`;
 }
