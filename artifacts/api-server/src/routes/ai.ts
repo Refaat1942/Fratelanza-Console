@@ -176,25 +176,31 @@ Return JSON only:
  "packages": [{"number": number, "name": string,
    "statedCount": number (how many features / requirements the document says this package has in total, e.g. "١٩ ميزة ومتطلبًا" -> 19; 0 if not stated),
    "includesPrevious": boolean (the package contains everything in the one before),
+   "itemsFromPhases": boolean (true when this package's requirement rows are listed under its delivery phases; then "items" may be []),
    "durations": [{"mode": "normal" | "compressed", "weeks": string (e.g. "8" or "8 – 10"), "delivery": string (delivery date as written, "" if none)}],
    "items": [{"title": string, "detail": string ("" if none),
      "normal": {"from": number, "to": number} | null, "compressed": {"from": number, "to": number} | null}]}],
- "phases": [{"title": string, "period": string (as written, e.g. "الأسابيع 1–4"), "fromWeek": number, "toWeek": number,
-   "deliverables": [string], "packageNumber": number (0 = every package), "mode": "normal" | "compressed" | ""}],
+ "phases": [{"number": number, "title": string, "summary": string ("" if none), "statedCount": number (rows the document says the phase has, 0 if not stated),
+   "period": string (as written, "" if none), "fromWeek": number, "toWeek": number,
+   "normal": {"weeks": string, "delivery": string} | null, "compressed": {"weeks": string, "delivery": string} | null,
+   "payment": string (the payment due on this phase, e.g. "الدفعة 1", "" if none),
+   "deliverables": [{"title": string, "detail": string, "normal": {"from": number, "to": number} | null, "compressed": {"from": number, "to": number} | null}],
+   "packageNumber": number (0 = every package), "mode": "normal" | "compressed" | ""}],
  "notes": [string],
  "chosen": {"number": number, "reason": string} or null}
 Rules:
 - "items" lists EVERY requirement / feature row the package adds, one entry per table row, copied in full in the proposal's language (keep product names such as Claude, Cloudflare, OWASP, Zotero). Never summarise, merge, skip or invent rows. Count the rows: a package's items plus those of the packages it includes must match its statedCount.
 - When a package "includes everything in the previous package", list only the rows it adds and set includesPrevious true.
 - Per-row execution weeks such as "٠ ← ١" or "1.5 → 2" go into "normal" / "compressed" as numbers {"from": 0, "to": 1} (Arabic digits converted). Use null when a row has none.
-- "phases": milestones the document defines with what is delivered or received in each (e.g. "first 4 weeks: X and Y"); [] if the document does not define them.
+- "phases": delivery phases / milestones the document defines with what is delivered or received in each (e.g. "first 4 weeks: X and Y", or "المرحلة ١ … بعد تسليم هذه المرحلة وقبولها تُستحق الدفعة ١"); [] if the document does not define them.
+  When a phase has its own table of requirements, "deliverables" lists EVERY row of that table in full (same rules as items) and the package that is split into these phases gets "itemsFromPhases": true. Each phase keeps its own normal / compressed duration and delivery date and the payment tied to it.
 - "notes": the document's conditions and assumptions that matter for a contract (e.g. how the compressed duration is decided, what each package includes), short sentences; [] if none.
 - If the proposal has no packages, return one package named after the project holding all its deliverables.
 - "chosen" only when the document itself states which package the client selected or approved; otherwise null.`;
 
 type Range = { from: number; to: number } | null;
 type RawItem = { title?: unknown; detail?: unknown; normal?: { from?: unknown; to?: unknown } | null; compressed?: { from?: unknown; to?: unknown } | null };
-type RawPkg = { number?: unknown; name?: unknown; statedCount?: unknown; includesPrevious?: unknown; durations?: { mode?: unknown; weeks?: unknown; delivery?: unknown }[]; items?: RawItem[] };
+type RawPkg = { number?: unknown; name?: unknown; statedCount?: unknown; includesPrevious?: unknown; itemsFromPhases?: unknown; durations?: { mode?: unknown; weeks?: unknown; delivery?: unknown }[]; items?: RawItem[] };
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : typeof v === "number" ? String(v) : "");
 const range = (r: RawItem["normal"]): Range => {
@@ -236,6 +242,22 @@ router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Pro
     const cfg = await getAiConfig();
     const opts = { timeoutMs: 240_000, maxTokens: 16_000 };
     const out = await chatJson<{ projectTitle?: unknown; summary?: unknown; startDate?: unknown; packages?: RawPkg[]; phases?: Record<string, unknown>[]; notes?: unknown[]; chosen?: { number?: unknown; reason?: unknown } | null }>(cfg, ANALYZE_SYSTEM, [...fileParts, textPart], opts);
+    const dur = (v: unknown) => {
+      const d = v as { weeks?: unknown; delivery?: unknown } | null;
+      return d && (str(d.weeks) || str(d.delivery)) ? { weeks: str(d.weeks), delivery: str(d.delivery) } : null;
+    };
+    const phases = (Array.isArray(out.phases) ? out.phases : []).map((x, i) => ({
+      number: Number(x.number) || i + 1,
+      title: str(x.title), summary: str(x.summary), period: str(x.period),
+      statedCount: Math.max(0, Math.round(Number(x.statedCount) || 0)),
+      fromWeek: Number(x.fromWeek) || 0, toWeek: Number(x.toWeek) || 0,
+      normal: dur(x.normal), compressed: dur(x.compressed), payment: str(x.payment),
+      // Older answers gave deliverables as plain strings
+      deliverables: (Array.isArray(x.deliverables) ? x.deliverables : []).map((d) => (typeof d === "string" ? { title: d.trim(), detail: "", normal: null, compressed: null } : toItems([d])[0]))
+        .filter((d): d is NonNullable<typeof d> => !!d && !!d.title),
+      packageNumber: Number(x.packageNumber) || 0,
+      mode: x.mode === "compressed" || x.mode === "normal" ? x.mode : "",
+    })).filter((x) => x.title || x.deliverables.length);
     const packages = (Array.isArray(out.packages) ? out.packages : []).map((p, i) => ({
       number: Number(p.number) || i + 1,
       name: str(p.name) || `باقة ${i + 1}`,
@@ -245,7 +267,16 @@ router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Pro
         .map((d) => ({ mode: d.mode === "compressed" ? "compressed" as const : "normal" as const, weeks: str(d.weeks), delivery: str(d.delivery) }))
         .filter((d) => d.weeks || d.delivery),
       items: toItems(p.items),
-    })).filter((p) => p.items.length);
+      itemsFromPhases: p.itemsFromPhases === true,
+    }));
+    // A package delivered in phases: its requirements are the phases' rows
+    for (const p of packages) {
+      const own = phases.filter((x) => x.packageNumber === p.number || (!x.packageNumber && packages.length === 1));
+      if ((p.itemsFromPhases || !p.items.length) && own.some((x) => x.deliverables.length)) {
+        p.items = own.flatMap((x) => x.deliverables.map((d) => ({ ...d, detail: d.detail || x.title })));
+      }
+    }
+    for (let i = packages.length - 1; i >= 0; i--) if (!packages[i]!.items.length) packages.splice(i, 1);
     if (!packages.length) throw new AiError("The AI could not find packages or requirements in this file.");
 
     // Completeness: rows this package adds = its stated total minus the stated total of the package it builds on
@@ -257,7 +288,8 @@ router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Pro
     };
     await Promise.all(packages.map(async (p, i) => {
       const want = expectedOwn(i);
-      if (!want || p.items.length >= want) return;
+      // A package built from its phases is completed phase by phase below
+      if (!want || p.items.length >= want || p.itemsFromPhases) return;
       const ask: ContentPart = { type: "text", text: `Package ${p.number} «${p.name}»${p.includesPrevious ? " (only the rows it adds to the previous package)" : ""} has ${want} requirement rows in the document, but only ${p.items.length} were listed:\n${p.items.map((x) => `- ${x.title}`).join("\n")}\n\nReturn ALL ${want} rows of this package, in the document's order, as {"items": [{"title", "detail", "normal", "compressed"}]} following the same rules.` };
       try {
         const more = await chatJson<{ items?: unknown }>(cfg, ANALYZE_SYSTEM, [...fileParts, textPart, ask], opts);
@@ -268,13 +300,24 @@ router.post("/ai/analyze-proposal", upload.single("file"), async (req, res): Pro
       }
     }));
 
-    const phases = (Array.isArray(out.phases) ? out.phases : []).map((x) => ({
-      title: str(x.title), period: str(x.period),
-      fromWeek: Number(x.fromWeek) || 0, toWeek: Number(x.toWeek) || 0,
-      deliverables: (Array.isArray(x.deliverables) ? x.deliverables : []).map(str).filter(Boolean),
-      packageNumber: Number(x.packageNumber) || 0,
-      mode: x.mode === "compressed" || x.mode === "normal" ? x.mode : "",
-    })).filter((x) => x.title || x.deliverables.length);
+    // The same for phases that state how many requirements they have
+    await Promise.all(phases.map(async (x) => {
+      if (!x.statedCount || x.deliverables.length >= x.statedCount) return;
+      const ask: ContentPart = { type: "text", text: `Phase ${x.number} «${x.title}» has ${x.statedCount} requirement rows in the document, but only ${x.deliverables.length} were listed:\n${x.deliverables.map((d) => `- ${d.title}`).join("\n")}\n\nReturn ALL ${x.statedCount} rows of this phase, in the document's order, as {"items": [{"title", "detail", "normal", "compressed"}]} following the same rules.` };
+      try {
+        const more = await chatJson<{ items?: unknown }>(cfg, ANALYZE_SYSTEM, [...fileParts, textPart, ask], opts);
+        const items = toItems(more.items);
+        if (items.length > x.deliverables.length) {
+          x.deliverables = items;
+          // Keep the package built from the phases in step
+          for (const p of packages) {
+            if (p.itemsFromPhases) p.items = phases.filter((y) => y.packageNumber === p.number || (!y.packageNumber && packages.length === 1)).flatMap((y) => y.deliverables.map((d) => ({ ...d, detail: d.detail || y.title })));
+          }
+        }
+      } catch (err) {
+        logger.warn({ err, phase: x.number }, "Completing a phase's requirements failed");
+      }
+    }));
     const chosenNo = Number(out.chosen?.number);
     res.json({
       projectTitle: str(out.projectTitle), summary: str(out.summary), startDate: str(out.startDate),
