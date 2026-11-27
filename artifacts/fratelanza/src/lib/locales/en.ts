@@ -59,6 +59,10 @@ export const en = {
     readFrom: "Read from: {{source}}", remove: "Remove from the contract", summary: "Project description in the annex", annex: "Technical annex (one item per line)",
     sectionTitle: "Section title", itemsHint: "Each line = one item in the annex", addSection: "Add section", clauses: "Project clauses (added before the signatures)", clauseTitle: "Clause title", addClause: "Add clause",
   },
+  contractClauses: {
+    title: "Contract clauses (edit any clause)", changed: "{{count}} changed", hint: "Hide any clause (eye icon), rename it, or press \"Edit text\" to rewrite it. Lines starting with \"-\" print as numbered items. Clauses are renumbered automatically. Note: once a clause's text is edited, its figures (amount, duration) no longer update automatically.",
+    hide: "Hide clause", show: "Show clause", edit: "Edit text", original: "Original text", resetAll: "Restore all original clauses",
+  },
   branding: {
     settings: "Branding & Settings", logo: "Company Logo", uploadLogo: "Upload Logo",
     removeLogo: "Remove Logo", brandName: "Brand Name", tagline: "Tagline",

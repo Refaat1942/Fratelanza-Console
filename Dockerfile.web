@@ -10,7 +10,7 @@ COPY lib/api-client-react/package.json ./lib/api-client-react/
 COPY lib/outline-utils/package.json ./lib/outline-utils/
 COPY lib/db/package.json ./lib/db/
 COPY artifacts/fratelanza/package.json ./artifacts/fratelanza/
-RUN pnpm install --no-frozen-lockfile
+RUN --mount=type=cache,id=fc-pnpm-store-web,target=/root/.local/share/pnpm/store pnpm install --no-frozen-lockfile
 
 FROM deps AS builder
 ARG CACHEBUST=1
