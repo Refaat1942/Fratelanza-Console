@@ -22,6 +22,8 @@ export type ContractScope = {
   schedule?: { label: string; items: string[] }[];
   /** Conditions and assumptions from the technical proposal */
   notes?: string[];
+  /** The editor's reading of the proposal (packages, phases, chosen package and mode), restored on reopening */
+  draft?: { analysis: unknown; pkgNo: number; mode: string; every: number | "phases" };
 };
 
 /** The delivery plan table and the proposal's notes (inside the annex or the scope clause). */
@@ -101,18 +103,47 @@ function decode(s: string) {
   return s.replace(/&nbsp;/g, " ").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 }
 /** A clause's HTML as editable text: paragraphs on their own lines, list items as "- item". */
+/** A table inside an edited clause: kept as it is (it updates with the contract) and shown as this line. */
+export const TABLE_MARK = "[الجدول]";
+const TABLES = /<table[\s\S]*?<\/table>/g;
+
 function clausePlainText(html: string): string {
   return decode(html
+    .replace(TABLES, `\n${TABLE_MARK}\n`)
     .replace(/<li[^>]*>/g, "\n- ").replace(/<\/(p|li|ol|ul|div|tr)>/g, "\n").replace(/<br\s*\/?>/g, "\n")
     .replace(/<[^>]+>/g, ""))
     .split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
 }
-/** Edited text as HTML: "- " lines become a numbered list, the rest paragraphs. */
-function clauseHtml(text: string): string {
+/**
+ * Text edited before tables were kept had a table flattened into lines ("المرحلةالنسبةالمبلغ" … "الإجمالي…"):
+ * put the table back in their place.
+ */
+function healFlattenedTables(text: string, originalHtml: string): string {
+  if (text.includes(TABLE_MARK)) return text;
+  const tables = originalHtml.match(TABLES) ?? [];
+  let lines = text.split("\n");
+  for (const table of tables) {
+    const head = decode((/<thead[\s\S]*?<\/thead>/.exec(table)?.[0] ?? "").replace(/<[^>]+>/g, "")).replace(/\s+/g, "");
+    if (!head) continue;
+    const start = lines.findIndex((l) => l.replace(/\s+/g, "") === head);
+    if (start < 0) continue;
+    let end = lines.findIndex((l, i) => i > start && l.trim().startsWith("الإجمالي"));
+    if (end < 0) end = start;
+    lines = [...lines.slice(0, start), TABLE_MARK, ...lines.slice(end + 1)];
+  }
+  return lines.join("\n");
+}
+
+/** Edited text as HTML: "- " lines become a numbered list, "[الجدول]" the clause's table, the rest paragraphs. */
+function clauseHtml(text: string, originalHtml = ""): string {
+  const tables = originalHtml.match(TABLES) ?? [];
+  let nextTable = 0;
+  text = healFlattenedTables(text, originalHtml);
   const out: string[] = [];
   let list: string[] = [];
   const flush = () => { if (list.length) { out.push(`<ol>${list.map((x) => `<li>${esc(x)}</li>`).join("")}</ol>`); list = []; } };
   for (const line of text.split("\n").map((x) => x.trim()).filter(Boolean)) {
+    if (line === TABLE_MARK) { flush(); if (tables[nextTable]) out.push(tables[nextTable++]!); continue; }
     const m = /^(?:[-•*]|\d{1,2}[.)])\s*(.+)$/.exec(line);
     if (m) list.push(m[1]!);
     else { flush(); out.push(`<p>${esc(line)}</p>`); }
@@ -152,7 +183,7 @@ function applyClauseEdits(body: string, edits: ClauseEdits | undefined): string 
   const kept = clauses.filter((c) => !edits?.[c.key]?.hidden).map((c) => {
     const e = edits?.[c.key];
     const title = e?.title?.trim() || c.title;
-    const html = e?.text?.trim() ? clauseHtml(e.text) : c.html;
+    const html = e?.text?.trim() ? clauseHtml(e.text, c.html) : c.html;
     return `<h2>البند ${ORDINALS[n++] ?? n}: ${esc(title)}</h2>${html}`;
   });
   return `${head}${kept.join("\n")}${tail}`;
@@ -435,7 +466,7 @@ export function shell(title: string, body: string, opts: ContractHtmlOptions, ex
     @bottom-left { content: "صفحة " counter(page) " من " counter(pages); font-family: 'Noto Naskh Arabic', Tahoma, sans-serif; font-size: 8.5pt; color: #6b7280; vertical-align: top; padding-top: 3mm; } }
   * { box-sizing: border-box; }
   html, body { margin: 0; background: #fff; }
-  body { font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', Tahoma, sans-serif; color: #111827; font-size: 12.5pt; line-height: 1.95; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: 'Noto Naskh Arabic', 'Traditional Arabic', 'Arabic Typesetting', Tahoma, sans-serif; color: #1f2937; font-size: 12pt; line-height: 1.9; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .page { max-width: 178mm; margin: 0 auto; padding: 6mm 0; }
   header { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #0a192f; padding-bottom: 8px; margin-bottom: 4px; }
   header img { width: 74px; height: 74px; object-fit: contain; border-radius: 50%; }
@@ -445,33 +476,40 @@ export function shell(title: string, body: string, opts: ContractHtmlOptions, ex
   header .ref { text-align: left; font-size: 9.5pt; color: #374151; line-height: 1.6; direction: rtl; }
   header .ref b { color: #0a192f; }
   .accent { height: 3px; background: linear-gradient(90deg, #00bfff, #0a192f); margin-bottom: 14px; }
-  h1 { text-align: center; font-size: 17pt; margin: 6px 0 12px; color: #0a192f; }
-  h3 { font-size: 12pt; margin: 8px 0 2px; color: #0a192f; page-break-after: avoid; }
-  h2 { font-size: 13pt; margin: 14px 0 4px; color: #0a192f; border-right: 4px solid #00bfff; padding-right: 8px; page-break-after: avoid; }
-  p { margin: 4px 0; text-align: justify; }
-  ol { margin: 4px 0; padding-right: 22px; }
-  ol li { text-align: justify; margin: 2px 0; }
-  .fill { font-weight: 700; color: #0a192f; border-bottom: 1px dotted #6b7280; padding: 0 3px; }
+  h1 { text-align: center; font-size: 19pt; margin: 8px 0 4px; color: #0a192f; }
+  h1::after { content: ""; display: block; width: 90px; height: 3px; margin: 8px auto 14px; background: linear-gradient(90deg, #00bfff, #0a192f); border-radius: 2px; }
+  h3 { font-size: 12pt; margin: 10px 0 2px; color: #0a192f; page-break-after: avoid; }
+  h2 { font-size: 12.5pt; margin: 18px 0 6px; color: #0a192f; background: #eef6fb; border-right: 5px solid #0a192f; padding: 4px 12px; border-radius: 4px; page-break-after: avoid; break-after: avoid; }
+  p { margin: 5px 0; text-align: justify; }
+  ol { margin: 4px 0; padding-right: 24px; }
+  ol li { text-align: justify; margin: 3px 0; }
+  ol li::marker { color: #0a192f; font-weight: 700; }
+  .party { border: 1px solid #e2e8f0; border-right: 4px solid #00bfff; background: #f8fafc; border-radius: 6px; padding: 6px 12px; margin: 8px 0; }
+  .fill { font-weight: 700; color: #0a192f; background: #f1f7fc; border-bottom: 1px solid #cbd5e1; border-radius: 3px; padding: 0 4px; }
   .blank { color: #6b7280; letter-spacing: 1px; }
-  table.pay { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 11pt; }
+  table.pay { width: 100%; border-collapse: separate; border-spacing: 0; margin: 10px 0; font-size: 11pt; border: 1px solid #cbd5e1; border-radius: 6px; overflow: hidden; }
   table.pay thead { display: table-header-group; }
   table.pay tr { page-break-inside: avoid; break-inside: avoid; }
   .refbox { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 12px; margin: 0 0 10px; font-size: 11pt; background: #f9fafb; }
-  table.pay th, table.pay td { border: 1px solid #9ca3af; padding: 5px 8px; vertical-align: top; }
+  table.pay th, table.pay td { border-bottom: 1px solid #e2e8f0; border-left: 1px solid #e2e8f0; padding: 6px 9px; vertical-align: top; text-align: start; }
+  table.pay th:last-child, table.pay td:last-child { border-left: 0; }
   table.pay th { background: #0a192f; color: #fff; font-weight: 600; line-height: 1.5; }
-  table.pay td { line-height: 1.6; }
+  table.pay td { line-height: 1.65; }
+  table.pay tbody tr:nth-child(even) td { background: #f8fafc; }
   table.pay td.num { text-align: center; white-space: nowrap; }
-  table.pay tr.total td { background: #f3f4f6; font-weight: 700; }
+  table.pay tr.total td { background: #e0f2fe; font-weight: 700; border-bottom: 0; }
   .paid { color: #047857; } .due { color: #b45309; }
   .warn { border: 2px solid #dc2626; color: #dc2626; padding: 6px 10px; margin: 8px 0; font-weight: 700; }
   .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 22px; page-break-inside: avoid; }
-  .sign div { border: 1px solid #d1d5db; border-radius: 6px; padding: 10px 14px; line-height: 2.3; }
+  .sign div { border: 1px solid #cbd5e1; border-top: 3px solid #0a192f; background: #f8fafc; border-radius: 6px; padding: 10px 14px; line-height: 2.3; }
   .sign b { display: block; color: #0a192f; border-bottom: 1px solid #e5e7eb; margin-bottom: 4px; }
   img.mk-sig { height: 46px; max-width: 170px; vertical-align: middle; margin: -14px 2px -10px; mix-blend-mode: multiply; }
   .mk-stamp-wrap { display: inline-block; vertical-align: middle; margin: 4px 2px -6px; }
   img.mk-stamp { width: 150px; transform: rotate(-4deg); opacity: .92; mix-blend-mode: multiply; display: block; }
   img.mk-sig, img.mk-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .annex { page-break-before: always; break-before: page; }
+  .annex > h1 { background: #0a192f; color: #fff; border-radius: 6px; padding: 8px 12px; font-size: 16pt; }
+  .annex > h1::after { display: none; }
   footer { display: none; }
   @media screen { body { background: #e5e7eb; } .page { background: #fff; padding: 14mm 16mm; margin: 12px auto; box-shadow: 0 2px 10px rgba(0,0,0,.15); max-width: 210mm; } footer { display: block; text-align: center; font-size: 8.5pt; color: #6b7280; max-width: 210mm; margin: 0 auto 12px; } }
 ${extraCss}
@@ -507,8 +545,8 @@ export function buildClientContractHtml(d: ClientContractData, opts: ContractHtm
   <h1>عقد اتفاق على تنفيذ وتطوير مشروع تقني</h1>
   <p>إنه في يوم ${fill(arabicDayName(d.contractDate), "............")} الموافق ${dateFill(d.contractDate)} م</p>
   <p>تحرر هذا العقد بين كل من:</p>
-  <p>أولاً: السادة / ${COMPANY.name}، سجل تجاري رقم ${COMPANY.registry} بطاقة ضريبية رقم ${COMPANY.taxId} الكائنة ${COMPANY.address}، ويمثلها في التوقيع على هذا العقد السيد / ${COMPANY.manager} بصفته المدير المسئول ويحمل بطاقة رقم قومي ${COMPANY.managerId} (الطرف الأول - الشركة المنفذة).</p>
-  <p>${secondParty}</p>
+  <p class="party">أولاً: السادة / ${COMPANY.name}، سجل تجاري رقم ${COMPANY.registry} بطاقة ضريبية رقم ${COMPANY.taxId} الكائنة ${COMPANY.address}، ويمثلها في التوقيع على هذا العقد السيد / ${COMPANY.manager} بصفته المدير المسئول ويحمل بطاقة رقم قومي ${COMPANY.managerId} (الطرف الأول - الشركة المنفذة).</p>
+  <p class="party">${secondParty}</p>
   <p>بعد أن أقر الطرفان بأهليتهما القانونية للتعاقد والتصرف، اتفقا على البنود التالية:</p>
 
   <h2>البند الأول: التمهيد</h2>
