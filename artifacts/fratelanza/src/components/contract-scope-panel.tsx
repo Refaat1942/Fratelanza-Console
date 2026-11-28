@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "wouter";
 import { useListProposals, type Proposal } from "@workspace/api-client-react";
@@ -188,6 +188,15 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
   const [mode, setMode] = useState<Duration["mode"] | "">("");
   const [showItems, setShowItems] = useState(false);
   const [every, setEvery] = useState<number | "phases">("phases");
+  // Reopening a saved contract: bring back its packages, phases, chosen package and mode
+  useEffect(() => {
+    const d = value?.draft;
+    if (analysis || !d?.analysis) return;
+    setAnalysis(d.analysis as Analysis);
+    setPkgNo(d.pkgNo);
+    setMode((d.mode as Duration["mode"] | "") ?? "");
+    setEvery(d.every ?? "phases");
+  }, [value?.draft]);
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [busy, setBusy] = useState<"" | "file" | "ai">("");
 
@@ -285,7 +294,9 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
     const schedule = docPhases.length
       ? docPhases.map((x) => ({ label: phaseLabel(x, mode), items: [x.summary || `جميع متطلبات المرحلة الواردة في الملحق (${phaseItems(x).length} متطلب)`, ...(x.payment ? [`بعد تسليم المرحلة وقبولها تُستحق ${x.payment}`] : [])] }))
       : plan;
-    const base: ContractScope = { source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule, notes: analysis.notes ?? [], placement: value?.placement };
+    // Kept with the contract (the proposal text is trimmed: the drafting has used it already)
+    const draft = { analysis: { ...analysis, text: analysis.text.slice(0, 20_000) }, pkgNo, mode, every };
+    const base: ContractScope = { draft, source: analysis.source, agreed, summary: analysis.summary, sections: annexSections(), clauses: durationClause(), schedule, notes: analysis.notes ?? [], placement: value?.placement };
     // The proposal ties a payment to each phase: the contract's payment schedule follows the phases
     const followPhases = () => {
       if (docPhases.length && docPhases.some((x) => x.payment) && onFillStages) {
@@ -474,13 +485,15 @@ export function ContractScopePanel({ type, value, onChange, projectName, partyNa
           </div>
           <div className="space-y-2">
             <Label className="text-xs">{t("contractScope.annex")}</Label>
+            <p className="text-[11px] text-muted-foreground">{t("contractScope.annexHint")}</p>
             {scope.sections.map((x, i) => (
               <div key={i} className="rounded border border-border p-2 space-y-1.5" data-testid={`scope-section-${i}`}>
                 <div className="flex items-center gap-2">
                   <Input className="h-8 text-sm" value={x.title} onChange={(e) => setSection(i, { title: e.target.value })} placeholder={t("contractScope.sectionTitle")} />
                   <button type="button" onClick={() => onChange({ ...scope, sections: scope.sections.filter((_, j) => j !== i) })} className="text-muted-foreground hover:text-destructive" title={t("common.delete")}><X className="h-4 w-4" /></button>
                 </div>
-                <Textarea rows={Math.min(10, Math.max(2, x.items.length + 1))} className="text-xs" value={x.items.join("\n")}
+                <div className="text-[10px] text-muted-foreground">{t("contractScope.itemsCount", { count: x.items.filter((i) => i.trim()).length })}</div>
+                <Textarea rows={Math.min(24, Math.max(3, x.items.length + 1))} className="text-xs leading-relaxed" value={x.items.join("\n")}
                   onChange={(e) => setSection(i, { items: e.target.value.split("\n") })} placeholder={t("contractScope.itemsHint")} />
               </div>
             ))}

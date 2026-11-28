@@ -53,7 +53,7 @@ const CSS = `
   .rc-words { color: #0a192f; font-weight: 700; }
   .rc-note { font-size: 10pt; color: #4b5563; margin-top: 10px; }
   .sign.rc-sign div { line-height: 2.4; }
-  .sign div.rc-stamp { margin-top: 6px; border: 0; padding: 0; line-height: 1; } .rc-stamp img.mk-stamp { width: 170px; }
+  .sign div.rc-stamp { margin-top: 6px; border: 0; padding: 0; line-height: 1; background: none; } .rc-stamp img.mk-stamp { width: 170px; }
   .stamp { height: 70px; border: 1px dashed #9ca3af; border-radius: 50%; width: 110px; margin-top: 4px; display: flex; align-items: center; justify-content: center; color: #9ca3af; font-size: 9pt; }
 `;
 

@@ -50,6 +50,7 @@ export const en = {
     perDocument: "This is the default; you can change it on each contract or receipt before printing.", adminOnly: "Only an admin can change the stamp and signature.",
   },
   contractScope: {
+    annexHint: "This is where you edit the annex itself: each section's title and, below it, its requirements (one per line). Changes show in the preview at once and are saved with the contract.",
     short: "Read {{got}} of the {{want}} requirements the proposal states – press \"Re-analyse\"", reanalyze: "Re-analyse to complete the requirements",
     plan: "Delivery plan:", byDocPhases: "The proposal's phases", everyWeeks: "Every {{n}} weeks", noPlan: "The proposal gives no dates for this package",
     planInContract: "Delivery plan (shown in the contract)", fillStages: "Fill the payment schedule from the delivery plan", stagesFilled: "{{count}} payments created from the delivery plan – review the percentages",
@@ -69,7 +70,7 @@ export const en = {
     sectionTitle: "Section title", itemsHint: "Each line = one item in the annex", addSection: "Add section", clauses: "Project clauses (added before the signatures)", clauseTitle: "Clause title", addClause: "Add clause",
   },
   contractClauses: {
-    title: "Contract clauses (edit any clause)", changed: "{{count}} changed", hint: "Hide any clause (eye icon), rename it, or press \"Edit text\" to rewrite it. Lines starting with \"-\" print as numbered items. Clauses are renumbered automatically. Note: once a clause's text is edited, its figures (amount, duration) no longer update automatically.",
+    title: "Contract clauses (edit any clause)", changed: "{{count}} changed", hint: "Hide any clause (eye icon), rename it, or press \"Edit text\" to rewrite it. Lines starting with \"-\" print as numbered items; the line \"[الجدول]\" is where the clause's table goes (e.g. the payment table) – keep it and the table stays and updates itself. Clauses are renumbered automatically. The annex is edited in the \"Technical proposal & scope\" section above.",
     hide: "Hide clause", show: "Show clause", edit: "Edit text", original: "Original text", resetAll: "Restore all original clauses",
   },
   branding: {
